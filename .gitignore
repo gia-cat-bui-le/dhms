@@ -141,3 +141,7 @@ dmypy.json
 ./save/
 ./scripts/
 ./newPCMDM/
+./data_loaders/d2m/aistpp_dataset
+*.pkl
+*.npy
+*.wav
