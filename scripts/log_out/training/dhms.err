@@ -1,0 +1,45 @@
+2024-04-09 09:39:33.467406: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2024-04-09 09:39:33.467520: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2024-04-09 09:39:33.758593: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2024-04-09 09:39:34.414688: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2024-04-09 09:39:48.491128: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+/media/nhdang/hieunmt/miniconda3/envs/dhms/lib/python3.11/site-packages/torch/nn/modules/transformer.py:282: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(f"enable_nested_tensor is True, but self.use_nested_tensor is False because {why_not_sparsity_fast_path}")
+  0%|          | 0/76 [00:00<?, ?it/s]/media/nhdang/Vy_Cat/newPCMDM/teach/data/tools/tensors.py:24: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  lengths = torch.tensor(lengths, device="cuda")
+  0%|          | 0/76 [00:04<?, ?it/s]
+Traceback (most recent call last):
+  File "/media/nhdang/Vy_Cat/newPCMDM/train_diffusion.py", line 59, in <module>
+    main()
+  File "/media/nhdang/Vy_Cat/newPCMDM/train_diffusion.py", line 55, in main
+    loop.run_loop()
+  File "/media/nhdang/Vy_Cat/newPCMDM/train/training_loop.py", line 128, in run_loop
+    self.run_step_multi(motion, cond)
+  File "/media/nhdang/Vy_Cat/newPCMDM/train/training_loop.py", line 184, in run_step_multi
+    self.forward_backward_multi(batch, cond)
+  File "/media/nhdang/Vy_Cat/newPCMDM/train/training_loop.py", line 236, in forward_backward_multi
+    loss0, hist = compute_losses0() 
+                  ^^^^^^^^^^^^^^^^^
+  File "/media/nhdang/Vy_Cat/newPCMDM/diffusion/respace.py", line 102, in training_losses_multi
+    return super().training_losses_multi(self._wrap_model(model), *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/nhdang/Vy_Cat/newPCMDM/diffusion/gaussian_diffusion.py", line 1962, in training_losses_multi
+    model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/nhdang/Vy_Cat/newPCMDM/diffusion/respace.py", line 139, in __call__
+    return self.model(x, new_ts, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/nhdang/hieunmt/miniconda3/envs/dhms/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/nhdang/hieunmt/miniconda3/envs/dhms/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/nhdang/Vy_Cat/newPCMDM/model/mdm.py", line 745, in forward
+    emb += self.mask_cond(music_emb, force_mask=force_mask)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/nhdang/Vy_Cat/newPCMDM/model/mdm.py", line 702, in mask_cond
+    bs, d = cond.shape
+    ^^^^^
+ValueError: too many values to unpack (expected 2)
