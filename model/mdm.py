@@ -706,7 +706,7 @@ class MDM(nn.Module):
         if force_mask:
             return torch.zeros_like(cond)
         elif self.training and self.cond_mask_prob > 0.:
-            mask = torch.bernoulli(torch.ones(bs, device=cond.device) * self.cond_mask_prob).view(bs, 1, 1)  # 1-> use null_cond, 0-> use real cond
+            mask = torch.bernoulli(torch.ones(bs, device=cond.device) * self.cond_mask_prob).view(bs, 1)  # 1-> use null_cond, 0-> use real cond
             # print("Mask Shape:", mask.shape)
             masked_cond = cond * (1. - mask)
             print("Masked Cond Shape:", masked_cond.shape)
