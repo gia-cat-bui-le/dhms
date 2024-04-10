@@ -6,7 +6,7 @@
 #SBATCH --error="/media/nhdang/Vy_Cat/newPCMDM/scripts/log_out/training/dhms.err"
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
-#SBATCH --mem=40G
+#SBATCH --mem=60G
 #SBATCH --cpus-per-task=40
 #SBATCH -w gpu05
 
