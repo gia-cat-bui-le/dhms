@@ -700,9 +700,9 @@ class MDM(nn.Module):
 
     def mask_cond(self, cond, force_mask=False):
         bs, seq, d = cond.shape
-        print("Original Shape:", cond.shape)
+        # print("Original Shape:", cond.shape)
         cond = cond.reshape(bs, seq*d)
-        print("Reshaped Shape:", cond.shape)
+        # print("Reshaped Shape:", cond.shape)
         if force_mask:
             return torch.zeros_like(cond)
         elif self.training and self.cond_mask_prob > 0.:
