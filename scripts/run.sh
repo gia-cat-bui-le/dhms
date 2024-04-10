@@ -2,8 +2,8 @@
 #SBATCH --job-name=job
 #SBATCH --ntasks=1
 #SBATCH --gpus=1             # total number of GPUs
-#SBATCH --output="/media/nhdang/Vy_Cat/newPCMDM/scripts/log_out/training/dhms.out"
-#SBATCH --error="/media/nhdang/Vy_Cat/newPCMDM/scripts/log_out/training/dhms.err"
+#SBATCH --output="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training/dhms.out"
+#SBATCH --error="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training/dhms.err"
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=16G

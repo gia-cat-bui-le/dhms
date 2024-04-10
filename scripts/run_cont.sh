@@ -2,8 +2,8 @@
 #SBATCH --job-name=job
 #SBATCH --ntasks=1
 #SBATCH --gpus=1             # total number of GPUs
-#SBATCH --output="/media/nhdang/Vy_Cat/newPCMDM/scripts/log_out/training_cont/dhms.out"
-#SBATCH --error="/media/nhdang/Vy_Cat/newPCMDM/scripts/log_out/training_cont/dhms.err"
+#SBATCH --output="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training_cont/dhms.out"
+#SBATCH --error="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training_cont/dhms.err"
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=40G
@@ -12,7 +12,7 @@
 
 source /media/nhdang/hieunmt/miniconda3/etc/profile.d/conda.sh
 
-cd /media/nhdang/Vy_Cat/newPCMDM
+cd /media/nhdang/Vy_Cat/dhms
 
 conda activate dhms
 
