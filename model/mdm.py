@@ -709,7 +709,7 @@ class MDM(nn.Module):
             mask = torch.bernoulli(torch.ones(bs, device=cond.device) * self.cond_mask_prob).view(bs, 1, 1)  # 1-> use null_cond, 0-> use real cond
             # print("Mask Shape:", mask.shape)
             masked_cond = cond * (1. - mask)
-            # print("Masked Cond Shape:", masked_cond.shape)
+            print("Masked Cond Shape:", masked_cond.shape)
             return masked_cond.reshape(bs, seq, d)
         else:
             return cond.reshape(bs, seq, d)
