@@ -705,7 +705,7 @@ class MDM(nn.Module):
             return torch.zeros_like(cond)
         elif self.training and self.cond_mask_prob > 0.:
             mask = torch.bernoulli(torch.ones(bs, device=cond.device) * self.cond_mask_prob).view(bs, 1)  # 1-> use null_cond, 0-> use real cond
-            return cond * (1. - mask).reshape(bs, seq, d)
+            return (cond * (1. - mask)).reshape(bs, seq, d)
         else:
             return cond.reshape(bs, seq, d)
 
