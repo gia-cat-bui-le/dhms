@@ -700,17 +700,17 @@ class MDM(nn.Module):
 
     def mask_cond(self, cond, force_mask=False):
         bs, seq, d = cond.shape
-        print("Original Shape:", cond.shape)
+        # print("Original Shape:", cond.shape)
         cond = cond.reshape(bs, seq*d)
-        print("Reshaped Shape:", cond.shape)
+        # print("Reshaped Shape:", cond.shape)
         if force_mask:
             return torch.zeros_like(cond)
         elif self.training and self.cond_mask_prob > 0.:
             mask = torch.bernoulli(torch.ones(bs, device=cond.device) * self.cond_mask_prob).view(bs, 1, 1)  # 1-> use null_cond, 0-> use real cond
-            print("Mask Shape:", mask.shape)
-            masked_cond = cond * (1. - mask).reshape(bs, seq, d)
-            print("Masked Cond Shape:", masked_cond.shape)
-            return masked_cond
+            # print("Mask Shape:", mask.shape)
+            masked_cond = cond * (1. - mask)
+            # print("Masked Cond Shape:", masked_cond.shape)
+            return masked_cond.reshape(bs, seq, d)
         else:
             return cond.reshape(bs, seq, d)
 
