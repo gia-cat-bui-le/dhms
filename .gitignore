@@ -145,3 +145,4 @@ dmypy.json
 *.pkl
 *.npy
 *.wav
+*.pt

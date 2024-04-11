@@ -91,7 +91,6 @@ class TrainLoop:
         resume_checkpoint = find_resume_checkpoint() or self.resume_checkpoint
 
         if resume_checkpoint:
-            self.resume_step = parse_resume_step_from_filename(resume_checkpoint)
             logger.log(f"loading model from checkpoint: {resume_checkpoint}...")
             missing_keys, unexpected_keys = self.model.load_state_dict(
                 dist_util.load_state_dict(
@@ -104,8 +103,10 @@ class TrainLoop:
 
     def _load_optimizer_state(self):
         main_checkpoint = find_resume_checkpoint() or self.resume_checkpoint
+        step = parse_resume_step_from_filename(self.resume_checkpoint)
+        print("resume at: ", step)
         opt_checkpoint = bf.join(
-            bf.dirname(main_checkpoint), f"opt{self.resume_step:09}.pt"
+            bf.dirname(main_checkpoint), f"opt{step:09}.pt"
         )
         if bf.exists(opt_checkpoint):
             logger.log(f"loading optimizer state from checkpoint: {opt_checkpoint}")
@@ -113,6 +114,10 @@ class TrainLoop:
                 opt_checkpoint, map_location=dist_util.dev()
             )
             self.opt.load_state_dict(state_dict)
+        else:
+            print("do not load optimizer from checkpoint")
+            
+        self.resume_step = step
 
     def run_loop(self):
         # self.model.train()
@@ -127,7 +132,7 @@ class TrainLoop:
                 cond['y'] = {key: val.to(self.device) if torch.is_tensor(val) else val for key, val in cond['y'].items()}
                 self.run_step_multi(motion, cond)
                 if self.step % self.log_interval == 0:
-                    for k,v in logger.get_current().name2val.items():
+                    for k,v in logger.get_current().dumpkvs().items():
                         if k == 'loss':
                             print('step[{}]: loss[{:0.5f}]'.format(self.step+self.resume_step, v))
 
@@ -224,19 +229,20 @@ class TrainLoop:
             # training
             compute_losses0 = functools.partial(
                 self.diffusion.training_losses_multi,
-                self.ddp_model,
+                self.model,
                 micro_0,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_0,
                 dataset=self.data.dataset,
                 noise=noise_0
             )
-            if last_batch or not self.use_ddp:
-                # hist_frames [b 5 dim]
-                loss0, hist = compute_losses0() 
-            else:
-                with self.ddp_model.no_sync():
-                    loss0, hist = compute_losses0() 
+            loss0, hist = compute_losses0() 
+            # if last_batch or not self.use_ddp:
+            #     # hist_frames [b 5 dim]
+            #     loss0, hist = compute_losses0() 
+            # else:
+            #     with self.ddp_model.no_sync():
+            #         loss0, hist = compute_losses0() 
 
             # lấy condition prev motion
             if self.hist_frames > 0:
@@ -274,18 +280,19 @@ class TrainLoop:
             # print("THIS HAS HIST FRAME")
             compute_losses1 = functools.partial(
                 self.diffusion.training_losses_multi,
-                self.ddp_model,
+                self.model,
                 micro_1,
                 t,
                 model_kwargs=micro_cond_1,
                 dataset=self.data.dataset,
                 noise=noise_1
             )
-            if last_batch or not self.use_ddp:
-                loss1, _ = compute_losses1() 
-            else:
-                with self.ddp_model.no_sync():
-                    loss1, _ = compute_losses1()
+            loss1, _ = compute_losses0() 
+            # if last_batch or not self.use_ddp:
+            #     loss1, _ = compute_losses1() 
+            # else:
+            #     with self.ddp_model.no_sync():
+            #         loss1, _ = compute_losses1()
                     
             losses = {}
             losses['loss'] = loss0['loss'] + loss1['loss']
@@ -293,7 +300,6 @@ class TrainLoop:
                 self.schedule_sampler.update_with_local_losses(
                     t, losses["loss"].detach()
                 )
-
             loss = (losses["loss"] * weights).mean()
             log_loss_dict(
                 self.diffusion, t, {k: v * weights for k, v in losses.items()}

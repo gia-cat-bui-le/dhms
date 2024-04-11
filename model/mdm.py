@@ -606,7 +606,7 @@ class MDM(nn.Module):
         # self.clip_dim = clip_dim
         self.action_emb = kargs.get('action_emb', None)
         
-        self.music_dim = 35 #baseline feats
+        self.music_dim = 35 * 150 #baseline feats
         pos_dim = 3
         rot_dim = self.njoints * self.nfeats  # 24 joints, 6dof
         self.input_feats = pos_dim + rot_dim + 4
@@ -635,7 +635,7 @@ class MDM(nn.Module):
             if self.hist_frames > 0:
                 # self.hist_frames = 5
                 self.seperation_token = nn.Parameter(torch.randn(latent_dim))
-                self.skel_embedding = nn.Linear(self.njoints, self.latent_dim)
+                self.skel_embedding = nn.Linear(self.input_feats, self.latent_dim)
         if self.arch == 'trans_enc' or self.arch == 'past_cond' or self.arch == 'inpainting':
             print("TRANS_ENC init")
             seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
@@ -699,9 +699,8 @@ class MDM(nn.Module):
         return clip_model
 
     def mask_cond(self, cond, force_mask=False):
-        bs, seq, d = cond.shape
+        bs, d = cond.shape
         # print("Original Shape:", cond.shape)
-        cond = cond.reshape(bs, seq*d)
         # print("Reshaped Shape:", cond.shape)
         if force_mask:
             return torch.zeros_like(cond)
@@ -709,10 +708,10 @@ class MDM(nn.Module):
             mask = torch.bernoulli(torch.ones(bs, device=cond.device) * self.cond_mask_prob).view(bs, 1)  # 1-> use null_cond, 0-> use real cond
             # print("Mask Shape:", mask.shape)
             masked_cond = cond * (1. - mask)
-            print("Masked Cond Shape:", masked_cond.shape)
-            return masked_cond.reshape(bs, seq, d)
+            # print("Masked Cond Shape:", masked_cond.shape)
+            return masked_cond
         else:
-            return cond.reshape(bs, seq, d)
+            return cond
 
     def encode_text(self, raw_text):
         # raw_text - list (batch_size length) of strings with input text prompts
@@ -894,7 +893,7 @@ class OutputProcess(nn.Module):
             output = torch.cat((first_pose, vel), axis=0)  # [seqlen, bs, 150]
         else:
             raise ValueError
-        output = output.reshape(nframes, bs, self.nfeats)
+        output = output.reshape(nframes, bs, self.input_feats)
         output = output.permute(1, 2, 0)  # [bs, njoints, nfeats, nframes]
         return output
 

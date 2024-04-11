@@ -328,10 +328,11 @@ class AISTPPDataset(Dataset):
     def __getitem__(self, idx):
         filename_ = self.data["filenames"][idx]
         feature = torch.from_numpy(np.load(filename_))
+        seq, d = feature.shape
         return {
             'pose': self.data["pose"][idx].permute(1, 0), 
             'pose_1': self.data["pose_1"][idx].permute(1, 0),
-            'music': feature,
+            'music': feature.reshape(seq*d),
         }
 
     def load_aistpp(self):

@@ -10,6 +10,6 @@ def view_and_save_pt_content(file_path, output_file):
         print(f"An error occurred: {str(e)}")
 
 # Example usage
-file_path = 'save/pcmdm_cont/opt000100000.pt'  # Change this to your .pt file path
+file_path = 'save\pcmdm\model000000000.pt'  # Change this to your .pt file path
 output_file = 'content.txt'  # Output text file name
 view_and_save_pt_content(file_path, output_file)
