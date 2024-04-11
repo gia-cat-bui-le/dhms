@@ -303,7 +303,6 @@ class GaussianDiffusion():
         )
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    #! currently here
     def p_mean_variance(
         self, model, x, t, clip_denoised=True, denoised_fn=None, model_kwargs=None
     ):
@@ -331,11 +330,8 @@ class GaussianDiffusion():
             model_kwargs = {}
 
         B, C = x.shape[:2]
-        # print("B, C: ", B, C)
         assert t.shape == (B,)
-        # print("x shape: ", x.shape)
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
-        # print("model output: ", model_output.shape)
 
         if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
             inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
@@ -345,13 +341,14 @@ class GaussianDiffusion():
             # print('model_output', model_output.shape, model_output)
             # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
             # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
-        if 'hframes' in model_kwargs['y'].keys():
-            hist_len =  model_kwargs['y']['hframes'].shape[-1]
-            model_output[:,:,:hist_len] = model_kwargs['y']['hframes']
+        if 'hist_motion' in model_kwargs['y'].keys():
+            hist_len =  model_kwargs['y']['hist_motion'].shape[-1]
+            hist_motion = model_kwargs['y']['hist_motion']
+            model_output[:,:,:,:hist_len] = hist_motion
         elif 'next_motion' in model_kwargs['y'].keys():
             next_len = model_kwargs['y']['next_motion'].shape[-1]
             for idx in range(B):
-                len  = model_kwargs['y']['lengths'][idx]
+                len  = model_kwargs['y']['length'][idx]
                 model_output[idx,:,:,len-next_len:len] = model_kwargs['y']['next_motion'][idx,:,:,:]
             # model_output[:,:,:,-next_len:] = model_kwargs['y']['next_motion']
 
@@ -413,8 +410,6 @@ class GaussianDiffusion():
                 pred_xstart = process_xstart(
                     self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output)
                 )
-            # print(pred_xstart.shape)
-            # print(x.shape)
             model_mean, _, _ = self.q_posterior_mean_variance(
                 x_start=pred_xstart, x_t=x, t=t
             )
@@ -440,7 +435,7 @@ class GaussianDiffusion():
         x_0, x_1 = extract_fn(x, model_kwargs_0['y'], model_kwargs_1['y'], inter_frames)
         output_0 = model(x_0, self._scale_timesteps(t), **model_kwargs_0)
         if hist_frames > 0:
-            hist_motion = torch.ones(B, 135, 1, hist_frames).to(output_0.device)
+            hist_motion = torch.ones(B, 151, 1, hist_frames).to(output_0.device)
             for idx in range(B):
                 len  = model_kwargs_0['y']['lengths'][idx]
                 hist_motion[idx,:,:,:] = output_0[idx,:,:,len-hist_frames:len]
@@ -635,7 +630,6 @@ class GaussianDiffusion():
                  - 'sample': a random sample from the model.
                  - 'pred_xstart': a prediction of x_0.
         """
-        # print("GOTO: p_sample")
         out = self.p_mean_variance(
             model,
             x,
@@ -875,13 +869,13 @@ class GaussianDiffusion():
         hist_frames,
         inpainting_frames,
         shape_0,
-        # shape_1,
+        shape_1,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
         cond_fn=None,
         model_kwargs_0=None,
-        # model_kwargs_1=None,
+        model_kwargs_1=None,
         device=None,
         progress=False,
         skip_timesteps=0,
@@ -891,21 +885,13 @@ class GaussianDiffusion():
         dump_steps=None,
         const_noise=False,
     ):
-        print("GOTO: p_sample_loop_inpainting")
         final = None
         if dump_steps is not None:
             dump = []
-            
-        B = shape_0[0]
-        noise_dim = shape_0[1]
-        
-        timestep = self.num_timesteps - skip_timesteps - 1
 
         for i, sample in enumerate(self.p_sample_loop_progressive(
             model,
             shape_0,
-            noise_dim=noise_dim,
-            hist_frames=hist_frames,
             noise=noise,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
@@ -922,57 +908,56 @@ class GaussianDiffusion():
             if dump_steps is not None and i in dump_steps:
                 dump.append(deepcopy(sample["sample"]))
             final_0 = sample
-            
+
         # if hist_frames > 0:
         #     hist_lst = [feats[:,:,:len] for feats, len in zip(final_0['pred_xstart'], batch['length_0'])]
         #     hframes = torch.stack([x[:,:,-self.hist_frames:] for x in hist_lst])
 
         # model_kwargs_1['y']['hframes'] = final_0['pred_xstart'][:,:,:,-hist_frames:]
 
+        B = shape_0[0]
 
-        # if hist_frames > 0:
-        #     # fixme
-        #     # print("GOTO: hist_frames > 0")
-        #     hist_motion = torch.ones(B, 151, hist_frames).to(final_0['sample'].device)
-        #     for idx in range(B):
-        #         len  = model_kwargs_0['y']['lengths'][idx]
-        #         hist_motion[idx,:,:] = final_0['sample'][idx,:,len-hist_frames:len]
-        #     model_kwargs_1['y']['hframes'] = hist_motion
+        if hist_frames > 0:
+            # FIXME
+            hist_motion = torch.ones(B, 151, 1, hist_frames).to(final_0['sample'].device)
+            for idx in range(B):
+                len  = model_kwargs_0['y']['lengths'][idx]
+                hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-hist_frames:len]
+            model_kwargs_1['y']['hframes'] = hist_motion
 
-        # if inpainting_frames > 0:
-        #     # fixme
-        #     hist_motion = torch.ones(B, 151, inpainting_frames).to(final_0['sample'].device)
-        #     for idx in range(B):
-        #         len  = model_kwargs_0['y']['lengths'][idx]
-        #         hist_motion[idx,:,:] = final_0['sample'][idx,:,len-inpainting_frames:len]
-        #     model_kwargs_1['y']['hist_motion'] = hist_motion
+        if inpainting_frames > 0:
+            # FIXME
+            hist_motion = torch.ones(B, 151, 1, inpainting_frames).to(final_0['sample'].device)
+            for idx in range(B):
+                len  = model_kwargs_0['y']['lengths'][idx]
+                hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-inpainting_frames:len]
+            model_kwargs_1['y']['hist_motion'] = hist_motion
         # model_kwargs_1['y']['hist_motion'] = [len + ]
         # shape_1 = (shape_1[0], shape_1[1], shape_1[2], shape_1[3] +  hist_frames)
         
-        # for i, sample in enumerate(self.p_sample_loop_progressive(
-        #     model,
-        #     shape_1,
-        #     noise=noise,
-        #     clip_denoised=clip_denoised,
-        #     denoised_fn=denoised_fn,
-        #     cond_fn=cond_fn,
-        #     model_kwargs=model_kwargs_1,
-        #     device=device,
-        #     progress=progress,
-        #     skip_timesteps=skip_timesteps,
-        #     init_image=init_image,
-        #     randomize_class=randomize_class,
-        #     cond_fn_with_grad=cond_fn_with_grad,
-        #     const_noise=const_noise,
-        # )):
-        #     if dump_steps is not None and i in dump_steps:
-        #         dump.append(deepcopy(sample["sample"]))
-        #     final_1 = sample
+        for i, sample in enumerate(self.p_sample_loop_progressive(
+            model,
+            shape_1,
+            noise=noise,
+            clip_denoised=clip_denoised,
+            denoised_fn=denoised_fn,
+            cond_fn=cond_fn,
+            model_kwargs=model_kwargs_1,
+            device=device,
+            progress=progress,
+            skip_timesteps=skip_timesteps,
+            init_image=init_image,
+            randomize_class=randomize_class,
+            cond_fn_with_grad=cond_fn_with_grad,
+            const_noise=const_noise,
+        )):
+            if dump_steps is not None and i in dump_steps:
+                dump.append(deepcopy(sample["sample"]))
+            final_1 = sample
 
         if dump_steps is not None:
             return dump
-        # return final_0["sample"], final_1["sample"]
-        return final_0["sample"]
+        return final_0["sample"], final_1["sample"]
 
     def p_sample_loop_comp(
         self,
@@ -1028,15 +1013,13 @@ class GaussianDiffusion():
         self,
         model,
         shape,
-        noise_dim,
-        hist_frames,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
         cond_fn=None,
         model_kwargs=None,
         device=None,
-        progress=True,
+        progress=False,
         skip_timesteps=0,
         init_image=None,
         randomize_class=False,
@@ -1051,7 +1034,6 @@ class GaussianDiffusion():
         Returns a generator over dicts, where each dict is the return value of
         p_sample().
         """
-        # print("GOTO: p_sample_loop_progressive")
         if device is None:
             device = next(model.parameters()).device
         assert isinstance(shape, (tuple, list))
@@ -1095,13 +1077,6 @@ class GaussianDiffusion():
                 )
                 yield out
                 img = out["sample"]
-                B = shape[0]
-                if hist_frames > 0:
-                    hist_motion = torch.ones(B, noise_dim, hist_frames).to(out['sample'].device)
-                    for idx in range(1, B):
-                        len  = model_kwargs['y']['lengths'][idx]
-                        hist_motion[idx,:,:] = out['sample'][idx-1,:,len-hist_frames:len]
-                    model_kwargs['y']['hframes'] = hist_motion
 
 
     def p_sample_loop_progressive_comp(
@@ -1259,7 +1234,7 @@ class GaussianDiffusion():
                 B = out_0_hat.shape(0)
                 # model_kwargs_1['y']['hframes'] = out_0['pred_xstart'][:,:,:,-hist_frames:]
                 if hist_frames > 0:
-                    hist_motion = torch.ones(B, 135, 1, hist_frames).to(out_0_hat.device)
+                    hist_motion = torch.ones(B, 151, 1, hist_frames).to(out_0_hat.device)
                     for idx in range(B):
                         len  = model_kwargs_0['y']['lengths'][idx]
                         hist_motion[idx,:,:,:] = out_0_hat[idx,:,:,len-hist_frames:len]
@@ -2272,6 +2247,7 @@ class GaussianDiffusion():
 
             terms["rot_mse"] = self.masked_l2(target, model_output, mask) # mean_flat(rot_mse)
 
+            #TODO: add more loss
             terms["loss"] = terms["rot_mse"]
 
         else:

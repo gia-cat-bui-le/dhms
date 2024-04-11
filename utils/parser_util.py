@@ -66,7 +66,7 @@ def add_base_options(parser):
     group.add_argument("--composition", default=False, type=bool, help="composition")
     group.add_argument("--inter_frames", default=0, type=int, help="inter_frames")
     group.add_argument("--infer_get", default=False, type=int, help="infer_get")
-    group.add_argument("--inpainting_frames", default=0, type=int, help="inpainting_frames")
+    group.add_argument("--inpainting_frames", default=75, type=int, help="inpainting_frames")
     group.add_argument("--refine_scale", default=1.0, type=float, help="inpainting_frames")
     group.add_argument("--max_len", default=90, type=int, help="inpainting_frames")
 
@@ -83,7 +83,7 @@ def add_model_options(parser):
     group = parser.add_argument_group('model')
     group.add_argument("--feature_type", default="baseline", type=str)
     group.add_argument("--cond_drop_prob", default=0.25, type=float)
-    group.add_argument("--arch", default='past_cond',
+    group.add_argument("--arch", default='inpainting',
                        choices=['trans_enc', 'trans_dec', 'gru', 'past_cond', 'inpainting'], type=str,
                        help="Architecture types as reported in the paper.")
     group.add_argument("--emb_trans_dec", default=False, type=bool,
@@ -233,7 +233,7 @@ def add_evaluation_options(parser):
     group = parser.add_argument_group('eval')
     group.add_argument("--model_path", required=True, type=str,
                        help="Path to model####.pt file to be sampled.")
-    group.add_argument("--eval_mode", default='wo_mm', choices=['wo_mm', 'mm_short', 'debug', 'full'], type=str,
+    group.add_argument("--eval_mode", default='debug', choices=['wo_mm', 'mm_short', 'debug', 'full'], type=str,
                        help="wo_mm (t2m only) - 20 repetitions without multi-modality metric; "
                             "mm_short (t2m only) - 5 repetitions with multi-modality metric; "
                             "debug - short run, less accurate results."

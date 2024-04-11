@@ -607,12 +607,13 @@ class MDM(nn.Module):
         self.action_emb = kargs.get('action_emb', None)
         
         self.music_dim = 35 * 150 #baseline feats
-        pos_dim = 3
-        rot_dim = self.njoints * self.nfeats  # 24 joints, 6dof
-        self.input_feats = pos_dim + rot_dim + 4
+        # pos_dim = 3
+        # rot_dim = self.njoints * self.nfeats  # 24 joints, 6dof
+        # self.input_feats = pos_dim + rot_dim + 4
+    
         # output_feats = self.input_feats
 
-        # self.input_feats = self.njoints * self.nfeats
+        self.input_feats = self.njoints * self.nfeats
 
         self.normalize_output = kargs.get('normalize_encoder_output', False)
 
@@ -635,7 +636,7 @@ class MDM(nn.Module):
             if self.hist_frames > 0:
                 # self.hist_frames = 5
                 self.seperation_token = nn.Parameter(torch.randn(latent_dim))
-                self.skel_embedding = nn.Linear(self.input_feats, self.latent_dim)
+                self.skel_embedding = nn.Linear(self.njoints, self.latent_dim)
         if self.arch == 'trans_enc' or self.arch == 'past_cond' or self.arch == 'inpainting':
             print("TRANS_ENC init")
             seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
@@ -735,7 +736,7 @@ class MDM(nn.Module):
         x: [batch_size, njoints, nfeats, max_frames], denoted x_t in the paper
         timesteps: [batch_size] (int)
         """
-        bs, nfeats, nframes = x.shape
+        bs, njoints, nfeats, nframes = x.shape
         emb = self.embed_timestep(timesteps)  # [1, bs, d]
 
         force_mask = y.get('uncond', False)
@@ -770,6 +771,15 @@ class MDM(nn.Module):
                 aug_mask = torch.cat((token_mask, mask), 1)
                 xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
                 xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+                # print(
+                #     f'DEBUG SECTION:\n',
+                #     f'\txseq: {xseq.shape}\n',
+                #     f'\taug_mask: {aug_mask.shape}\n',
+                #     f'\tmask: {mask.shape}\n'
+                #     f'\ty[lengths]: {y["lengths"]}\n',
+                #     f'\temb: {emb.shape}\n',
+                #     f'\tx: {x.shape}\n'
+                # )
                 if self.motion_mask:
                     output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
                 else:
@@ -853,8 +863,9 @@ class InputProcess(nn.Module):
             self.velEmbedding = nn.Linear(self.input_feats, self.latent_dim)
 
     def forward(self, x):
-        bs, nfeats, nframes = x.shape
-        x = x.permute((2, 0, 1))
+        bs, njoints, nfeats, nframes = x.shape
+        # print("INPUT PROCESS: ", bs, njoints, nfeats, nframes)
+        x = x.permute((3, 0, 1, 2)).reshape(nframes, bs, njoints*nfeats)
 
         if self.data_rep in ['rot6d', 'xyz', 'hml_vec']:
             x = self.poseEmbedding(x)  # [seqlen, bs, d]
@@ -893,8 +904,8 @@ class OutputProcess(nn.Module):
             output = torch.cat((first_pose, vel), axis=0)  # [seqlen, bs, 150]
         else:
             raise ValueError
-        output = output.reshape(nframes, bs, self.input_feats)
-        output = output.permute(1, 2, 0)  # [bs, njoints, nfeats, nframes]
+        output = output.reshape(nframes, bs, self.njoints, self.nfeats)
+        output = output.permute(1, 2, 3, 0)  # [bs, njoints, nfeats, nframes]
         return output
 
 

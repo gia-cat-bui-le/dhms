@@ -27,7 +27,7 @@ from teach.data.tools import lengths_to_mask
 INITIAL_LOG_LOSS_SCALE = 20.0
 
 class TrainLoop:
-    def __init__(self, args, train_platform, model, diffusion, data):
+    def __init__(self, args, train_platform, model, diffusion, data, normalizer):
         self.args = args
         self.dataset = args.dataset
         self.train_platform = train_platform
@@ -86,6 +86,8 @@ class TrainLoop:
 
         self.hist_frames = args.hist_frames
         self.inpainting_frames = args.inpainting_frames
+        
+        self.normalizer = normalizer
 
     def _load_and_sync_parameters(self):
         resume_checkpoint = find_resume_checkpoint() or self.resume_checkpoint
@@ -123,14 +125,18 @@ class TrainLoop:
         # self.model.train()
         for epoch in range(self.num_epochs):
             print(f'Starting epoch {epoch}')                
-            for motion, cond in tqdm(self.data):
+            for batch in tqdm(self.data):
                 if not (not self.lr_anneal_steps or self.step + self.resume_step < self.lr_anneal_steps):
                     break
 
-                motion['motion_feats_0'] = motion['motion_feats_0'].to(self.device)
-                motion['motion_feats_1'] = motion['motion_feats_1'].to(self.device)
-                cond['y'] = {key: val.to(self.device) if torch.is_tensor(val) else val for key, val in cond['y'].items()}
-                self.run_step_multi(motion, cond)
+                batch = {key: val.to(self.device) if torch.is_tensor(val) else val for key, val in batch.items()}
+                # cond['y'] = {key: val.to(self.device) if torch.is_tensor(val) else val for key, val in cond['y'].items()}
+                if self.args.arch == 'past_cond':
+                    print("MODEL ARCH: PAST COND")
+                    self.run_step_multi(batch)
+                else:
+                    print("MODEL ARCH: INPAINTING")
+                    self.run_step_inpainting(batch)
                 if self.step % self.log_interval == 0:
                     for k,v in logger.get_current().dumpkvs().items():
                         if k == 'loss':
@@ -191,6 +197,131 @@ class TrainLoop:
         self._anneal_lr()
         self.log_step()
 
+    
+    def run_step_inpainting(self, batch):
+        self.forward_backward_inpainting(batch)
+        self.mp_trainer.optimize(self.opt)
+        self._anneal_lr()
+        self.log_step()
+        
+    def forward_backward_inpainting(self, batch):
+        self.mp_trainer.zero_grad()
+        for i in range(0, batch['motion_feats_0'].shape[0], self.microbatch):
+            # Eliminates the microbatch feature
+            assert i == 0
+            assert self.microbatch == self.batch_size
+            last_batch = (i + self.microbatch) >= batch['motion_feats_0'].shape[0]
+            t, weights = self.schedule_sampler.sample(batch['motion_feats_0'].shape[0], dist_util.dev())
+
+            print("micro 0")
+            micro_0 = batch['motion_feats_0'] # bs len 135
+            micro_0 = micro_0.unsqueeze(2).permute(0, 3, 2, 1) # bs 135 1 len
+            micro_cond_0 = {}
+            micro_cond_0['y'] = {}
+            micro_cond_0['y']['lengths'] = batch['length_0']
+            # assuming mask.shape == bs, 1, 1, seqlen
+            micro_cond_0['y']['mask'] = lengths_to_mask(batch['length_0'], micro_0.device).unsqueeze(1).unsqueeze(2)
+            micro_cond_0['y']['music'] = batch['music_0_with_transition'].to(batch['motion_feats_0'].device)
+            
+            print("COND shape: ", micro_cond_0['y']['music'].shape)
+                
+            # print(micro_cond_0['y']['music'])
+            
+            compute_losses_0 = functools.partial(
+                self.diffusion.training_losses_inpainting,
+                self.ddp_model,
+                micro_0,  # [bs, ch, image_size, image_size]
+                t,  # [bs](int) sampled timesteps
+                model_kwargs=micro_cond_0,
+                dataset=self.data.dataset
+            )
+            if last_batch or not self.use_ddp:
+                # hist_frames [b 5 dim]
+                loss_0 = compute_losses_0() 
+            else:
+                with self.ddp_model.no_sync():
+                    loss_0 = compute_losses_0() 
+
+            # bs 135 1 frames
+
+            print("micro 1")
+            micro_1 = batch['motion_feats_1_with_transition']
+            micro_1 = micro_1.unsqueeze(2).permute(0, 3, 2, 1)
+            micro_cond_1 = {}
+            micro_cond_1['y'] = {}
+            # micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1_with_transition']]
+            micro_cond_1['y']['lengths'] = [len for len in batch['length_1_with_transition']]
+            micro_cond_1['y']['mask'] = lengths_to_mask(micro_cond_1['y']['lengths'], micro_1.device).unsqueeze(1).unsqueeze(2)
+            micro_cond_1['y']['music'] = batch['music_1'].to(batch['motion_feats_0'].device)
+            hist_lst = [feats[:,:,:len] for feats, len in zip(micro_0, micro_cond_0['y']['lengths'])]
+            hist_frames = torch.stack([x[:,:,-self.inpainting_frames:] for x in hist_lst])
+            micro_1 = torch.cat((hist_frames, micro_1), axis=-1)
+            # micro_cond = cond
+            
+            #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
+            compute_losses_1 = functools.partial(
+                self.diffusion.training_losses_inpainting,
+                self.ddp_model,
+                micro_1,  # [bs, ch, image_size, image_size]
+                t,  # [bs](int) sampled timesteps
+                model_kwargs=micro_cond_1,
+                dataset=self.data.dataset
+            )
+            if last_batch or not self.use_ddp:
+                # hist_frames [b 5 dim]
+                loss_1 = compute_losses_1() 
+            else:
+                with self.ddp_model.no_sync():
+                    loss_1 = compute_losses_1() 
+            # print_0 = (loss0['loss']).mean()
+            # print_1 = (loss1['loss']).mean()
+            # print(f'loss_0: {print_0}, loss_1:{print_1}')
+
+            print("micro 2")
+            micro_2 = batch['motion_feats_0']
+            micro_2 = micro_2.unsqueeze(2).permute(0, 3, 2, 1)
+            micro_cond_2 = {}
+            micro_cond_2['y'] = {}
+            micro_cond_2['y']['lengths'] = [len + self.inpainting_frames for len in batch['length_0']]
+            micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
+            micro_cond_2 ['y']['music'] = batch['music_0_with_transition'].to(batch['motion_feats_0'].device)
+            fut_lst = [feats[:,:,:len] for feats, len in zip(batch['motion_feats_1_with_transition'].unsqueeze(2).permute(0, 3, 2, 1), batch['length_1_with_transition'])]
+            fut_frames = torch.stack([x[:,:,:self.inpainting_frames] for x in fut_lst])
+            micro_2 = torch.cat((micro_2, torch.zeros(micro_2.shape[0], micro_2.shape[1], micro_2.shape[2], self.inpainting_frames).to(micro_2.device)), axis=-1)
+            for idx in range(micro_2.shape[0]):
+                micro_2[idx, :, :, batch['length_0'][idx]:batch['length_0'][idx]+self.inpainting_frames] = fut_frames[idx, :, :, :] 
+            # micro_2 = torch.cat((micro_2, fut_frames), axis=-1)
+            # micro_cond = cond
+            
+            #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
+            compute_losses_cycle = functools.partial(
+                self.diffusion.training_losses_inpainting,
+                self.ddp_model,
+                micro_2,  # [bs, ch, image_size, image_size]
+                t,  # [bs](int) sampled timesteps
+                model_kwargs=micro_cond_2,
+                dataset=self.data.dataset
+            )
+            if last_batch or not self.use_ddp:
+                # hist_frames [b 5 dim]
+                loss_cycle = compute_losses_cycle() 
+            else:
+                with self.ddp_model.no_sync():
+                    loss_cycle = compute_losses_cycle() 
+
+            losses = {}
+            losses['loss'] = loss_0['loss'] + loss_1['loss'] + self.args.lambda_cycle * loss_cycle['loss']
+            if isinstance(self.schedule_sampler, LossAwareSampler):
+                self.schedule_sampler.update_with_local_losses(
+                    t, losses["loss"].detach()
+                )
+
+            loss = (losses["loss"] * weights).mean()
+            log_loss_dict(
+                self.diffusion, t, {k: v * weights for k, v in losses.items()}
+            )
+            self.mp_trainer.backward(loss)
+    
     def forward_backward_multi(self, batch, cond):
         self.mp_trainer.zero_grad()
         for i in range(0, batch["motion_feats_0"].shape[0], self.microbatch):
@@ -345,6 +476,11 @@ class TrainLoop:
             "wb",
         ) as f:
             torch.save(self.opt.state_dict(), f)
+            
+        ckpt = {
+                "normalizer": self.normalizer,
+                }
+        torch.save(ckpt, os.path.join(self.save_dir, f"normalizer-{(self.step+self.resume_step):09d}.pt"))
 
 
 def parse_resume_step_from_filename(filename):

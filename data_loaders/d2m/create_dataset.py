@@ -34,14 +34,19 @@ def create_dataset(opt):
             
         # slice motions/music into sliding windows to create training dataset
         print("Slicing train data")
-        slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, 10.0)
+        
+        inpainting_frame = opt.inpainting_frame
+        motion_len = opt.motion_len
+        slice_len = inpainting_frame + motion_len*2
+        
+        slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
-        slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 5, 5)
+        slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
     else:
         print("Slicing train data")
-        slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, 10.0)
+        slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
-        slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 5, 5)
+        slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
     
 
 def parse_opt():
@@ -58,6 +63,18 @@ def parse_opt():
         type=str,
         default="/raid/nhdang/Vy/data",
         help="path to folder containing motions and music",
+    )
+    parser.add_argument(
+        "--inpainting_frame",
+        type=float,
+        default=2.5,
+        help="the length (in frames) of inpainting transition between 2 motions",
+    )
+    parser.add_argument(
+        "--motion_len",
+        type=float,
+        default=2.5,
+        help="each motion segment's length",
     )
     parser.add_argument("--extract-baseline", action="store_true")
     parser.add_argument("--extract-jukebox", action="store_true")

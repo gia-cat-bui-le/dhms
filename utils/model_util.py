@@ -27,10 +27,27 @@ def get_model_args(args, data):
     # SMPL defaults
     data_rep = 'rot6d'
     
+    njoints = 25
+    nfeats = 6
+
+    if args.dataset == 'humanml':
+        data_rep = 'hml_vec'
+        njoints = 263
+        nfeats = 1
+    elif args.dataset == 'kit':
+        data_rep = 'hml_vec'
+        njoints = 251
+        nfeats = 1
+    elif args.dataset == 'babel':
+        data_rep = 'hml_vec'
+        njoints = 135
+        nfeats = 1
+    
     if args.dataset == "aistpp":
-        njoints = 24
-        nfeats = 6
+        njoints = 151
+        nfeats = 1
     elif args.dataset == "finedance":
+        #TODO: add this for finedance
         njoints = 52
         nfeats = 6
     

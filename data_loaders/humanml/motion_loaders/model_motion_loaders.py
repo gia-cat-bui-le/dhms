@@ -14,7 +14,7 @@ def collate_fn(batch):
 class MMGeneratedDataset(Dataset):
     def __init__(self, opt, motion_dataset, w_vectorizer):
         self.opt = opt
-        self.dataset = motion_dataset.mm_generated_motion
+        self.dataset = motion_dataset.generated_motion
         self.w_vectorizer = w_vectorizer
 
     def __len__(self):
@@ -22,10 +22,10 @@ class MMGeneratedDataset(Dataset):
 
     def __getitem__(self, item):
         data = self.dataset[item]
-        mm_motions = data['mm_motions']
+        # mm_motions = data['mm_motions']
         m_lens = []
         motions = []
-        for mm_motion in mm_motions:
+        for mm_motion in data:
             m_lens.append(mm_motion['length'])
             motion = mm_motion['motion']
             # We don't need the following logic because our sample func generates the full tensor anyway:
@@ -80,15 +80,15 @@ def get_mdm_loader(args, model, diffusion, batch_size, ground_truth_loader, mm_n
     # dataset = CompMDMGeneratedDataset(opt, ground_truth_dataset, ground_truth_dataset.w_vectorizer, mm_num_samples, mm_num_repeats)
     dataset = CompCCDGeneratedDataset(args, model, diffusion, ground_truth_loader, mm_num_samples, mm_num_repeats, num_samples_limit, scale)
 
-    mm_dataset = MMGeneratedDataset(opt, dataset, None)
+    # mm_dataset = MMGeneratedDataset(opt, dataset, None)
 
     # NOTE: bs must not be changed! this will cause a bug in R precision calc!
     motion_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn, drop_last=True, num_workers=4)
-    mm_motion_loader = DataLoader(mm_dataset, batch_size=1, num_workers=1)
+    # mm_motion_loader = DataLoader(mm_dataset, batch_size=1, num_workers=1)
 
     print('Generated Dataset Loading Completed!!!')
 
-    return motion_loader, mm_motion_loader
+    return motion_loader
 
 def get_teach_loader(args, model, diffusion, batch_size, ground_truth_loader, mm_num_samples, mm_num_repeats, num_samples_limit, scale, cnt):
     opt = {

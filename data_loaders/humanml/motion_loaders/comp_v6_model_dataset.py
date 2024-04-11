@@ -267,9 +267,11 @@ class CompMDMGeneratedDataset(Dataset):
 class CompCCDGeneratedDataset(Dataset):
 
     def __init__(self, args, model, diffusion, dataloader, mm_num_samples, mm_num_repeats, num_samples_limit, scale=1.):
-        self.dataloader = dataloader
-        self.dataset = dataloader.dataset
-        assert mm_num_samples < len(dataloader.dataset)
+        self.dataloader, normalizer = dataloader
+        dataloader = self.dataloader
+        # print(dataloader)
+        self.dataset = self.dataloader.dataset
+        assert mm_num_samples < len(self.dataloader.dataset)
         use_ddim = False  # FIXME - hardcoded
         clip_denoised = False  # FIXME - hardcoded
         composition = args.composition
@@ -286,15 +288,15 @@ class CompCCDGeneratedDataset(Dataset):
         if args.refine:
             sample_fn_refine = diffusion.p_sample_loop
 
-        real_num_batches = len(dataloader)
+        real_num_batches = len(self.dataloader)
         if num_samples_limit is not None:
-            real_num_batches = num_samples_limit // dataloader.batch_size + 1
+            real_num_batches = num_samples_limit // self.dataloader.batch_size + 1
         print('real_num_batches', real_num_batches)
 
         generated_motion = []
         mm_generated_motions = []
         if mm_num_samples > 0:
-            mm_idxs = np.random.choice(real_num_batches, mm_num_samples // dataloader.batch_size +1, replace=False)
+            mm_idxs = np.random.choice(real_num_batches, mm_num_samples // self.dataloader.batch_size +1, replace=False)
             mm_idxs = np.sort(mm_idxs)
         else:
             mm_idxs = []
@@ -319,36 +321,36 @@ class CompCCDGeneratedDataset(Dataset):
                 model_kwargs_0 = {}
                 model_kwargs_0['y'] = {}
                 if args.inter_frames > 0:
-                    model_kwargs_0['y']['length'] = [len + args.inter_frames // 2 for len in batch['length_0']]
+                    model_kwargs_0['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_0']]
                 else:
-                    model_kwargs_0['y']['length'] = batch['length_0']
-                model_kwargs_0['y']['text'] = batch['text_0']
-                model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['length'], 
+                    model_kwargs_0['y']['lengths'] = batch['length_0']
+                model_kwargs_0['y']['music'] = batch['music_0_with_transition'].to("cuda")
+                model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
 
                 model_kwargs_1 = {}
                 model_kwargs_1['y'] = {}
 
                 if args.inter_frames > 0:
-                    model_kwargs_1['y']['length'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
+                    model_kwargs_1['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
                 else:
-                    model_kwargs_1['y']['length'] = [args.inpainting_frames + len 
+                    model_kwargs_1['y']['lengths'] = [args.inpainting_frames + len 
                                                 for len in batch['length_1_with_transition']]
-                model_kwargs_1['y']['text'] = batch['text_1']
-                model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['length'], 
+                model_kwargs_1['y']['music'] = batch['music_1'].to("cuda")
+                model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
                 # add CFG scale to batch
                 if scale != 1.:
-                    model_kwargs_0['y']['scale'] = torch.ones(len(model_kwargs_0['y']['length']),
+                    model_kwargs_0['y']['scale'] = torch.ones(len(model_kwargs_0['y']['lengths']),
                                                             device=dist_util.dev()) * scale
-                    model_kwargs_1['y']['scale'] = torch.ones(len(model_kwargs_1['y']['length']),
+                    model_kwargs_1['y']['scale'] = torch.ones(len(model_kwargs_1['y']['lengths']),
                                                             device=dist_util.dev()) * scale
 
                 
 
 
                 mm_num_now = len(mm_generated_motions) // dataloader.batch_size
-                is_mm = i in mm_idxs
+                is_mm = False
                 repeat_times = mm_num_repeats if is_mm else 1
                 mm_motions = []
 
@@ -361,8 +363,8 @@ class CompCCDGeneratedDataset(Dataset):
                         model,
                         args.hist_frames,
                         args.inpainting_frames if not args.composition else args.inter_frames,
-                        (bs, 135, 1, model_kwargs_0['y']['mask'].shape[-1]),
-                        (bs, 135, 1, model_kwargs_1['y']['mask'].shape[-1]),
+                        (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1]),
+                        (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1]),
                         clip_denoised=clip_denoised,
                         model_kwargs_0=model_kwargs_0,
                         model_kwargs_1=model_kwargs_1,
@@ -383,14 +385,14 @@ class CompCCDGeneratedDataset(Dataset):
                         model_kwargs_0_refine = {}
                         model_kwargs_0_refine['y'] = {}
                         model_kwargs_0_refine['y']['scale'] = model_kwargs_0['y']['scale']
-                        model_kwargs_0_refine['y']['text'] = model_kwargs_0['y']['text']
+                        model_kwargs_0_refine['y']['music'] = model_kwargs_0['y']['music']
                         model_kwargs_0_refine['y']['next_motion'] = sample_1[:,:,:,:args.inpainting_frames]
-                        model_kwargs_0_refine['y']['length'] = [len + args.inpainting_frames
-                                                        for len in model_kwargs_0['y']['length']]
-                        model_kwargs_0_refine['y']['mask'] = lengths_to_mask(model_kwargs_0_refine['y']['length'], dist_util.dev()).unsqueeze(1).unsqueeze(2)
+                        model_kwargs_0_refine['y']['lengths'] = [len + args.inpainting_frames
+                                                        for len in model_kwargs_0['y']['lengths']]
+                        model_kwargs_0_refine['y']['mask'] = lengths_to_mask(model_kwargs_0_refine['y']['lengths'], dist_util.dev()).unsqueeze(1).unsqueeze(2)
                         sample_0_refine = sample_fn_refine( # bs 135 1 len+inpainting 
                                                     model,
-                                                    (bs, 135, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
+                                                    (bs, 151, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
                                                     clip_denoised=False,
                                                     model_kwargs=model_kwargs_0_refine,
                                                     skip_timesteps=0, 
@@ -439,7 +441,8 @@ class CompCCDGeneratedDataset(Dataset):
                     if t == 0:
                         sub_dicts = [{'motion': sample[bs_i],
                                     'length': length[bs_i],
-                                    'text': model_kwargs_0['y']['text'][bs_i] + ', ' +  model_kwargs_1['y']['text'][bs_i]
+                                    'music': torch.cat((model_kwargs_0['y']['music'][bs_i], model_kwargs_1['y']['music'][bs_i]), axis=0),
+                                    'filename': batch["filename"][bs_i],
                                     # 'caption': model_kwargs['y']['text'][bs_i],
                                     # 'tokens': tokens[bs_i],
                                     # 'cap_len': len(tokens[bs_i]),
@@ -456,14 +459,14 @@ class CompCCDGeneratedDataset(Dataset):
 
                     if is_mm:
                         mm_motions += [{'motion': sample[bs_i].squeeze().permute(1, 0).cpu().numpy(),
-                                        'length': model_kwargs['y']['lengths'][bs_i].cpu().numpy(),
+                                        'length': length[bs_i].cpu().numpy(),
                                         } for bs_i in range(dataloader.batch_size)]
 
                 if is_mm:
                     mm_generated_motions += [{
-                                    'caption': model_kwargs['y']['text'][bs_i],
-                                    'tokens': tokens[bs_i],
-                                    'cap_len': len(tokens[bs_i]),
+                                    # 'caption': model_kwargs['y']['text'][bs_i],
+                                    # 'tokens': tokens[bs_i],
+                                    # 'cap_len': len(tokens[bs_i]),
                                     'mm_motions': mm_motions[bs_i::dataloader.batch_size],  # collect all 10 repeats from the (32*10) generated motions
                                     } for bs_i in range(dataloader.batch_size)]
 
@@ -479,7 +482,7 @@ class CompCCDGeneratedDataset(Dataset):
 
     def __getitem__(self, item):
         data = self.generated_motion[item]
-        motion, length, text= data['motion'], data['length'], data['text']
+        motion, length, music, filename = data['motion'], data['length'], data['music'], data['filename']
         # sent_len = data['cap_len']
 
         # if self.dataset.mode == 'eval':
@@ -497,7 +500,7 @@ class CompCCDGeneratedDataset(Dataset):
         #     word_embeddings.append(word_emb[None, :])
         # pos_one_hots = np.concatenate(pos_one_hots, axis=0)
         # word_embeddings = np.concatenate(word_embeddings, axis=0)
-        return motion, length, text
+        return motion, length, music, filename
         # return word_embeddings, pos_one_hots, caption, sent_len, motion, m_length, '_'.join(tokens)
 
 class CompTEACHGeneratedDataset(Dataset):

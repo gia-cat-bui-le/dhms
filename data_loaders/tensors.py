@@ -1,11 +1,41 @@
 import torch
 import numpy as np
+from typing import List, Dict
 
 def lengths_to_mask(lengths, max_len):
     # max_len = max(lengths)
     mask = torch.arange(max_len, device=lengths.device).expand(len(lengths), max_len) < lengths.unsqueeze(1)
     return mask
     
+
+def collate_contrastive(lst_elements: List, ) -> Dict:
+    concat_lst = [{
+        "features": torch.cat((el["pose_0"], el["pose_1_with_transition"]), axis=0),
+        "length":   el["length_0"] + el["length_1_with_transition"],
+        "music": torch.cat((el["music_0"], el["music_1"]), axis=0),
+    } for el in lst_elements]
+
+    batch = {"motion_feats": collate_tensors([el["features"] for el in concat_lst]),
+            "length": [x["length"] for x in concat_lst], 
+            "music": torch.stack([torch.tensor(x["music"]) for x in lst_elements], dim=0)
+            }
+
+    return batch
+
+def collate_pairs_and_text(lst_elements: List, ) -> Dict:
+    batch = {"motion_feats_0": collate_tensors([el["pose_0"] for el in lst_elements]),
+            "motion_feats_1": collate_tensors([el["pose_1"] for el in lst_elements]),
+            "motion_feats_1_with_transition": collate_tensors([el["pose_1_with_transition"] for el in lst_elements]),
+            "length_0": [x["length_0"] for x in lst_elements], 
+            "length_1": [x["length_1"] for x in lst_elements], 
+            "length_transition": [x["length_transition"] for x in lst_elements], 
+            "length_1_with_transition": [x["length_1_with_transition"] for x in lst_elements],
+            "music_0": torch.stack([torch.tensor(x["music_0"]) for x in lst_elements], dim=0),
+            "music_0_with_transition": torch.stack([torch.tensor(x["music_0_with_transition"]) for x in lst_elements], dim=0),
+            "music_1": torch.stack([torch.tensor(x["music_1"]) for x in lst_elements], dim=0),
+            "filename": [x["filename"] for x in lst_elements],
+            }
+    return batch
 
 def collate_tensors(batch):
     dims = batch[0].dim()
@@ -53,23 +83,6 @@ def collate(batch):
             'music': torch.tensor(np.array(musicbatch), dtype=torch.float32),
             'music_1': torch.tensor(np.array(musicbatch_1), dtype=torch.float32),
             })
-        
-    # if 'text' in notnone_batches[0]:
-    #     textbatch = [b['text'] for b in notnone_batches]
-    #     cond['y'].update({'text': textbatch})
-
-    # if 'tokens' in notnone_batches[0]:
-    #     textbatch = [b['tokens'] for b in notnone_batches]
-    #     cond['y'].update({'tokens': textbatch})
-
-    # if 'action' in notnone_batches[0]:
-    #     actionbatch = [b['action'] for b in notnone_batches]
-    #     cond['y'].update({'action': torch.as_tensor(actionbatch).unsqueeze(1)})
-
-    # # collate action textual names
-    # if 'action_text' in notnone_batches[0]:
-    #     action_text = [b['action_text']for b in notnone_batches]
-    #     cond['y'].update({'action_text': action_text})
 
     return motion, cond
 

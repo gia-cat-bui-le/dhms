@@ -22,12 +22,11 @@ class ClassifierFreeSampleModel(nn.Module):
         self.cond_mode = self.model.cond_mode
 
     def forward(self, x, timesteps, y=None):
-        # print("go to ClassifierFreeSampleModel")
         cond_mode = self.model.cond_mode
-        assert cond_mode in ['music', 'audio']
+        assert cond_mode in ['text', 'action', "music"]
         y_uncond = deepcopy(y)
         y_uncond['uncond'] = True
         out = self.model(x, timesteps, y)
         out_uncond = self.model(x, timesteps, y_uncond)
-        return out_uncond + (y['scale'].view(-1, 1, 1) * (out - out_uncond))
+        return out_uncond + (y['scale'].view(-1, 1, 1, 1) * (out - out_uncond))
 
