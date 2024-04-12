@@ -2,6 +2,11 @@ import torch
 import numpy as np
 from typing import List, Dict
 
+import warnings
+
+# Suppress the warning
+warnings.filterwarnings("ignore", category=UserWarning)
+
 def lengths_to_mask(lengths, max_len):
     # max_len = max(lengths)
     mask = torch.arange(max_len, device=lengths.device).expand(len(lengths), max_len) < lengths.unsqueeze(1)
