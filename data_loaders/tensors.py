@@ -30,9 +30,9 @@ def collate_pairs_and_text(lst_elements: List, ) -> Dict:
             "length_1": [x["length_1"] for x in lst_elements], 
             "length_transition": [x["length_transition"] for x in lst_elements], 
             "length_1_with_transition": [x["length_1_with_transition"] for x in lst_elements],
-            "music_0": torch.stack([torch.tensor(x["music_0"]) for x in lst_elements], dim=0),
-            "music_0_with_transition": torch.stack([torch.tensor(x["music_0_with_transition"]) for x in lst_elements], dim=0),
-            "music_1": torch.stack([torch.tensor(x["music_1"]) for x in lst_elements], dim=0),
+            "music_0": torch.stack([torch.tensor(x["music_0"]).clone().detach() for x in lst_elements], dim=0),
+            "music_0_with_transition": torch.stack([torch.tensor(x["music_0_with_transition"]).clone().detach() for x in lst_elements], dim=0),
+            "music_1": torch.stack([torch.tensor(x["music_1"]).clone().detach() for x in lst_elements], dim=0),
             "filename": [x["filename"] for x in lst_elements],
             }
     return batch

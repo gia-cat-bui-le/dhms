@@ -132,10 +132,10 @@ class TrainLoop:
                 batch = {key: val.to(self.device) if torch.is_tensor(val) else val for key, val in batch.items()}
                 # cond['y'] = {key: val.to(self.device) if torch.is_tensor(val) else val for key, val in cond['y'].items()}
                 if self.args.arch == 'past_cond':
-                    print("MODEL ARCH: PAST COND")
+                    # print("MODEL ARCH: PAST COND")
                     self.run_step_multi(batch)
                 else:
-                    print("MODEL ARCH: INPAINTING")
+                    # print("MODEL ARCH: INPAINTING")
                     self.run_step_inpainting(batch)
                 if self.step % self.log_interval == 0:
                     for k,v in logger.get_current().dumpkvs().items():
@@ -213,7 +213,7 @@ class TrainLoop:
             last_batch = (i + self.microbatch) >= batch['motion_feats_0'].shape[0]
             t, weights = self.schedule_sampler.sample(batch['motion_feats_0'].shape[0], dist_util.dev())
 
-            print("micro 0")
+            # print("micro 0")
             micro_0 = batch['motion_feats_0'] # bs len 135
             micro_0 = micro_0.unsqueeze(2).permute(0, 3, 2, 1) # bs 135 1 len
             micro_cond_0 = {}
@@ -223,7 +223,7 @@ class TrainLoop:
             micro_cond_0['y']['mask'] = lengths_to_mask(batch['length_0'], micro_0.device).unsqueeze(1).unsqueeze(2)
             micro_cond_0['y']['music'] = batch['music_0_with_transition'].to(batch['motion_feats_0'].device)
             
-            print("COND shape: ", micro_cond_0['y']['music'].shape)
+            # print("COND shape: ", micro_cond_0['y']['music'].shape)
                 
             # print(micro_cond_0['y']['music'])
             
@@ -244,7 +244,7 @@ class TrainLoop:
 
             # bs 135 1 frames
 
-            print("micro 1")
+            # print("micro 1")
             micro_1 = batch['motion_feats_1_with_transition']
             micro_1 = micro_1.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_1 = {}
@@ -277,7 +277,7 @@ class TrainLoop:
             # print_1 = (loss1['loss']).mean()
             # print(f'loss_0: {print_0}, loss_1:{print_1}')
 
-            print("micro 2")
+            # print("micro 2")
             micro_2 = batch['motion_feats_0']
             micro_2 = micro_2.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_2 = {}
