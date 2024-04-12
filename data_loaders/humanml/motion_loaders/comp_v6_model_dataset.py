@@ -267,8 +267,8 @@ class CompMDMGeneratedDataset(Dataset):
 class CompCCDGeneratedDataset(Dataset):
 
     def __init__(self, args, model, diffusion, dataloader, mm_num_samples, mm_num_repeats, num_samples_limit, scale=1.):
-        self.dataloader, normalizer = dataloader
-        dataloader = self.dataloader
+        self.dataloader = dataloader
+        # dataloader = self.dataloader
         # print(dataloader)
         self.dataset = self.dataloader.dataset
         assert mm_num_samples < len(self.dataloader.dataset)
@@ -291,7 +291,6 @@ class CompCCDGeneratedDataset(Dataset):
         real_num_batches = len(self.dataloader)
         if num_samples_limit is not None:
             real_num_batches = num_samples_limit // self.dataloader.batch_size + 1
-        print('real_num_batches', real_num_batches)
 
         generated_motion = []
         mm_generated_motions = []
@@ -303,7 +302,6 @@ class CompCCDGeneratedDataset(Dataset):
         print('mm_idxs', mm_idxs)
 
         model.eval()
-
 
         with torch.no_grad():
             for i, batch in tqdm(enumerate(dataloader)):
@@ -324,7 +322,7 @@ class CompCCDGeneratedDataset(Dataset):
                     model_kwargs_0['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_0']]
                 else:
                     model_kwargs_0['y']['lengths'] = batch['length_0']
-                model_kwargs_0['y']['music'] = batch['music_0_with_transition'].to("cuda")
+                model_kwargs_0['y']['music'] = batch['music_0'].to("cuda")
                 model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
 
@@ -332,10 +330,9 @@ class CompCCDGeneratedDataset(Dataset):
                 model_kwargs_1['y'] = {}
 
                 if args.inter_frames > 0:
-                    model_kwargs_1['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
+                    model_kwargs_1['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_1']]
                 else:
-                    model_kwargs_1['y']['lengths'] = [args.inpainting_frames + len 
-                                                for len in batch['length_1_with_transition']]
+                    model_kwargs_1['y']['lengths'] = [len for len in batch['length_1']]
                 model_kwargs_1['y']['music'] = batch['music_1'].to("cuda")
                 model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
@@ -345,9 +342,6 @@ class CompCCDGeneratedDataset(Dataset):
                                                             device=dist_util.dev()) * scale
                     model_kwargs_1['y']['scale'] = torch.ones(len(model_kwargs_1['y']['lengths']),
                                                             device=dist_util.dev()) * scale
-
-                
-
 
                 mm_num_now = len(mm_generated_motions) // dataloader.batch_size
                 is_mm = False
@@ -409,7 +403,8 @@ class CompCCDGeneratedDataset(Dataset):
                     sample_0 = sample_0.squeeze().permute(0, 2, 1).cpu().numpy() # B L D
                     sample_1 = sample_1.squeeze().permute(0, 2, 1).cpu().numpy()
                     length_0 = batch['length_0']
-                    length_1 = batch['length_1_with_transition']
+                    length_1 = batch['length_1']
+                    length_transition = batch['length_transition']
                     # length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
                     # if args.inter_frames > 0:
                     #     length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
@@ -429,15 +424,18 @@ class CompCCDGeneratedDataset(Dataset):
                         # canvas = [x.detach().numpy() for x in canvas]
                         return canvas
 
-                    def merge(motion_0, length_0, motion_1, length_1): # B L D
+                    def merge(motion_0, length_0, motion_1, length_1, length_transition): # B L D
                         bs = motion_0.shape[0]
                         ret = []
                         for idx in range(bs):
-                             ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
+                            transition_0 = motion_0[idx, length_0[idx] - length_transition[idx] : length_0[idx]]
+                            transition_1 = motion_1[idx, length_1[idx] - length_transition[idx] : length_1[idx]]
+                            transition = (transition_0 + transition_1) / 2
+                            ret.append(np.concatenate((motion_0[idx,:length_0[idx] - length_transition[idx]], transition, motion_1[idx,:length_1[idx] - length_transition[idx]]), axis=0))
                         
                         return collate_tensor_with_padding(ret)
 
-                    sample = merge(sample_0, length_0, sample_1, length_1)
+                    sample = merge(sample_0, length_0, sample_1, length_1, length_transition)
                     if t == 0:
                         sub_dicts = [{'motion': sample[bs_i],
                                     'length': length[bs_i],
@@ -469,8 +467,7 @@ class CompCCDGeneratedDataset(Dataset):
                                     # 'cap_len': len(tokens[bs_i]),
                                     'mm_motions': mm_motions[bs_i::dataloader.batch_size],  # collect all 10 repeats from the (32*10) generated motions
                                     } for bs_i in range(dataloader.batch_size)]
-
-
+                    
         self.generated_motion = generated_motion
         self.mm_generated_motion = mm_generated_motions
         # self.w_vectorizer = dataloader.dataset.w_vectorizer

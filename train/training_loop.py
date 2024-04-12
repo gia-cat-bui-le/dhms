@@ -214,13 +214,13 @@ class TrainLoop:
             t, weights = self.schedule_sampler.sample(batch['motion_feats_0'].shape[0], dist_util.dev())
 
             # print("micro 0")
-            micro_0 = batch['motion_feats_0'] # bs len 135
+            micro_0 = batch['motion_feats_0_with_transition'] # bs len 135
             micro_0 = micro_0.unsqueeze(2).permute(0, 3, 2, 1) # bs 135 1 len
             micro_cond_0 = {}
             micro_cond_0['y'] = {}
-            micro_cond_0['y']['lengths'] = batch['length_0']
+            micro_cond_0['y']['lengths'] = [x + y for x, y in zip(batch['length_0'], batch['length_transition'])]
             # assuming mask.shape == bs, 1, 1, seqlen
-            micro_cond_0['y']['mask'] = lengths_to_mask(batch['length_0'], micro_0.device).unsqueeze(1).unsqueeze(2)
+            micro_cond_0['y']['mask'] = lengths_to_mask(micro_cond_0['y']['lengths'], micro_0.device).unsqueeze(1).unsqueeze(2)
             micro_cond_0['y']['music'] = batch['music_0_with_transition'].to(batch['motion_feats_0'].device)
             
             # print("COND shape: ", micro_cond_0['y']['music'].shape)
@@ -245,14 +245,14 @@ class TrainLoop:
             # bs 135 1 frames
 
             # print("micro 1")
-            micro_1 = batch['motion_feats_1_with_transition']
+            micro_1 = batch['motion_feats_1']
             micro_1 = micro_1.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_1 = {}
             micro_cond_1['y'] = {}
             # micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1_with_transition']]
-            micro_cond_1['y']['lengths'] = [len for len in batch['length_1_with_transition']]
+            micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1']]
             micro_cond_1['y']['mask'] = lengths_to_mask(micro_cond_1['y']['lengths'], micro_1.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_1['y']['music'] = batch['music_1'].to(batch['motion_feats_0'].device)
+            micro_cond_1['y']['music'] = batch['music_1_with_transition'].to(batch['motion_feats_0'].device)
             hist_lst = [feats[:,:,:len] for feats, len in zip(micro_0, micro_cond_0['y']['lengths'])]
             hist_frames = torch.stack([x[:,:,-self.inpainting_frames:] for x in hist_lst])
             micro_1 = torch.cat((hist_frames, micro_1), axis=-1)
@@ -285,7 +285,8 @@ class TrainLoop:
             micro_cond_2['y']['lengths'] = [len + self.inpainting_frames for len in batch['length_0']]
             micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
             micro_cond_2 ['y']['music'] = batch['music_0_with_transition'].to(batch['motion_feats_0'].device)
-            fut_lst = [feats[:,:,:len] for feats, len in zip(batch['motion_feats_1_with_transition'].unsqueeze(2).permute(0, 3, 2, 1), batch['length_1_with_transition'])]
+            length_1_with_transition = [x + y for x, y in zip(batch['length_1'], batch['length_transition'])]
+            fut_lst = [feats[:,:,:len] for feats, len in zip(batch['motion_feats_1_with_transition'].unsqueeze(2).permute(0, 3, 2, 1), length_1_with_transition)]
             fut_frames = torch.stack([x[:,:,:self.inpainting_frames] for x in fut_lst])
             micro_2 = torch.cat((micro_2, torch.zeros(micro_2.shape[0], micro_2.shape[1], micro_2.shape[2], self.inpainting_frames).to(micro_2.device)), axis=-1)
             for idx in range(micro_2.shape[0]):
@@ -322,115 +323,83 @@ class TrainLoop:
             )
             self.mp_trainer.backward(loss)
     
-    def forward_backward_multi(self, batch, cond):
+    def forward_backward_multi(self, batch):
         self.mp_trainer.zero_grad()
-        for i in range(0, batch["motion_feats_0"].shape[0], self.microbatch):
+        for i in range(0, batch['motion_feats_0_with_transition'].shape[0], self.microbatch):
             # Eliminates the microbatch feature
             assert i == 0
             assert self.microbatch == self.batch_size
-            micro_0 = batch["motion_feats_0"]
+            micro_0 = batch['motion_feats_0_with_transition']
+            micro_0 = micro_0.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_0 = {}
             micro_cond_0['y'] = {}
-            micro_cond_0['y']['lengths'] = cond['y']['lengths']
-            micro_cond_0['y']['mask'] = lengths_to_mask(cond['y']['lengths'], micro_0.device).unsqueeze(1)
-            micro_cond_0['y']['music'] = cond['y']['music']
+            micro_cond_0['y']['length'] = [x + y for x, y in zip(batch['length_0'], batch['length_transition'])]
+           
+            # assuming mask.shape == bs, 1, 1, seqlen
+            micro_cond_0['y']['mask'] = lengths_to_mask(micro_cond_0['y']['length'], micro_0.device).unsqueeze(1).unsqueeze(2)
+            micro_cond_0['y']['music'] = batch['music_0_with_transition']
             
-            last_batch = (i + self.microbatch) >= micro_0.shape[0]
+            last_batch = (i + self.microbatch) >= batch['motion_feats_0_with_transition'].shape[0]
             t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
-            
-            # shuffle noise
-            noise_0 = None
-            # noise_0 = torch.randn(
-            # [micro_0.shape[0], micro_0.shape[1], micro_0.shape[2]], device=micro_0.device
-            # )
-            # window_size = 10
-            # window_stride = 5
-            # for frame_index in range(window_size, micro_0.shape[2], window_stride):
-            #     list_index = list(
-            #         range(
-            #             frame_index - window_size,
-            #             frame_index + window_stride - window_size,
-            #         )
-            #     )
-            #     random.shuffle(list_index)
-            #     noise_0[
-            #         :, :, frame_index : frame_index + window_stride
-            #     ] = noise_0[:, :, list_index]
-            
-            # training
             compute_losses0 = functools.partial(
                 self.diffusion.training_losses_multi,
-                self.model,
+                self.ddp_model,
                 micro_0,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_0,
-                dataset=self.data.dataset,
-                noise=noise_0
+                dataset=self.data.dataset
             )
-            loss0, hist = compute_losses0() 
-            # if last_batch or not self.use_ddp:
-            #     # hist_frames [b 5 dim]
-            #     loss0, hist = compute_losses0() 
-            # else:
-            #     with self.ddp_model.no_sync():
-            #         loss0, hist = compute_losses0() 
+            if last_batch or not self.use_ddp:
+                # hist_frames [b 5 dim]
+                loss0, hist = compute_losses0() 
+            else:
+                with self.ddp_model.no_sync():
+                    loss0, hist = compute_losses0() 
 
-            # lấy condition prev motion
+            # bs 135 1 frames
+            # bs = hist.shape(0)
             if self.hist_frames > 0:
-                hist_lst = [feats[:,:len] for feats, len in zip(hist, cond['y']['lengths'])]
-                hframes = torch.stack([x[:,-self.hist_frames:] for x in hist_lst])
+                hist_lst = [feats[:,:,:len] for feats, len in zip(hist, batch['motion_feats_0_with_transition'])]
+                hframes = torch.stack([x[:,:,-self.hist_frames:] for x in hist_lst])
+                # micro_cond_1['y']['hframes'] = hframes
 
             micro_1 = batch['motion_feats_1']
+            micro_1 = micro_1.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_1 = {}
             micro_cond_1['y'] = {}
             if self.hist_frames > 0:
                 micro_cond_1['y']['hframes'] = hframes
-            micro_cond_1['y']['lengths'] = cond['y']['lengths']
-            micro_cond_1['y']['mask'] = lengths_to_mask(cond['y']['lengths'], micro_0.device).unsqueeze(1)
-            micro_cond_1['y']['music'] = cond['y']['music_1']
+            micro_cond_1['y']['length'] = batch['length_1']
+            micro_cond_1['y']['mask'] = lengths_to_mask(batch['length_1'], micro_1.device).unsqueeze(1).unsqueeze(2)
+            micro_cond_1['y']['music'] = batch['music_1']
             
-            # noise
-            noise_1 = None
-            # noise_1 = torch.randn(
-            # [micro_1.shape[0], micro_1.shape[1], micro_1.shape[2]], device=micro_1.device
-            # )
-            # window_size = 10
-            # window_stride = 5
-            # for frame_index in range(window_size, micro_1.shape[2], window_stride):
-            #     list_index = list(
-            #         range(
-            #             frame_index - window_size,
-            #             frame_index + window_stride - window_size,
-            #         )
-            #     )
-            #     random.shuffle(list_index)
-            #     noise_1[
-            #         :, :, frame_index : frame_index + window_stride
-            #     ] = noise_1[:, :, list_index]
+            # micro_cond = cond
             
-            # print("THIS HAS HIST FRAME")
+            #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses1 = functools.partial(
                 self.diffusion.training_losses_multi,
-                self.model,
-                micro_1,
-                t,
+                self.ddp_model,
+                micro_1,  # [bs, ch, image_size, image_size]
+                t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_1,
-                dataset=self.data.dataset,
-                noise=noise_1
+                dataset=self.data.dataset
             )
-            loss1, _ = compute_losses0() 
-            # if last_batch or not self.use_ddp:
-            #     loss1, _ = compute_losses1() 
-            # else:
-            #     with self.ddp_model.no_sync():
-            #         loss1, _ = compute_losses1()
-                    
+            if last_batch or not self.use_ddp:
+                # hist_frames [b 5 dim]
+                loss1, _ = compute_losses1() 
+            else:
+                with self.ddp_model.no_sync():
+                    loss1, _ = compute_losses1() 
+            # print_0 = (loss0['loss']).mean()
+            # print_1 = (loss1['loss']).mean()
+            # print(f'loss_0: {print_0}, loss_1:{print_1}')
             losses = {}
             losses['loss'] = loss0['loss'] + loss1['loss']
             if isinstance(self.schedule_sampler, LossAwareSampler):
                 self.schedule_sampler.update_with_local_losses(
                     t, losses["loss"].detach()
                 )
+
             loss = (losses["loss"] * weights).mean()
             log_loss_dict(
                 self.diffusion, t, {k: v * weights for k, v in losses.items()}

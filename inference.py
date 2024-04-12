@@ -21,28 +21,30 @@ from scipy.ndimage import gaussian_filter as G
 from scipy.signal import argrelextrema
 from scipy import linalg
 
+import pickle
+from pathlib import Path
+
 from features.kinetic import extract_kinetic_features
 from features.manual_new import extract_manual_features
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-def generating(motion_loaders, file):
+def generating(motion_loaders, out_dir):
     print('========== GENERATING ==========')
     for motion_loader_name, motion_loader in motion_loaders.items():
+        all_motion_embedding = []
         all_motion_embeddings = []
         with torch.no_grad():
             for idx, batch in enumerate(motion_loader):
                 if motion_loader_name != 'vald':
-                    motion, length, music, filename = batch["motion_feats"], batch["length"], batch["music"], batch["filename"]
+                    motion, length, music, filenames = batch["motion_feats"], batch["length"], batch["music"], batch["filename"]
                 else:
-                    motion, length, music, filename = batch
+                    motion, length, music, filenames = batch
                     
                 b, s, c = motion.shape
                 
                 sample_contact, motion = torch.split(
                 motion, (4, motion.shape[2] - 4), dim=2)
-                
-                print("motion shape: ", b, s, c)
                 pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
                 q = motion[:, :, 3:].reshape(b, s, 24, 6)
                 # go 6d to ax
@@ -50,15 +52,30 @@ def generating(motion_loaders, file):
                 
                 full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
                 
+                for full_pose, filename in zip(full_poses, filenames):
+                    if out_dir is not None:
+                        outname = f'inference/{"_".join(os.path.splitext(os.path.basename(filename))[0].split("_")[:-1])}.pkl'
+                        # Path(out_dir).mkdir(parents=True, exist_ok=True)
+                        # pickle.dump(
+                        #     {
+                        #         "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                        #         "smpl_trans": pos.squeeze(0).cpu().numpy(),
+                        #         "full_pose": full_pose,
+                        #     },
+                        #     open(os.path.join(out_dir, outname), "wb"),
+                        # )
+                
                 #TODO: code save generated motion
 
-                all_motion_embeddings.append(full_poses)
+                all_motion_embedding.append(full_poses)
+                
+            all_motion_embedding = np.concatenate(all_motion_embedding, axis=0)
+        all_motion_embeddings.append(all_motion_embedding)
+        
+    all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
+    print(all_motion_embeddings.shape)
 
-            all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
-
-    return
-
-def inference(eval_motion_loaders, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
+def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     with open(log_file, 'a') as f:
         for replication in range(replication_times):
             motion_loaders = {}
@@ -71,7 +88,10 @@ def inference(eval_motion_loaders, log_file, replication_times, diversity_times,
             print(f'Time: {datetime.now()}')
             print(f'Time: {datetime.now()}', file=f, flush=True)
             
-            generating(motion_loaders, f)
+            generating(motion_loaders, out_dir)
+            
+            for batch in origin_loader:
+                print(batch["length_0"], batch["length_1"])
 
             print(f'!!! DONE !!!')
             print(f'!!! DONE !!!', file=f, flush=True)
@@ -105,7 +125,7 @@ if __name__ == '__main__':
 
     print(f'Eval mode [{args.eval_mode}]')
     if args.eval_mode == 'debug':
-        num_samples_limit = 32  # None means no limit (eval over all dataset)
+        num_samples_limit = None  # None means no limit (eval over all dataset)
         run_mm = False
         mm_num_samples = 0
         mm_num_repeats = 0
@@ -142,8 +162,8 @@ if __name__ == '__main__':
 
     logger.log("creating data loader...")
     split = False
-    origin_loader = get_dataset_loader(args, name=args.dataset, batch_size=args.batch_size, split=split)
-    print(origin_loader)
+    origin_loader, _ = get_dataset_loader(args, name=args.dataset, batch_size=args.batch_size, split=split)
+    
     # gt_loader = get_dataset_loader(name=args.dataset, batch_size=args.batch_size, split=split, hml_mode='eval')
     # num_actions = gen_loader.dataset.num_actions
     num_actions = 1
@@ -175,4 +195,4 @@ if __name__ == '__main__':
     }
 
     # eval_wrapper = EvaluatorCCDWrapper(args.dataset, dist_util.dev())
-    inference(eval_motion_loaders, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
+    inference(eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)

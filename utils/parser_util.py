@@ -240,6 +240,12 @@ def add_evaluation_options(parser):
                             "full (a2m only) - 20 repetitions.")
     group.add_argument("--guidance_param", default=2.5, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
+    group.add_argument(
+        "--out_dir",
+        type=str,
+        default="./save/result",
+        help="folder containing input music",
+    )
 
 
 def train_args():

@@ -1897,13 +1897,12 @@ class GaussianDiffusion():
         :return: a dict with the key "loss" containing a tensor of shape [N].
                  Some mean or variance settings may also have other keys.
         """
-        # hist_frames = 0 #todo
+        # hist_frames = 0 #TODO
         # enc = model.model._modules['module']
-        # print("GOTO: training losses multi")
+        
         enc = model.model
-        # print("enc: ", enc)
-        mask = model_kwargs['y']['mask'].unsqueeze(1)
-        # print("mask shape: ", mask.shape)
+        # TODO
+        mask = model_kwargs['y']['mask']
 
         # not use in humanml3d
         get_xyz = lambda sample: enc.rot2xyz(sample, mask=None, pose_rep=enc.pose_rep, translation=enc.translation,
@@ -1917,10 +1916,9 @@ class GaussianDiffusion():
         if noise is None:
             noise = th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise)
-        
-        # predict_epsilon = False
+
         terms = {}
-        
+
         if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:
             terms["loss"] = self._vb_terms_bpd(
                 model=model,
@@ -1932,7 +1930,6 @@ class GaussianDiffusion():
             )["output"]
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
-                
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
             model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
 

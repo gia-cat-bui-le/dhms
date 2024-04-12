@@ -59,6 +59,10 @@ def slice_motion(motion_file, stride, length, out_dir, inpainting_frames, motion
             pos[start_idx : start_idx + motion_len_],
             q[start_idx : start_idx + motion_len_],
         ) # lenght_0
+        pos_0_with_transition, q_0_with_transition = (
+            pos[start_idx : start_idx + motion_len_ + inpainting_frames_],
+            q[start_idx : start_idx + motion_len_ + inpainting_frames_],
+        ) # lenght_0
         pos_1_with_transition, q_1_with_transition = (
             pos[start_idx + motion_len_ : start_idx + window],
             q[start_idx + motion_len_ : start_idx + window],
@@ -70,6 +74,8 @@ def slice_motion(motion_file, stride, length, out_dir, inpainting_frames, motion
                     
         out = {"pos_0": pos_0, 
                 "q_0":q_0,
+                "pos_0_with_transition": pos_0_with_transition,
+                "q_0_with_transition": q_0_with_transition,
                 "pos_1_with_transition": pos_1_with_transition,
                 "q_1_with_transition": q_1_with_transition,
                 "pos_1": pos_1,
@@ -77,7 +83,6 @@ def slice_motion(motion_file, stride, length, out_dir, inpainting_frames, motion
                 "length_0": int(motion_len_ / 2),
                 "length_1": int(motion_len_ / 2),
                 "length_transition": int(inpainting_frames_ / 2),
-                "length_1_with_transition": int(motion_len_+inpainting_frames_ / 2)
                 }
         
         # out = {"pos": pos_slice, "q": q_slice, "pos1": pos_slice_1, "q1": q_slice_1}
