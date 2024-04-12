@@ -321,8 +321,8 @@ class CompCCDGeneratedDataset(Dataset):
                 if args.inter_frames > 0:
                     model_kwargs_0['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_0']]
                 else:
-                    model_kwargs_0['y']['lengths'] = batch['length_0']
-                model_kwargs_0['y']['music'] = batch['music_0'].to("cuda")
+                    model_kwargs_0['y']['lengths'] = [x + y for x, y in zip(batch['length_0'], batch['length_transition'])]
+                model_kwargs_0['y']['music'] = batch['music_0_with_transition'].to("cuda:0" if torch.cuda.is_available() else "cpu")
                 model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
 
@@ -332,16 +332,16 @@ class CompCCDGeneratedDataset(Dataset):
                 if args.inter_frames > 0:
                     model_kwargs_1['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_1']]
                 else:
-                    model_kwargs_1['y']['lengths'] = [len for len in batch['length_1']]
-                model_kwargs_1['y']['music'] = batch['music_1'].to("cuda")
+                    model_kwargs_1['y']['lengths'] = [x + y for x, y in zip(batch['length_1'], batch['length_transition'])]
+                model_kwargs_1['y']['music'] = batch['music_1_with_transition'].to("cuda:0" if torch.cuda.is_available() else "cpu")
                 model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
                 # add CFG scale to batch
                 if scale != 1.:
                     model_kwargs_0['y']['scale'] = torch.ones(len(model_kwargs_0['y']['lengths']),
-                                                            device=dist_util.dev()) * scale
+                                                            device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                     model_kwargs_1['y']['scale'] = torch.ones(len(model_kwargs_1['y']['lengths']),
-                                                            device=dist_util.dev()) * scale
+                                                            device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
 
                 mm_num_now = len(mm_generated_motions) // dataloader.batch_size
                 is_mm = False
@@ -432,7 +432,10 @@ class CompCCDGeneratedDataset(Dataset):
                             transition_1 = motion_1[idx, length_1[idx] - length_transition[idx] : length_1[idx]]
                             transition = (transition_0 + transition_1) / 2
                             ret.append(np.concatenate((motion_0[idx,:length_0[idx] - length_transition[idx]], transition, motion_1[idx,:length_1[idx] - length_transition[idx]]), axis=0))
-                        
+                            # ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
+                            
+                        print((torch.from_numpy(ret)).shape)
+                            
                         return collate_tensor_with_padding(ret)
 
                     sample = merge(sample_0, length_0, sample_1, length_1, length_transition)

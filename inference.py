@@ -54,7 +54,7 @@ def generating(motion_loaders, out_dir):
                 
                 for full_pose, filename in zip(full_poses, filenames):
                     if out_dir is not None:
-                        outname = f'inference/{"_".join(os.path.splitext(os.path.basename(filename))[0].split("_")[:-1])}.pkl'
+                        outname = f'evaluation/inference/{"_".join(os.path.splitext(os.path.basename(filename))[0].split("_")[:-1])}.pkl'
                         # Path(out_dir).mkdir(parents=True, exist_ok=True)
                         # pickle.dump(
                         #     {
@@ -91,6 +91,33 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
             generating(motion_loaders, out_dir)
             
             for batch in origin_loader:
+                motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1_with_transition"], batch["filename"]
+                motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=0))
+                
+                b, s, c = motion.shape
+                
+                sample_contact, motion = torch.split(
+                motion, (4, motion.shape[2] - 4), dim=2)
+                pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+                q = motion[:, :, 3:].reshape(b, s, 24, 6)
+                # go 6d to ax
+                q = ax_from_6v(q).to(motion.device)
+                
+                full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
+                
+                for full_pose, filename in zip(full_poses, filenames):
+                    if out_dir is not None:
+                        outname = f'evaluation/gt/{"_".join(os.path.splitext(os.path.basename(filename))[0].split("_")[:-1])}.pkl'
+                        # Path(out_dir).mkdir(parents=True, exist_ok=True)
+                        # pickle.dump(
+                        #     {
+                        #         "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                        #         "smpl_trans": pos.squeeze(0).cpu().numpy(),
+                        #         "full_pose": full_pose,
+                        #     },
+                        #     open(os.path.join(out_dir, outname), "wb"),
+                        # )
+                
                 print(batch["length_0"], batch["length_1"])
 
             print(f'!!! DONE !!!')
@@ -177,7 +204,7 @@ if __name__ == '__main__':
 
     if args.guidance_param != 1:
         model = ClassifierFreeSampleModel(model)   # wrapping model with the classifier-free sampler
-    model.to(dist_util.dev())
+    model.to("cuda:0" if torch.cuda.is_available() else "cpu")
     model.eval()  # disable random masking
 
     eval_motion_loaders = {

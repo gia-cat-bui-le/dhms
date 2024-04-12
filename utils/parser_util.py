@@ -50,6 +50,7 @@ def get_model_path_from_args():
         dummy_parser = ArgumentParser()
         dummy_parser.add_argument('model_path')
         dummy_args, _ = dummy_parser.parse_known_args()
+        print(dummy_args.model_path)
         return dummy_args.model_path
     except:
         raise ValueError('model_path argument must be specified.')
@@ -62,7 +63,11 @@ def add_base_options(parser):
     group.add_argument("--seed", default=10, type=int, help="For fixing random seed.")
     group.add_argument("--batch_size", default=128, type=int, help="Batch size during training.")
     group.add_argument("--tiny", default=False, type=bool, help="If True, use only part of data")
-    group.add_argument("--refine", default=False, type=bool, help="refine")
+    group.add_argument(
+        "--refine",
+        action="store_true",
+        help="refine",
+    )
     group.add_argument("--composition", default=False, type=bool, help="composition")
     group.add_argument("--inter_frames", default=0, type=int, help="inter_frames")
     group.add_argument("--infer_get", default=False, type=int, help="infer_get")

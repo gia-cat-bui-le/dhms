@@ -348,7 +348,7 @@ class GaussianDiffusion():
         elif 'next_motion' in model_kwargs['y'].keys():
             next_len = model_kwargs['y']['next_motion'].shape[-1]
             for idx in range(B):
-                len  = model_kwargs['y']['length'][idx]
+                len  = model_kwargs['y']['lengths'][idx]
                 model_output[idx,:,:,len-next_len:len] = model_kwargs['y']['next_motion'][idx,:,:,:]
             # model_output[:,:,:,-next_len:] = model_kwargs['y']['next_motion']
 
