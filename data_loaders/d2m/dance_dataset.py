@@ -154,7 +154,7 @@ class FineDanceDataset(Dataset):
         split_data_path = os.path.join(
             self.data_path, "train" if self.train else "test"
         )
-        print(split_data_path)
+        # print(split_data_path)
         # print(split_data_path)
 
         # Structure:
@@ -379,7 +379,7 @@ class AISTPPDataset(Dataset):
         split_data_path = os.path.join(
             self.data_path, "train" if self.train else "test"
         )
-        print(split_data_path)
+        # print(split_data_path)
         # print(split_data_path)
 
         # Structure:
