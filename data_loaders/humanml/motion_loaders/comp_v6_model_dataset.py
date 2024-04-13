@@ -318,6 +318,8 @@ class CompCCDGeneratedDataset(Dataset):
                 
                 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
+                # TODO: bring to line 360
+                # no condition
                 model_kwargs_0 = {}
                 model_kwargs_0['y'] = {}
                 if args.inter_frames > 0:
@@ -328,13 +330,14 @@ class CompCCDGeneratedDataset(Dataset):
                 model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
 
+                # condition
                 model_kwargs_1 = {}
                 model_kwargs_1['y'] = {}
 
                 if args.inter_frames > 0:
                     model_kwargs_1['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_1']]
                 else:
-                    model_kwargs_1['y']['lengths'] = [args.inpainting_frames + len 
+                    model_kwargs_1['y']['lengths'] = [args.inpainting_frames + len # inpainting_frames ~ 1s ~ 30f
                                                 for len in batch['length_1']]
                 model_kwargs_1['y']['music'] = batch['music_1'].to("cuda:0" if torch.cuda.is_available() else "cpu")
                 model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
@@ -345,13 +348,16 @@ class CompCCDGeneratedDataset(Dataset):
                                                             device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                     model_kwargs_1['y']['scale'] = torch.ones(len(model_kwargs_1['y']['lengths']),
                                                             device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
+                # TODO: bring down till here
 
                 mm_num_now = len(mm_generated_motions) // dataloader.batch_size
                 is_mm = False
                 repeat_times = mm_num_repeats if is_mm else 1
                 mm_motions = []
 
+                # NOTE: chạy nhiều lần
                 for t in range(repeat_times):
+                    # TODO: loop generate sample
                     # if args.hist_frames > 0:
                     #     arg_frames = args.hist_frames
                     # else:
@@ -398,6 +404,7 @@ class CompCCDGeneratedDataset(Dataset):
                     else:
                         noise_1, noise_0 = None, None
                     
+                    # TODO: tách xử lý sample_0 và sample_1 thành 2 fn
                     sample_0, sample_1 = sample_fn(
                         model,
                         args.hist_frames,
@@ -457,6 +464,7 @@ class CompCCDGeneratedDataset(Dataset):
                         else:
                             noise_0_refine = None
                         
+                        # TODO: tách ra 1 fn để refine
                         sample_0_refine = sample_fn_refine( # bs 135 1 len+inpainting 
                                                     model,
                                                     (bs, 151, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
@@ -472,7 +480,9 @@ class CompCCDGeneratedDataset(Dataset):
                         sample_0 = sample_0  + args.refine_scale * (sample_0_refine - sample_0)
                         # model_kwargs_0['y']['length'] = [len - args.inpainting_frames
                         #                                 for len in model_kwargs_0['y']['length']]
+                    # TODO: condition hết, sau đó refine ngược lại
 
+                    # NOTE: for merge
                     sample_0 = sample_0.squeeze().permute(0, 2, 1).cpu().numpy() # B L D
                     sample_1 = sample_1.squeeze().permute(0, 2, 1).cpu().numpy()
                     length_0 = batch['length_0']
@@ -497,6 +507,7 @@ class CompCCDGeneratedDataset(Dataset):
                         # canvas = [x.detach().numpy() for x in canvas]
                         return canvas
 
+                    # TODO: sửa code để merge nhiều sample, input là array gồm nhiều samples
                     def merge(motion_0, length_0, motion_1, length_1, length_transition): # B L D
                         bs = motion_0.shape[0]
                         ret = []

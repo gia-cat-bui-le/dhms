@@ -890,6 +890,7 @@ class GaussianDiffusion():
         if dump_steps is not None:
             dump = []
 
+        # TODO: tách thành 1 fn xử lý sample_0
         for i, sample in enumerate(self.p_sample_loop_progressive(
             model,
             shape_0,
@@ -916,6 +917,7 @@ class GaussianDiffusion():
 
         # model_kwargs_1['y']['hframes'] = final_0['pred_xstart'][:,:,:,-hist_frames:]
 
+        # TODO: tách thành 1 fn xử lý sample_1, input là kèm sample 0
         B = shape_0[0]
 
         if hist_frames > 0:
@@ -926,6 +928,7 @@ class GaussianDiffusion():
                 hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-hist_frames:len]
             model_kwargs_1['y']['hframes'] = hist_motion
 
+        # NOTE: lấy condition từ model_0 sang model_1
         if inpainting_frames > 0:
             # FIXME
             hist_motion = torch.ones(B, 151, 1, inpainting_frames).to(final_0['sample'].device)

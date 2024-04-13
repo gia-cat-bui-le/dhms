@@ -153,6 +153,7 @@ if __name__ == '__main__':
     ########################################################################
     # LOAD SMPL
     
+    # output data with shape [batch_size, n_frames, 24 joints, 3 dimension (each joint)]
     smpl = SMPLSkeleton(device="cpu")
     
     ########################################################################
@@ -218,6 +219,7 @@ if __name__ == '__main__':
         ################
         ## HumanML3D Dataset##
         ################
+        # generate data
         'vald': lambda: get_mdm_loader(
             args, model, diffusion, args.batch_size,
             origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
