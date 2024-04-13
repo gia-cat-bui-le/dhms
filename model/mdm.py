@@ -606,7 +606,7 @@ class MDM(nn.Module):
         # self.clip_dim = clip_dim
         self.action_emb = kargs.get('action_emb', None)
         
-        self.music_dim = 35 * 150 #baseline feats
+        self.music_dim = 35 * 75 #baseline feats
         # pos_dim = 3
         # rot_dim = self.njoints * self.nfeats  # 24 joints, 6dof
         # self.input_feats = pos_dim + rot_dim + 4

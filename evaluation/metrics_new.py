@@ -180,6 +180,8 @@ if __name__ == '__main__':
 
     #TODO: fix the path
     gt_root = 'evaluation\gt'
+    
+    calc_and_save_feats(gt_root)
 
     pred_roots = [
         'evaluation\inference'
