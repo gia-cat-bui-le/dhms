@@ -7,6 +7,7 @@ from tqdm import tqdm
 from utils import dist_util
 from teach.data.tools import lengths_to_mask 
 import numpy as np
+import random
 
 def build_models(opt):
     if opt.text_enc_mod == 'bigru':
@@ -355,12 +356,56 @@ class CompCCDGeneratedDataset(Dataset):
                     #     arg_frames = args.hist_frames
                     # else:
                     #     arg_frames = args.inpainting_frames if not args.composition else args.inter_frames
+                    
+                    if args.shuffle_noise:
+                        feats = 151
+                        nframe = model_kwargs_0['y']['mask'].shape[-1]
+                        
+                        noise_frame = 10
+                        noise_stride = 5
+            
+                        noise_0 = torch.randn(
+                            [1, feats, 1, nframe], device=device
+                        ).repeat(bs, 1, 1, 1)
+                        for frame_index in range(noise_frame, nframe, noise_stride):
+                            list_index = list(
+                                range(
+                                    frame_index - noise_frame,
+                                    frame_index + noise_stride - noise_frame,
+                                )
+                            )
+                            random.shuffle(list_index)
+                            noise_0[
+                                :, :, :, frame_index : frame_index + noise_stride
+                            ] = noise_0[:, :, :, list_index]
+                            
+                        nframe = model_kwargs_1['y']['mask'].shape[-1]
+            
+                        noise_1 = torch.randn(
+                            [1, feats, 1, nframe], device=device
+                        ).repeat(bs, 1, 1, 1)
+                        for frame_index in range(noise_frame, nframe, noise_stride):
+                            list_index = list(
+                                range(
+                                    frame_index - noise_frame,
+                                    frame_index + noise_stride - noise_frame,
+                                )
+                            )
+                            random.shuffle(list_index)
+                            noise_1[
+                                :, :, :, frame_index : frame_index + noise_stride
+                            ] = noise_1[:, :, :, list_index]
+                    else:
+                        noise_1, noise_0 = None, None
+                    
                     sample_0, sample_1 = sample_fn(
                         model,
                         args.hist_frames,
                         args.inpainting_frames if not args.composition else args.inter_frames,
                         (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1]),
                         (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1]),
+                        noise_0=noise_0,
+                        noise_1=noise_1,
                         clip_denoised=clip_denoised,
                         model_kwargs_0=model_kwargs_0,
                         model_kwargs_1=model_kwargs_1,
@@ -368,7 +413,6 @@ class CompCCDGeneratedDataset(Dataset):
                         init_image=None,
                         progress=False,
                         dump_steps=None,
-                        noise=None,
                         const_noise=False,
                         # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                     )
@@ -387,16 +431,42 @@ class CompCCDGeneratedDataset(Dataset):
                         model_kwargs_0_refine['y']['lengths'] = [len + args.inpainting_frames
                                                         for len in model_kwargs_0['y']['lengths']]
                         model_kwargs_0_refine['y']['mask'] = lengths_to_mask(model_kwargs_0_refine['y']['lengths'], dist_util.dev()).unsqueeze(1).unsqueeze(2)
+                        
+                        if args.shuffle_noise:
+                            feats = 151
+                            nframe = model_kwargs_0_refine['y']['mask'].shape[-1]
+                            
+                            noise_frame = 10
+                            noise_stride = 5
+                
+                            noise_0_refine = torch.randn(
+                                [1, feats, 1, nframe], device=device
+                            ).repeat(bs, 1, 1, 1)
+                            for frame_index in range(noise_frame, nframe, noise_stride):
+                                list_index = list(
+                                    range(
+                                        frame_index - noise_frame,
+                                        frame_index + noise_stride - noise_frame,
+                                    )
+                                )
+                                random.shuffle(list_index)
+                                noise_0_refine[
+                                    :, :, :, frame_index : frame_index + noise_stride
+                                ] = noise_0_refine[:, :, :, list_index]
+                                
+                        else:
+                            noise_0_refine = None
+                        
                         sample_0_refine = sample_fn_refine( # bs 135 1 len+inpainting 
                                                     model,
                                                     (bs, 151, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
+                                                    noise=noise_0_refine,
                                                     clip_denoised=False,
                                                     model_kwargs=model_kwargs_0_refine,
                                                     skip_timesteps=0, 
                                                     init_image=None,
                                                     progress=True,
                                                     dump_steps=None,
-                                                    noise=None,
                                                     const_noise=False)
                         sample_0_refine = sample_0_refine[:,:,:,:-args.inpainting_frames]
                         sample_0 = sample_0  + args.refine_scale * (sample_0_refine - sample_0)

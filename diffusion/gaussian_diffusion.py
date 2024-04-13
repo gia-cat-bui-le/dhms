@@ -870,7 +870,8 @@ class GaussianDiffusion():
         inpainting_frames,
         shape_0,
         shape_1,
-        noise=None,
+        noise_0=None,
+        noise_1=None,
         clip_denoised=True,
         denoised_fn=None,
         cond_fn=None,
@@ -892,7 +893,7 @@ class GaussianDiffusion():
         for i, sample in enumerate(self.p_sample_loop_progressive(
             model,
             shape_0,
-            noise=noise,
+            noise=noise_0,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
             cond_fn=cond_fn,
@@ -938,7 +939,7 @@ class GaussianDiffusion():
         for i, sample in enumerate(self.p_sample_loop_progressive(
             model,
             shape_1,
-            noise=noise,
+            noise=noise_1,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
             cond_fn=cond_fn,

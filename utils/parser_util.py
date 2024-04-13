@@ -110,6 +110,13 @@ def add_model_options(parser):
     #                         "Currently tested on HumanAct12 only.")
     group.add_argument("--hist_frames", default=75, type=int, help="hist_frames")
     group.add_argument("--motion_mask", default=True, type=bool, help="if mask")
+    
+    
+    group.add_argument(
+        "--shuffle_noise",
+        action="store_true",
+        help="use noise shuffling or not",
+    )
 
     # group.add_argument("--refine", action='store_true',)
 
