@@ -214,14 +214,14 @@ class TrainLoop:
             t, weights = self.schedule_sampler.sample(batch['motion_feats_0'].shape[0], dist_util.dev())
 
             # print("micro 0")
-            micro_0 = batch['motion_feats_0_with_transition'] # bs len 135
+            micro_0 = batch['motion_feats_0'] # bs len 135
             micro_0 = micro_0.unsqueeze(2).permute(0, 3, 2, 1) # bs 135 1 len
             micro_cond_0 = {}
             micro_cond_0['y'] = {}
-            micro_cond_0['y']['lengths'] = [x + y for x, y in zip(batch['length_0'], batch['length_transition'])]
+            micro_cond_0['y']['lengths'] = batch['length_0']
             # assuming mask.shape == bs, 1, 1, seqlen
             micro_cond_0['y']['mask'] = lengths_to_mask(micro_cond_0['y']['lengths'], micro_0.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_0['y']['music'] = batch['music_0_with_transition'].to(batch['motion_feats_0'].device)
+            micro_cond_0['y']['music'] = batch['music_0'].to(batch['motion_feats_0'].device)
             
             # print("COND shape: ", micro_cond_0['y']['music'].shape)
                 
@@ -252,7 +252,7 @@ class TrainLoop:
             # micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1_with_transition']]
             micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1']]
             micro_cond_1['y']['mask'] = lengths_to_mask(micro_cond_1['y']['lengths'], micro_1.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_1['y']['music'] = batch['music_1_with_transition'].to(batch['motion_feats_0'].device)
+            micro_cond_1['y']['music'] = batch['music_1'].to(batch['motion_feats_0'].device)
             hist_lst = [feats[:,:,:len] for feats, len in zip(micro_0, micro_cond_0['y']['lengths'])]
             hist_frames = torch.stack([x[:,:,-self.inpainting_frames:] for x in hist_lst])
             micro_1 = torch.cat((hist_frames, micro_1), axis=-1)
@@ -284,9 +284,8 @@ class TrainLoop:
             micro_cond_2['y'] = {}
             micro_cond_2['y']['lengths'] = [len + self.inpainting_frames for len in batch['length_0']]
             micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_2 ['y']['music'] = batch['music_0_with_transition'].to(batch['motion_feats_0'].device)
-            length_1_with_transition = [x + y for x, y in zip(batch['length_1'], batch['length_transition'])]
-            fut_lst = [feats[:,:,:len] for feats, len in zip(batch['motion_feats_1_with_transition'].unsqueeze(2).permute(0, 3, 2, 1), length_1_with_transition)]
+            micro_cond_2 ['y']['music'] = batch['music_0'].to(batch['motion_feats_0'].device)
+            fut_lst = [feats[:,:,:len] for feats, len in zip(batch['motion_feats_1'].unsqueeze(2).permute(0, 3, 2, 1), batch['length_1'])]
             fut_frames = torch.stack([x[:,:,:self.inpainting_frames] for x in fut_lst])
             micro_2 = torch.cat((micro_2, torch.zeros(micro_2.shape[0], micro_2.shape[1], micro_2.shape[2], self.inpainting_frames).to(micro_2.device)), axis=-1)
             for idx in range(micro_2.shape[0]):

@@ -162,7 +162,7 @@ def calc_and_save_feats(root):
         if os.path.isdir(os.path.join(root, pkl)):
             continue
             
-        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True).item()['pred_position'][:225,:].reshape([225, -1])
+        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)['full_pose'][:225,:].reshape([225, -1])
         # print(extract_manual_features(joint3d.reshape(-1, 24, 3)))
         roott = joint3d[:1, :3]  # the root Tx72 (Tx(24x3))
         # print(roott)
@@ -179,10 +179,10 @@ def calc_and_save_feats(root):
 if __name__ == '__main__':
 
     #TODO: fix the path
-    gt_root = '../data/aist_features_zero_start'
+    gt_root = 'evaluation\gt'
 
     pred_roots = [
-        '/mnt/lustre/syli/dance/Bailando/tpami_bailandopp/experiments/actor_critic/eval_rotmat/pkl/ep000010'
+        'evaluation\inference'
     ]
 
     for pred_root in pred_roots:

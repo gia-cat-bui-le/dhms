@@ -37,7 +37,7 @@ def create_dataset(opt):
         
         inpainting_frame = opt.inpainting_frame
         motion_len = opt.motion_len
-        slice_len = inpainting_frame + motion_len*2
+        slice_len = motion_len*2
         
         slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
@@ -67,7 +67,7 @@ def parse_opt():
     parser.add_argument(
         "--inpainting_frame",
         type=float,
-        default=2.5,
+        default=1.0,
         help="the length (in frames) of inpainting transition between 2 motions",
     )
     parser.add_argument(

@@ -248,7 +248,7 @@ def add_evaluation_options(parser):
     group.add_argument(
         "--out_dir",
         type=str,
-        default="./save/result",
+        default="./",
         help="folder containing input music",
     )
 

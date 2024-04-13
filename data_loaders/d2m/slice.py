@@ -59,25 +59,25 @@ def slice_motion(motion_file, stride, length, out_dir, inpainting_frames, motion
             pos[start_idx : start_idx + motion_len_],
             q[start_idx : start_idx + motion_len_],
         ) # lenght_0
-        pos_0_with_transition, q_0_with_transition = (
-            pos[start_idx : start_idx + motion_len_ + inpainting_frames_],
-            q[start_idx : start_idx + motion_len_ + inpainting_frames_],
-        ) # lenght_0
-        pos_1_with_transition, q_1_with_transition = (
+        # pos_0_with_transition, q_0_with_transition = (
+        #     pos[start_idx : start_idx + motion_len_ + inpainting_frames_],
+        #     q[start_idx : start_idx + motion_len_ + inpainting_frames_],
+        # ) # lenght_0
+        # pos_1_with_transition, q_1_with_transition = (
+        #     pos[start_idx + motion_len_ : start_idx + window],
+        #     q[start_idx + motion_len_ : start_idx + window],
+        # ) # lenght_0
+        pos_1, q_1 = (
             pos[start_idx + motion_len_ : start_idx + window],
             q[start_idx + motion_len_ : start_idx + window],
-        ) # lenght_0
-        pos_1, q_1 = (
-            pos[start_idx + motion_len_ + inpainting_frames_ : start_idx + window],
-            q[start_idx + motion_len_ + inpainting_frames_ : start_idx + window],
         ) # lenght_0
                     
         out = {"pos_0": pos_0, 
                 "q_0":q_0,
-                "pos_0_with_transition": pos_0_with_transition,
-                "q_0_with_transition": q_0_with_transition,
-                "pos_1_with_transition": pos_1_with_transition,
-                "q_1_with_transition": q_1_with_transition,
+                # "pos_0_with_transition": pos_0_with_transition,
+                # "q_0_with_transition": q_0_with_transition,
+                # "pos_1_with_transition": pos_1_with_transition,
+                # "q_1_with_transition": q_1_with_transition,
                 "pos_1": pos_1,
                 "q_1": q_1,
                 "length_0": int(motion_len_ / 2),

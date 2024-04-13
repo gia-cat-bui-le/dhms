@@ -54,16 +54,20 @@ def generating(motion_loaders, out_dir):
                 
                 for full_pose, filename in zip(full_poses, filenames):
                     if out_dir is not None:
-                        outname = f'evaluation/inference/{"_".join(os.path.splitext(os.path.basename(filename))[0].split("_")[:-1])}.pkl'
-                        # Path(out_dir).mkdir(parents=True, exist_ok=True)
-                        # pickle.dump(
-                        #     {
-                        #         "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
-                        #         "smpl_trans": pos.squeeze(0).cpu().numpy(),
-                        #         "full_pose": full_pose,
-                        #     },
-                        #     open(os.path.join(out_dir, outname), "wb"),
-                        # )
+                        outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        out_path = os.path.join(out_dir, outname)
+                        # Create the directory if it doesn't exist
+                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                        # print(out_path)
+                        with open(out_path, "wb") as file_pickle:
+                            pickle.dump(
+                                {
+                                    "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                                    "smpl_trans": pos.squeeze(0).cpu().numpy(),
+                                    "full_pose": full_pose,
+                                },
+                                file_pickle,
+                            )
                 
                 #TODO: code save generated motion
 
@@ -73,7 +77,6 @@ def generating(motion_loaders, out_dir):
         all_motion_embeddings.append(all_motion_embedding)
         
     all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
-    print(all_motion_embeddings.shape)
 
 def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     with open(log_file, 'a') as f:
@@ -91,8 +94,8 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
             generating(motion_loaders, out_dir)
             
             for batch in origin_loader:
-                motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1_with_transition"], batch["filename"]
-                motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=0))
+                motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1"], batch["filename"]
+                motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=1))
                 
                 b, s, c = motion.shape
                 
@@ -107,18 +110,22 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
                 
                 for full_pose, filename in zip(full_poses, filenames):
                     if out_dir is not None:
-                        outname = f'evaluation/gt/{"_".join(os.path.splitext(os.path.basename(filename))[0].split("_")[:-1])}.pkl'
-                        # Path(out_dir).mkdir(parents=True, exist_ok=True)
-                        # pickle.dump(
-                        #     {
-                        #         "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
-                        #         "smpl_trans": pos.squeeze(0).cpu().numpy(),
-                        #         "full_pose": full_pose,
-                        #     },
-                        #     open(os.path.join(out_dir, outname), "wb"),
-                        # )
+                        outname = f'evaluation/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        out_path = os.path.join(out_dir, outname)
+                        # Create the directory if it doesn't exist
+                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                        print(out_path)
+                        with open(out_path, "wb") as file_pickle:
+                            pickle.dump(
+                                {
+                                    "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                                    "smpl_trans": pos.squeeze(0).cpu().numpy(),
+                                    "full_pose": full_pose,
+                                },
+                                file_pickle,
+                            )
                 
-                print(batch["length_0"], batch["length_1"])
+                # print(batch["length_0"], batch["length_1"])
 
             print(f'!!! DONE !!!')
             print(f'!!! DONE !!!', file=f, flush=True)
@@ -127,6 +134,7 @@ if __name__ == '__main__':
     
     args = evaluation_parser()
     fixseed(args.seed)
+    #TODO: fix the hardcode
     args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
     name = os.path.basename(os.path.dirname(args.model_path))
     niter = os.path.basename(args.model_path).replace('model', '').replace('.pt', '')
@@ -140,7 +148,6 @@ if __name__ == '__main__':
     log_file += f'_comp{args.inter_frames}'
     log_file += f'_{args.eval_mode}'
     log_file += '.log'
-    print(args)
     print(f'Will save to log file [{log_file}]')
     
     ########################################################################

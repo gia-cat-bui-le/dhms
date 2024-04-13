@@ -305,7 +305,6 @@ class CompCCDGeneratedDataset(Dataset):
 
         with torch.no_grad():
             for i, batch in tqdm(enumerate(dataloader)):
-                 
                 if num_samples_limit is not None and len(generated_motion) >= num_samples_limit:
                     break
 
@@ -315,14 +314,16 @@ class CompCCDGeneratedDataset(Dataset):
                 #     batch['length_1_with_transition'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
 
                 bs = len(batch['length_0'])
+                
+                device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
                 model_kwargs_0 = {}
                 model_kwargs_0['y'] = {}
                 if args.inter_frames > 0:
                     model_kwargs_0['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_0']]
                 else:
-                    model_kwargs_0['y']['lengths'] = [x + y for x, y in zip(batch['length_0'], batch['length_transition'])]
-                model_kwargs_0['y']['music'] = batch['music_0_with_transition'].to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs_0['y']['lengths'] = batch['length_0']
+                model_kwargs_0['y']['music'] = batch['music_0'].to("cuda:0" if torch.cuda.is_available() else "cpu")
                 model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
 
@@ -332,8 +333,9 @@ class CompCCDGeneratedDataset(Dataset):
                 if args.inter_frames > 0:
                     model_kwargs_1['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_1']]
                 else:
-                    model_kwargs_1['y']['lengths'] = [x + y for x, y in zip(batch['length_1'], batch['length_transition'])]
-                model_kwargs_1['y']['music'] = batch['music_1_with_transition'].to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs_1['y']['lengths'] = [args.inpainting_frames + len 
+                                                for len in batch['length_1']]
+                model_kwargs_1['y']['music'] = batch['music_1'].to("cuda:0" if torch.cuda.is_available() else "cpu")
                 model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
                 # add CFG scale to batch
@@ -370,6 +372,7 @@ class CompCCDGeneratedDataset(Dataset):
                         const_noise=False,
                         # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                     )
+                    
                     if args.inpainting_frames > 0:
                         sample_1 = sample_1[:,:,:,args.inpainting_frames:] # B 135 1 L
                     if args.inter_frames > 0:
@@ -428,13 +431,13 @@ class CompCCDGeneratedDataset(Dataset):
                         bs = motion_0.shape[0]
                         ret = []
                         for idx in range(bs):
-                            transition_0 = motion_0[idx, length_0[idx] - length_transition[idx] : length_0[idx]]
-                            transition_1 = motion_1[idx, length_1[idx] - length_transition[idx] : length_1[idx]]
-                            transition = (transition_0 + transition_1) / 2
-                            ret.append(np.concatenate((motion_0[idx,:length_0[idx] - length_transition[idx]], transition, motion_1[idx,:length_1[idx] - length_transition[idx]]), axis=0))
-                            # ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
+                            # transition_0 = motion_0[idx, length_0[idx] : length_0[idx] + length_transition[idx]]
+                            # transition_1 = motion_1[idx, length_1[idx] : length_1[idx] + length_transition[idx]]
+                            # transition = (transition_0 + transition_1) / 2
+                            # ret.append(np.concatenate((motion_0[idx,:length_0[idx]], transition, motion_1[idx,:length_1[idx]]), axis=0))
+                            ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
                             
-                        print((torch.from_numpy(ret)).shape)
+                        print((torch.from_numpy(np.array(ret))).shape)
                             
                         return collate_tensor_with_padding(ret)
 
