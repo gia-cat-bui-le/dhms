@@ -24,8 +24,8 @@ from scipy import linalg
 import pickle
 from pathlib import Path
 
-from features.kinetic import extract_kinetic_features
-from features.manual_new import extract_manual_features
+from evaluation.features.kinetic import extract_kinetic_features
+from evaluation.features.manual_new import extract_manual_features
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
