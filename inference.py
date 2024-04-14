@@ -52,7 +52,10 @@ def generating(motion_loaders, out_dir):
                 
                 full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
                 
+                print(full_poses.shape)
+                
                 for full_pose, filename in zip(full_poses, filenames):
+                    print(full_pose.shape)
                     if out_dir is not None:
                         outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join(out_dir, outname)
@@ -71,12 +74,12 @@ def generating(motion_loaders, out_dir):
                 
                 #TODO: code save generated motion
 
-                all_motion_embedding.append(full_poses)
+    #             all_motion_embedding.append(full_poses)
                 
-            all_motion_embedding = np.concatenate(all_motion_embedding, axis=0)
-        all_motion_embeddings.append(all_motion_embedding)
+    #         all_motion_embedding = np.concatenate(all_motion_embedding, axis=0)
+    #     all_motion_embeddings.append(all_motion_embedding)
         
-    all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
+    # all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
 
 def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     with open(log_file, 'a') as f:

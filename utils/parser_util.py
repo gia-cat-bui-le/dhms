@@ -71,7 +71,7 @@ def add_base_options(parser):
     group.add_argument("--composition", default=False, type=bool, help="composition")
     group.add_argument("--inter_frames", default=0, type=int, help="inter_frames")
     group.add_argument("--infer_get", default=False, type=int, help="infer_get")
-    group.add_argument("--inpainting_frames", default=75, type=int, help="inpainting_frames")
+    group.add_argument("--inpainting_frames", default=30, type=int, help="inpainting_frames")
     group.add_argument("--refine_scale", default=1.0, type=float, help="inpainting_frames")
     group.add_argument("--max_len", default=90, type=int, help="inpainting_frames")
 
