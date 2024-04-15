@@ -219,7 +219,7 @@ class GaussianDiffusion():
         
         self.p2_loss_weight_k = 1
         self.p2_loss_weight_gamma = 0.5 if use_p2 else 0
-        self.p2_loss_weight = (self.p2_loss_weight_k + self.alphas_cumprod / (1 - self.alphas_cumprod))** -self.p2_loss_weight_gamma
+        self.p2_loss_weight = torch.from_numpy((self.p2_loss_weight_k + self.alphas_cumprod / (1 - self.alphas_cumprod))** -self.p2_loss_weight_gamma)
 
         self.l2_loss = lambda a, b: (a - b) ** 2  # th.nn.MSELoss(reduction='none')  # must be None for handling mask later on.
         
