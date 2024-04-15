@@ -101,9 +101,10 @@ def add_model_options(parser):
     group.add_argument("--cond_mask_prob", default=.1, type=float,
                        help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
-    group.add_argument("--lambda_rcxyz", default=0.0, type=float, help="Joint positions loss.")
-    group.add_argument("--lambda_vel", default=0.0, type=float, help="Joint velocity loss.")
-    group.add_argument("--lambda_fc", default=0.0, type=float, help="Foot contact loss.")
+    group.add_argument("--lambda_mse", default=0.636, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_rcxyz", default=0.646, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
+    group.add_argument("--lambda_fc", default=10.942, type=float, help="Foot contact loss.")
     group.add_argument("--lambda_cycle", default=0.0, type=float, help="Foot contact loss.")
     # group.add_argument("--unconstrained", action='store_true',
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "
