@@ -71,7 +71,7 @@ def add_base_options(parser):
     group.add_argument("--composition", default=False, type=bool, help="composition")
     group.add_argument("--inter_frames", default=0, type=int, help="inter_frames")
     group.add_argument("--infer_get", default=False, type=int, help="infer_get")
-    group.add_argument("--inpainting_frames", default=75, type=int, help="inpainting_frames")
+    group.add_argument("--inpainting_frames", default=30, type=int, help="inpainting_frames")
     group.add_argument("--refine_scale", default=1.0, type=float, help="inpainting_frames")
     group.add_argument("--max_len", default=90, type=int, help="inpainting_frames")
 
@@ -101,9 +101,9 @@ def add_model_options(parser):
     group.add_argument("--cond_mask_prob", default=.1, type=float,
                        help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
-    group.add_argument("--lambda_rcxyz", default=1.0, type=float, help="Joint positions loss.")
-    group.add_argument("--lambda_vel", default=1.0, type=float, help="Joint velocity loss.")
-    group.add_argument("--lambda_fc", default=1.0, type=float, help="Foot contact loss.")
+    group.add_argument("--lambda_rcxyz", default=0.0, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_vel", default=0.0, type=float, help="Joint velocity loss.")
+    group.add_argument("--lambda_fc", default=0.0, type=float, help="Foot contact loss.")
     group.add_argument("--lambda_cycle", default=0.0, type=float, help="Foot contact loss.")
     # group.add_argument("--unconstrained", action='store_true',
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "

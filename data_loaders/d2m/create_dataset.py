@@ -17,7 +17,7 @@ def create_dataset(opt):
         path_folder = os.path.join(opt.datapath, 'finedance/')
     # # split the data according to the splits files
     print("Creating train / test split")
-    # split_data(path_folder, opt.dataset_name)
+    split_data(path_folder, opt.dataset_name)
     
     # process dataset to extract audio features
     if opt.dataset_name == "aistpp":
@@ -68,12 +68,12 @@ def parse_opt():
         "--inpainting_frame",
         type=float,
         default=1.0,
-        help="the length (in frames) of inpainting transition between 2 motions",
+        help="the length (in seconds) of inpainting transition between 2 motions",
     )
     parser.add_argument(
         "--motion_len",
         type=float,
-        default=2.5,
+        default=3.0,
         help="each motion segment's length",
     )
     parser.add_argument("--extract-baseline", action="store_true")

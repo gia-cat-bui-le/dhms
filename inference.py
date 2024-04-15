@@ -24,59 +24,62 @@ from scipy import linalg
 import pickle
 from pathlib import Path
 
-from features.kinetic import extract_kinetic_features
-from features.manual_new import extract_manual_features
+from evaluation.features.kinetic import extract_kinetic_features
+from evaluation.features.manual_new import extract_manual_features
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-def generating(motion_loaders, out_dir):
-    print('========== GENERATING ==========')
-    for motion_loader_name, motion_loader in motion_loaders.items():
-        all_motion_embedding = []
-        all_motion_embeddings = []
-        with torch.no_grad():
-            for idx, batch in enumerate(motion_loader):
-                if motion_loader_name != 'vald':
-                    motion, length, music, filenames = batch["motion_feats"], batch["length"], batch["music"], batch["filename"]
-                else:
-                    motion, length, music, filenames = batch
+# def generating(motion_loaders, out_dir):
+#     print('========== GENERATING ==========')
+#     for motion_loader_name, motion_loader in motion_loaders.items():
+#         all_motion_embedding = []
+#         all_motion_embeddings = []
+#         with torch.no_grad():
+#             for idx, batch in enumerate(motion_loader):
+#                 if motion_loader_name != 'vald':
+#                     motion, length, music, filenames = batch["motion_feats"], batch["length"], batch["music"], batch["filename"]
+#                 else:
+#                     motion, length, music, filenames = batch
                     
-                b, s, c = motion.shape
+#                 b, s, c = motion.shape
                 
-                sample_contact, motion = torch.split(
-                motion, (4, motion.shape[2] - 4), dim=2)
-                pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-                q = motion[:, :, 3:].reshape(b, s, 24, 6)
-                # go 6d to ax
-                q = ax_from_6v(q).to(motion.device)
+#                 sample_contact, motion = torch.split(
+#                 motion, (4, motion.shape[2] - 4), dim=2)
+#                 pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+#                 q = motion[:, :, 3:].reshape(b, s, 24, 6)
+#                 # go 6d to ax
+#                 q = ax_from_6v(q).to(motion.device)
                 
-                full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
+#                 full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
                 
-                for full_pose, filename in zip(full_poses, filenames):
-                    if out_dir is not None:
-                        outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
-                        out_path = os.path.join(out_dir, outname)
-                        # Create the directory if it doesn't exist
-                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        # print(out_path)
-                        with open(out_path, "wb") as file_pickle:
-                            pickle.dump(
-                                {
-                                    "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
-                                    "smpl_trans": pos.squeeze(0).cpu().numpy(),
-                                    "full_pose": full_pose,
-                                },
-                                file_pickle,
-                            )
+#                 print(full_poses.shape)
                 
-                #TODO: code save generated motion
+#                 for full_pose, filename in zip(full_poses, filenames):
+#                     print(full_pose.shape)
+#                     if out_dir is not None:
+#                         outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+#                         out_path = os.path.join(out_dir, outname)
+#                         # Create the directory if it doesn't exist
+#                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+#                         # print(out_path)
+#                         with open(out_path, "wb") as file_pickle:
+#                             pickle.dump(
+#                                 {
+#                                     "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+#                                     "smpl_trans": pos.squeeze(0).cpu().numpy(),
+#                                     "full_pose": full_pose,
+#                                 },
+#                                 file_pickle,
+#                             )
+                
+#                 #TODO: code save generated motion
 
-                all_motion_embedding.append(full_poses)
+    #             all_motion_embedding.append(full_poses)
                 
-            all_motion_embedding = np.concatenate(all_motion_embedding, axis=0)
-        all_motion_embeddings.append(all_motion_embedding)
+    #         all_motion_embedding = np.concatenate(all_motion_embedding, axis=0)
+    #     all_motion_embeddings.append(all_motion_embedding)
         
-    all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
+    # all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
 
 def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     with open(log_file, 'a') as f:
@@ -108,7 +111,7 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
                 
                 full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
                 
-                for full_pose, filename in zip(full_poses, filenames):
+                for full_pose, q_, pos_, filename in zip(full_poses, q, pos, filenames):
                     if out_dir is not None:
                         outname = f'evaluation/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join(out_dir, outname)
@@ -118,8 +121,8 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
                         with open(out_path, "wb") as file_pickle:
                             pickle.dump(
                                 {
-                                    "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
-                                    "smpl_trans": pos.squeeze(0).cpu().numpy(),
+                                    "smpl_poses": q_.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                                    "smpl_trans": pos_.squeeze(0).cpu().numpy(),
                                     "full_pose": full_pose,
                                 },
                                 file_pickle,
