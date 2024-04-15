@@ -392,21 +392,20 @@ class TrainLoop:
     
     def forward_backward_multi(self, batch):
         self.mp_trainer.zero_grad()
-        for i in range(0, batch['motion_feats_0_with_transition'].shape[0], self.microbatch):
+        for i in range(0, batch['motion_feats_0'].shape[0], self.microbatch):
             # Eliminates the microbatch feature
             assert i == 0
             assert self.microbatch == self.batch_size
-            micro_0 = batch['motion_feats_0_with_transition']
+            micro_0 = batch['motion_feats_0']
             micro_0 = micro_0.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_0 = {}
             micro_cond_0['y'] = {}
-            micro_cond_0['y']['length'] = [x + y for x, y in zip(batch['length_0'], batch['length_transition'])]
-           
+            micro_cond_0['y']['lengths'] = batch['length_0']
             # assuming mask.shape == bs, 1, 1, seqlen
-            micro_cond_0['y']['mask'] = lengths_to_mask(micro_cond_0['y']['length'], micro_0.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_0['y']['music'] = batch['music_0_with_transition']
+            micro_cond_0['y']['mask'] = lengths_to_mask(batch['length_0'], micro_0.device).unsqueeze(1).unsqueeze(2)
+            micro_cond_0['y']['music'] = batch['music_0']
             
-            last_batch = (i + self.microbatch) >= batch['motion_feats_0_with_transition'].shape[0]
+            last_batch = (i + self.microbatch) >= batch['motion_feats_0'].shape[0]
             t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses0 = functools.partial(
                 self.diffusion.training_losses_multi,
@@ -426,7 +425,7 @@ class TrainLoop:
             # bs 135 1 frames
             # bs = hist.shape(0)
             if self.hist_frames > 0:
-                hist_lst = [feats[:,:,:len] for feats, len in zip(hist, batch['motion_feats_0_with_transition'])]
+                hist_lst = [feats[:,:,:len] for feats, len in zip(hist, batch['length_0'])]
                 hframes = torch.stack([x[:,:,-self.hist_frames:] for x in hist_lst])
                 # micro_cond_1['y']['hframes'] = hframes
 
@@ -436,7 +435,7 @@ class TrainLoop:
             micro_cond_1['y'] = {}
             if self.hist_frames > 0:
                 micro_cond_1['y']['hframes'] = hframes
-            micro_cond_1['y']['length'] = batch['length_1']
+            micro_cond_1['y']['lengths'] = batch['length_1']
             micro_cond_1['y']['mask'] = lengths_to_mask(batch['length_1'], micro_1.device).unsqueeze(1).unsqueeze(2)
             micro_cond_1['y']['music'] = batch['music_1']
             

@@ -9,6 +9,12 @@ from teach.data.tools import lengths_to_mask
 import numpy as np
 import random
 
+import pickle
+import os
+
+from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
+from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_to_axis_angle)
+
 def build_models(opt):
     if opt.text_enc_mod == 'bigru':
         text_encoder = TextEncoderBiGRU(word_size=opt.dim_word,
@@ -418,7 +424,7 @@ class CompCCDGeneratedDataset(Dataset):
                     )
                     
                     if args.inpainting_frames > 0:
-                        sample_1 = sample_1[:,:,:,args.inpainting_frames:] # B 135 1 L
+                        sample_1_tmp = sample_1[:,:,:,args.inpainting_frames:] # B 135 1 L
                     if args.inter_frames > 0:
                         sample_0 = sample_0[:,:,:,:-args.inter_frames // 2]
                         sample_1 = sample_1[:,:,:,args.inter_frames // 2:]
@@ -427,7 +433,7 @@ class CompCCDGeneratedDataset(Dataset):
                         model_kwargs_0_refine['y'] = {}
                         model_kwargs_0_refine['y']['scale'] = model_kwargs_0['y']['scale']
                         model_kwargs_0_refine['y']['music'] = model_kwargs_0['y']['music']
-                        model_kwargs_0_refine['y']['next_motion'] = sample_1[:,:,:,:args.inpainting_frames]
+                        model_kwargs_0_refine['y']['next_motion'] = sample_1_tmp[:,:,:,:args.inpainting_frames]
                         model_kwargs_0_refine['y']['lengths'] = [len + args.inpainting_frames
                                                         for len in model_kwargs_0['y']['lengths']]
                         model_kwargs_0_refine['y']['mask'] = lengths_to_mask(model_kwargs_0_refine['y']['lengths'], dist_util.dev()).unsqueeze(1).unsqueeze(2)
@@ -468,8 +474,108 @@ class CompCCDGeneratedDataset(Dataset):
                                                     progress=True,
                                                     dump_steps=None,
                                                     const_noise=False)
+                        print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
+                        assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
+                        
                         sample_0_refine = sample_0_refine[:,:,:,:-args.inpainting_frames]
                         sample_0 = sample_0  + args.refine_scale * (sample_0_refine - sample_0)
+                        to_stack = sample_0_refine[:, :, :, args.inpainting_frames:]
+                        sample_0 = np.concatenate((sample_0, to_stack), axis=-1)
+                        
+                        assert sample_0.shape == sample_1.shape == (bs, 151, 1, 120)
+                        
+                        for idx in bs:
+                            motion_0_result = sample_0.squeeze().permute(0, 2, 1)[idx].unsqueeze(dim=0)
+                            motion_1_result = sample_1[idx].squeeze().permute(0, 2, 1).unsqueeze(dim=0)
+                            
+                            assert motion_0_result.shape == motion_1_result.shape == (1, 120, 151)
+                            
+                            motion_result = torch.stack((motion_0_result, motion_1_result), dim=0)
+                            
+                            assert motion_result.shape == (2, 120, 151)
+                            
+                            if motion_result.shape[2] == 151:
+                                sample_contact, motion_result = torch.split(
+                                    motion_result, (4, motion_result.shape[2] - 4), dim=2
+                                )
+                            else:
+                                sample_contact = None
+                            # do the FK all at once
+                            b, s, c = motion_result.shape
+                            pos = motion_result[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                            q = motion_result[:, :, 3:].reshape(b, s, 24, 6)
+                            # go 6d to ax
+                            q = ax_from_6v(q).to(device)
+
+                            b, s, c1, c2 = q.shape
+                            assert s % 2 == 0
+                            half = s // 2
+                            if b > 1:
+                                # if long mode, stitch position using linear interp
+
+                                fade_out = torch.ones((1, s, 1)).to(pos.device)
+                                fade_in = torch.ones((1, s, 1)).to(pos.device)
+                                fade_out[:, half:, :] = torch.linspace(1, 0, half)[None, :, None].to(
+                                    pos.device
+                                )
+                                fade_in[:, :half, :] = torch.linspace(0, 1, half)[None, :, None].to(
+                                    pos.device
+                                )
+
+                                pos[:-1] *= fade_out
+                                pos[1:] *= fade_in
+
+                                full_pos = torch.zeros((s + half * (b - 1), 3)).to(pos.device)
+                                idx = 0
+                                for pos_slice in pos:
+                                    full_pos[idx : idx + s] += pos_slice
+                                    idx += half
+
+                                # stitch joint angles with slerp
+                                slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(pos.device)
+
+                                left, right = q[:-1, half:], q[1:, :half]
+                                # convert to quat
+                                left, right = (
+                                    axis_angle_to_quaternion(left),
+                                    axis_angle_to_quaternion(right),
+                                )
+                                merged = quat_slerp(left, right, slerp_weight)  # (b-1) x half x ...
+                                # convert back
+                                merged = quaternion_to_axis_angle(merged)
+
+                                full_q = torch.zeros((s + half * (b - 1), c1, c2)).to(pos.device)
+                                full_q[:half] += q[0, :half]
+                                idx = half
+                                for q_slice in merged:
+                                    full_q[idx : idx + half] += q_slice
+                                    idx += half
+                                full_q[idx : idx + half] += q[-1, half:]
+
+                                # unsqueeze for fk
+                                full_pos = full_pos.unsqueeze(0)
+                                full_q = full_q.unsqueeze(0)
+                                
+                                full_pose = (
+                                    self.smpl.forward(full_q, full_pos).detach().cpu().numpy()
+                                )  # b, s, 24, 3
+                                
+                                filename = batch['filename'][idx]
+                                outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                                out_path = os.path.join("./", outname)
+                                # Create the directory if it doesn't exist
+                                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                                # print(out_path)
+                                with open(out_path, "wb") as file_pickle:
+                                    pickle.dump(
+                                        {
+                                            "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                                            "smpl_trans": pos.squeeze(0).cpu().numpy(),
+                                            "full_pose": full_pose,
+                                        },
+                                        file_pickle,
+                                    )
+                            
                         # model_kwargs_0['y']['length'] = [len - args.inpainting_frames
                         #                                 for len in model_kwargs_0['y']['length']]
 
