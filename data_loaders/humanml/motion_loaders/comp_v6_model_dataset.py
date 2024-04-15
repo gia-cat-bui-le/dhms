@@ -15,6 +15,9 @@ import os
 from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_to_axis_angle)
 
+# NOTE: import for fixing generate
+from diffusion.gaussian_diffusion import create_first_sample, create_other_sample
+
 def build_models(opt):
     if opt.text_enc_mod == 'bigru':
         text_encoder = TextEncoderBiGRU(word_size=opt.dim_word,
@@ -411,14 +414,52 @@ class CompCCDGeneratedDataset(Dataset):
                         noise_1, noise_0 = None, None
                     
                     # TODO: tách xử lý sample_0 và sample_1 thành 2 fn
-                    sample_0, sample_1 = sample_fn(
+                    # NOTE: original
+                    # sample_0, sample_1 = sample_fn(
+                    #     model,                                                                  
+                    #     args.hist_frames,                                                       
+                    #     args.inpainting_frames if not args.composition else args.inter_frames,  
+                    #     (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1]),    # shape_0
+                    #     (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1]),    # shape_1
+                    #     noise_0=noise_0,                                                        
+                    #     noise_1=noise_1,                                                        
+                    #     clip_denoised=clip_denoised,
+                    #     model_kwargs_0=model_kwargs_0,
+                    #     model_kwargs_1=model_kwargs_1,
+                    #     skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
+                    #     init_image=None,
+                    #     progress=False,
+                    #     dump_steps=None,
+                    #     const_noise=False,
+                    #     # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
+                    # )
+                    # NOTE: end original
+
+                    shape_0 = (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1])
+                    shape_1 = (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1])
+
+                    dump, sample_0 = create_first_sample(
+                        model,
+                        shape_0,
+                        noise_0=noise_0,                                                        
+                        clip_denoised=clip_denoised,
+                        model_kwargs_0=model_kwargs_0,
+                        skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
+                        init_image=None,
+                        progress=False,
+                        dump_steps=None,
+                        const_noise=False
+                    )
+
+                    dump, sample_1 = create_other_sample(
+                        dump,
+                        sample_0,
                         model,
                         args.hist_frames,
-                        args.inpainting_frames if not args.composition else args.inter_frames,
-                        (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1]),
-                        (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1]),
-                        noise_0=noise_0,
-                        noise_1=noise_1,
+                        args.inpainting_frames,
+                        shape_0,
+                        shape_1,                                                  
+                        noise_1=noise_1,                                                        
                         clip_denoised=clip_denoised,
                         model_kwargs_0=model_kwargs_0,
                         model_kwargs_1=model_kwargs_1,
@@ -427,7 +468,6 @@ class CompCCDGeneratedDataset(Dataset):
                         progress=False,
                         dump_steps=None,
                         const_noise=False,
-                        # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                     )
                     
                     if args.inpainting_frames > 0:

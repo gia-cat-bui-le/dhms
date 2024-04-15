@@ -861,120 +861,7 @@ class GaussianDiffusion():
             final = sample
         if dump_steps is not None:
             return dump
-        return final[0]["sample"], final[1]["sample"]
-    
-    #NOTE: create first sample
-    def create_first_sample(
-        self,
-        model,
-        shape_0,
-        noise_0=None,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs_0=None,
-        device=None,
-        progress=False,
-        skip_timesteps=0,
-        init_image=None,
-        randomize_class=False,
-        cond_fn_with_grad=False,
-        dump_steps=None,
-        const_noise=False,            
-    ):
-        if dump_steps is not None:
-            dump = []
-
-        for i, sample in enumerate(self.p_sample_loop_progressive(
-            model,
-            shape_0,
-            noise=noise_0,
-            clip_denoised=clip_denoised,
-            denoised_fn=denoised_fn,
-            cond_fn=cond_fn,
-            model_kwargs=model_kwargs_0,
-            device=device,
-            progress=progress,
-            skip_timesteps=skip_timesteps,
-            init_image=init_image,
-            randomize_class=randomize_class,
-            cond_fn_with_grad=cond_fn_with_grad,
-            const_noise=const_noise,
-        )):
-            if dump_steps is not None and i in dump_steps:
-                dump.append(deepcopy(sample["sample"]))
-            final_0 = sample
-
-        return dump, final_0
-    
-    #NOTE: create sample for second loop
-    def create_other_sample(
-        self,
-        dump,
-        pre_sample,
-        model,
-        hist_frames,
-        inpainting_frames,
-        shape_0,
-        shape_1,
-        noise_1=None,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs_0=None,
-        model_kwargs_1=None,
-        device=None,
-        progress=False,
-        skip_timesteps=0,
-        init_image=None,
-        randomize_class=False,
-        cond_fn_with_grad=False,
-        dump_steps=None,
-        const_noise=False,            
-    ):
-        B = shape_0[0]
-
-        if hist_frames > 0:
-            # FIXME
-            hist_motion = torch.ones(B, 151, 1, hist_frames).to(pre_sample['sample'].device)
-            for idx in range(B):
-                len  = model_kwargs_0['y']['lengths'][idx]
-                hist_motion[idx,:,:,:] = pre_sample['sample'][idx,:,:,len-hist_frames:len]
-            model_kwargs_1['y']['hframes'] = hist_motion
-
-        # NOTE: lấy condition từ model_0 sang model_1
-        if inpainting_frames > 0:
-            # FIXME
-            hist_motion = torch.ones(B, 151, 1, inpainting_frames).to(pre_sample['sample'].device)
-            for idx in range(B):
-                len  = model_kwargs_0['y']['lengths'][idx]
-                hist_motion[idx,:,:,:] = pre_sample['sample'][idx,:,:,len-inpainting_frames:len]
-            model_kwargs_1['y']['hist_motion'] = hist_motion
-        # model_kwargs_1['y']['hist_motion'] = [len + ]
-        # shape_1 = (shape_1[0], shape_1[1], shape_1[2], shape_1[3] +  hist_frames)
-        
-        for i, sample in enumerate(self.p_sample_loop_progressive(
-            model,
-            shape_1,
-            noise=noise_1,
-            clip_denoised=clip_denoised,
-            denoised_fn=denoised_fn,
-            cond_fn=cond_fn,
-            model_kwargs=model_kwargs_1,
-            device=device,
-            progress=progress,
-            skip_timesteps=skip_timesteps,
-            init_image=init_image,
-            randomize_class=randomize_class,
-            cond_fn_with_grad=cond_fn_with_grad,
-            const_noise=const_noise,
-        )):
-            if dump_steps is not None and i in dump_steps:
-                dump.append(deepcopy(sample["sample"]))
-            final_1 = sample
-
-        return dump, final_1
-        
+        return final[0]["sample"], final[1]["sample"]        
 
     def p_sample_loop_inpainting(
         self,
@@ -1026,21 +913,21 @@ class GaussianDiffusion():
         #     final_0 = sample
         # NOTE: end original
 
-        dump, final_0 = self.create_first_sample(model,
-                                                 shape_0,
-                                                 noise_0,
-                                                 clip_denoised,
-                                                 denoised_fn,
-                                                 cond_fn,
-                                                 model_kwargs_0,
-                                                 device,
-                                                 progress,
-                                                 skip_timesteps,
-                                                 init_image,
-                                                 randomize_class,
-                                                 cond_fn_with_grad,
-                                                 dump_steps,
-                                                 const_noise)
+        dump, final_0 = create_first_sample(model,
+                                            shape_0,
+                                            noise_0,
+                                            clip_denoised,
+                                            denoised_fn,
+                                            cond_fn,
+                                            model_kwargs_0,
+                                            device,
+                                            progress,
+                                            skip_timesteps,
+                                            init_image,
+                                            randomize_class,
+                                            cond_fn_with_grad,
+                                            dump_steps,
+                                            const_noise)
 
         # if hist_frames > 0:
         #     hist_lst = [feats[:,:,:len] for feats, len in zip(final_0['pred_xstart'], batch['length_0'])]
@@ -1092,27 +979,27 @@ class GaussianDiffusion():
         #     final_1 = sample
         # NOTE: end original
 
-        dump, final_1 = self.create_other_sample(dump,
-                                                 final_0,
-                                                 model,
-                                                 hist_frames,
-                                                 inpainting_frames,
-                                                 shape_0,
-                                                 shape_1,
-                                                 noise_1,
-                                                 clip_denoised,
-                                                 denoised_fn,
-                                                 cond_fn,
-                                                 model_kwargs_0,
-                                                 model_kwargs_1,
-                                                 device,
-                                                 progress,
-                                                 skip_timesteps,
-                                                 init_image,
-                                                 randomize_class,
-                                                 cond_fn_with_grad,
-                                                 dump_steps,
-                                                 const_noise)
+        dump, final_1 = create_other_sample(dump,
+                                            final_0,
+                                            model,
+                                            hist_frames,
+                                            inpainting_frames,
+                                            shape_0,
+                                            shape_1,
+                                            noise_1,
+                                            clip_denoised,
+                                            denoised_fn,
+                                            cond_fn,
+                                            model_kwargs_0,
+                                            model_kwargs_1,
+                                            device,
+                                            progress,
+                                            skip_timesteps,
+                                            init_image,
+                                            randomize_class,
+                                            cond_fn_with_grad,
+                                            dump_steps,
+                                            const_noise)
 
         if dump_steps is not None:
             return dump
@@ -2603,3 +2490,113 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
     return res.expand(broadcast_shape)
+    
+#NOTE: create first sample
+def create_first_sample(
+    model,
+    shape_0,
+    noise_0=None,
+    clip_denoised=True,
+    denoised_fn=None,
+    cond_fn=None,
+    model_kwargs_0=None,
+    device=None,
+    progress=False,
+    skip_timesteps=0,
+    init_image=None,
+    randomize_class=False,
+    cond_fn_with_grad=False,
+    dump_steps=None,
+    const_noise=False,            
+):
+    if dump_steps is not None:
+        dump = []
+
+    for i, sample in enumerate(GaussianDiffusion.p_sample_loop_progressive(
+        model,
+        shape_0,
+        noise=noise_0,
+        clip_denoised=clip_denoised,
+        denoised_fn=denoised_fn,
+        cond_fn=cond_fn,
+        model_kwargs=model_kwargs_0,
+        device=device,
+        progress=progress,
+        skip_timesteps=skip_timesteps,
+        init_image=init_image,
+        randomize_class=randomize_class,
+        cond_fn_with_grad=cond_fn_with_grad,
+        const_noise=const_noise,
+    )):
+        if dump_steps is not None and i in dump_steps:
+            dump.append(deepcopy(sample["sample"]))
+        final_0 = sample
+
+    return dump, final_0
+
+#NOTE: create sample for second loop
+def create_other_sample(
+    dump,
+    pre_sample,
+    model,
+    hist_frames,
+    inpainting_frames,
+    shape_0,
+    shape_1,
+    noise_1=None,
+    clip_denoised=True,
+    denoised_fn=None,
+    cond_fn=None,
+    model_kwargs_0=None,
+    model_kwargs_1=None,
+    device=None,
+    progress=False,
+    skip_timesteps=0,
+    init_image=None,
+    randomize_class=False,
+    cond_fn_with_grad=False,
+    dump_steps=None,
+    const_noise=False,            
+):
+    B = shape_0[0]
+
+    if hist_frames > 0:
+        # FIXME
+        hist_motion = torch.ones(B, 151, 1, hist_frames).to(pre_sample['sample'].device)
+        for idx in range(B):
+            len  = model_kwargs_0['y']['lengths'][idx]
+            hist_motion[idx,:,:,:] = pre_sample['sample'][idx,:,:,len-hist_frames:len]
+        model_kwargs_1['y']['hframes'] = hist_motion
+
+    # NOTE: lấy condition từ model_0 sang model_1
+    if inpainting_frames > 0:
+        # FIXME
+        hist_motion = torch.ones(B, 151, 1, inpainting_frames).to(pre_sample['sample'].device)
+        for idx in range(B):
+            len  = model_kwargs_0['y']['lengths'][idx]
+            hist_motion[idx,:,:,:] = pre_sample['sample'][idx,:,:,len-inpainting_frames:len]
+        model_kwargs_1['y']['hist_motion'] = hist_motion
+    # model_kwargs_1['y']['hist_motion'] = [len + ]
+    # shape_1 = (shape_1[0], shape_1[1], shape_1[2], shape_1[3] +  hist_frames)
+    
+    for i, sample in enumerate(GaussianDiffusion.p_sample_loop_progressive(
+        model,
+        shape_1,
+        noise=noise_1,
+        clip_denoised=clip_denoised,
+        denoised_fn=denoised_fn,
+        cond_fn=cond_fn,
+        model_kwargs=model_kwargs_1,
+        device=device,
+        progress=progress,
+        skip_timesteps=skip_timesteps,
+        init_image=init_image,
+        randomize_class=randomize_class,
+        cond_fn_with_grad=cond_fn_with_grad,
+        const_noise=const_noise,
+    )):
+        if dump_steps is not None and i in dump_steps:
+            dump.append(deepcopy(sample["sample"]))
+        final_1 = sample
+
+    return dump, final_1
