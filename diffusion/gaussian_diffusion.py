@@ -144,6 +144,7 @@ class GaussianDiffusion():
         model_var_type,
         loss_type,
         rescale_timesteps=False,
+        lambda_mse=1.,
         lambda_rcxyz=0.,
         lambda_vel=0.,
         lambda_pose=1.,
@@ -167,6 +168,7 @@ class GaussianDiffusion():
         self.lambda_loc = lambda_loc
 
         self.lambda_rcxyz = lambda_rcxyz
+        self.lambda_mse = lambda_mse
         self.lambda_vel = lambda_vel
         self.lambda_root_vel = lambda_root_vel
         self.lambda_vel_rcxyz = lambda_vel_rcxyz
@@ -217,9 +219,11 @@ class GaussianDiffusion():
         
         use_p2 = False
         
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        
         self.p2_loss_weight_k = 1
         self.p2_loss_weight_gamma = 0.5 if use_p2 else 0
-        self.p2_loss_weight = torch.from_numpy((self.p2_loss_weight_k + self.alphas_cumprod / (1 - self.alphas_cumprod))** -self.p2_loss_weight_gamma)
+        self.p2_loss_weight = torch.from_numpy((self.p2_loss_weight_k + self.alphas_cumprod / (1 - self.alphas_cumprod))** -self.p2_loss_weight_gamma).to(self.device)
 
         self.l2_loss = lambda a, b: (a - b) ** 2  # th.nn.MSELoss(reduction='none')  # must be None for handling mask later on.
         
@@ -228,7 +232,7 @@ class GaussianDiffusion():
 
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        
         self.smpl = SMPLSkeleton(self.device)
         
     def masked_l2(self, a, b, mask):
@@ -2171,7 +2175,7 @@ class GaussianDiffusion():
             loss = reduce(loss, "b ... -> b (...)", "mean")
             loss = loss * extract(self.p2_loss_weight, t, loss.shape)
             
-            terms["rcxyz_mse"] = loss
+            terms["rot_mse"] = loss
 
             # split off contact from the rest
             model_contact, model_output_loss = torch.split(
@@ -2227,10 +2231,19 @@ class GaussianDiffusion():
             
             terms["fc"] = foot_loss
             
-            terms["loss"] = (self.lambda_mse * terms["rot_mse"]) + terms.get('vb', 0.) +\
-                            (self.lambda_vel * terms.get('vel_mse', 0.)) +\
-                            (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
-                            (self.lambda_fc * terms.get('fc', 0.))
+            losses = (
+            self.lambda_mse * loss.mean(),
+            self.lambda_vel * v_loss.mean(),
+            self.lambda_rcxyz * fk_loss.mean(),
+            self.lambda_fc * foot_loss.mean(),
+            )
+        
+            terms["loss"] = sum(losses)
+            
+            # terms["loss"] = (self.lambda_mse * terms.get('rot_mse', 0.)) + terms.get('vb', 0.) +\
+            #                 (self.lambda_vel * terms.get('vel_mse', 0.)) +\
+            #                 (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
+            #                 (self.lambda_fc * terms.get('fc', 0.))
 
         else:
             raise NotImplementedError(self.loss_type)
