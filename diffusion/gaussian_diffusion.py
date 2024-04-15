@@ -2040,7 +2040,6 @@ class GaussianDiffusion():
                             (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
                             (self.lambda_fc * terms.get('fc', 0.))
             
-            #TODO: add loss based on EDGE
 
             # if self.lambda_rcxyz > 0.:
             #     target_xyz = get_xyz(target)  # [bs, nvertices(vertices)/njoints(smpl), 3, nframes]
@@ -2251,10 +2250,75 @@ class GaussianDiffusion():
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            terms["rot_mse"] = self.masked_l2(target, model_output, mask) # mean_flat(rot_mse)
+            bs, njoints, nfeats, nframes = model_output.shape
+            model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            
+            # full reconstruction loss
+            loss = self.loss_fn(model_output_loss, target_loss, reduction="none")
+            loss = reduce(loss, "b ... -> b (...)", "mean")
+            loss = loss * extract(self.p2_loss_weight, t, loss.shape)
+            
+            terms["rcxyz_mse"] = loss
 
-            #TODO: add more loss
-            terms["loss"] = terms["rot_mse"]
+            # split off contact from the rest
+            model_contact, model_output_loss = torch.split(
+                model_output_loss, (4, model_output_loss.shape[2] - 4), dim=2
+            )
+            target_contact, target_loss = torch.split(target_loss, (4, target_loss.shape[2] - 4), dim=2)
+
+            # velocity loss
+            target_v = target_loss[:, 1:] - target_loss[:, :-1]
+            model_output_loss_v = model_output_loss[:, 1:] - model_output_loss[:, :-1]
+            v_loss = self.loss_fn(model_output_loss_v, target_v, reduction="none")
+            v_loss = reduce(v_loss, "b ... -> b (...)", "mean")
+            v_loss = v_loss * extract(self.p2_loss_weight, t, v_loss.shape)
+            
+            terms["vel_mse"] = v_loss
+
+            # FK loss
+            b, s, c = model_output_loss.shape
+            # unnormalize
+            # model_output_loss = self.normalizer.unnormalize(model_output_loss)
+            # target = self.normalizer.unnormalize(target)
+            # X, Q
+            model_x = model_output_loss[:, :, :3]
+            model_q = ax_from_6v(model_output_loss[:, :, 3:].reshape(b, s, -1, 6))
+            target_x = target_loss[:, :, :3]
+            target_q = ax_from_6v(target_loss[:, :, 3:].reshape(b, s, -1, 6))
+
+            # perform FK
+            model_xp = self.smpl.forward(model_q, model_x)
+            target_xp = self.smpl.forward(target_q, target_x)
+
+            fk_loss = self.loss_fn(model_xp, target_xp, reduction="none")
+            fk_loss = reduce(fk_loss, "b ... -> b (...)", "mean")
+            fk_loss = fk_loss * extract(self.p2_loss_weight, t, fk_loss.shape)
+            
+            terms["rcxyz_mse"] = fk_loss
+
+            # foot skate loss
+            foot_idx = [7, 8, 10, 11]
+
+            # find static indices consistent with model's own predictions
+            static_idx = model_contact > 0.95  # N x S x 4
+            model_feet = model_xp[:, :, foot_idx]  # foot positions (N, S, 4, 3)
+            model_foot_v = torch.zeros_like(model_feet)
+            model_foot_v[:, :-1] = (
+                model_feet[:, 1:, :, :] - model_feet[:, :-1, :, :]
+            )  # (N, S-1, 4, 3)
+            model_foot_v[~static_idx] = 0
+            foot_loss = self.loss_fn(
+                model_foot_v, torch.zeros_like(model_foot_v), reduction="none"
+            )
+            foot_loss = reduce(foot_loss, "b ... -> b (...)", "mean")
+            
+            terms["fc"] = foot_loss
+            
+            terms["loss"] = (self.lambda_mse * terms["rot_mse"]) + terms.get('vb', 0.) +\
+                            (self.lambda_vel * terms.get('vel_mse', 0.)) +\
+                            (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
+                            (self.lambda_fc * terms.get('fc', 0.))
 
         else:
             raise NotImplementedError(self.loss_type)
