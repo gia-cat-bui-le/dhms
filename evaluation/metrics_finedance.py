@@ -222,8 +222,8 @@ if __name__ == '__main__':
     # mod = '_global'
 
 
-    gt_root = 'evaluation\gt_noise'
-    pred_root = 'evaluation\inference_noise'
+    gt_root = 'evaluation\gt'
+    pred_root = 'evaluation\inference'
     print('Calculating and saving features')
 
 
