@@ -15,6 +15,8 @@ import os
 from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_to_axis_angle)
 
+from vis import SMPLSkeleton
+
 def build_models(opt):
     if opt.text_enc_mod == 'bigru':
         text_encoder = TextEncoderBiGRU(word_size=opt.dim_word,
@@ -307,6 +309,10 @@ class CompCCDGeneratedDataset(Dataset):
         else:
             mm_idxs = []
         print('mm_idxs', mm_idxs)
+        
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        
+        self.smpl = SMPLSkeleton(device)
 
         model.eval()
 
@@ -321,8 +327,6 @@ class CompCCDGeneratedDataset(Dataset):
                 #     batch['length_1_with_transition'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
 
                 bs = len(batch['length_0'])
-                
-                device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
                 model_kwargs_0 = {}
                 model_kwargs_0['y'] = {}
@@ -478,19 +482,25 @@ class CompCCDGeneratedDataset(Dataset):
                         assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
                         
                         sample_0_refine = sample_0_refine[:,:,:,:-args.inpainting_frames]
+                        to_stack = sample_0_refine[:, :, :, -args.inpainting_frames:]
                         sample_0 = sample_0  + args.refine_scale * (sample_0_refine - sample_0)
-                        to_stack = sample_0_refine[:, :, :, args.inpainting_frames:]
-                        sample_0 = np.concatenate((sample_0, to_stack), axis=-1)
                         
+                        sample_0 = torch.cat((sample_0, to_stack), axis=-1)
+                        
+                        # print(sample_0.shape, sample_1.shape)
                         assert sample_0.shape == sample_1.shape == (bs, 151, 1, 120)
                         
-                        for idx in bs:
-                            motion_0_result = sample_0.squeeze().permute(0, 2, 1)[idx].unsqueeze(dim=0)
-                            motion_1_result = sample_1[idx].squeeze().permute(0, 2, 1).unsqueeze(dim=0)
+                        sample = []
+                        
+                        for idx in range(bs):
+                            motion_0_result = sample_0[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            motion_1_result = sample_1[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                             
                             assert motion_0_result.shape == motion_1_result.shape == (1, 120, 151)
                             
-                            motion_result = torch.stack((motion_0_result, motion_1_result), dim=0)
+                            motion_result = torch.cat((motion_0_result, motion_1_result), dim=0)
+                            
+                            # print(motion_result.shape)
                             
                             assert motion_result.shape == (2, 120, 151)
                             
@@ -526,10 +536,10 @@ class CompCCDGeneratedDataset(Dataset):
                                 pos[1:] *= fade_in
 
                                 full_pos = torch.zeros((s + half * (b - 1), 3)).to(pos.device)
-                                idx = 0
+                                id_ = 0
                                 for pos_slice in pos:
-                                    full_pos[idx : idx + s] += pos_slice
-                                    idx += half
+                                    full_pos[id_ : id_ + s] += pos_slice
+                                    id_ += half
 
                                 # stitch joint angles with slerp
                                 slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(pos.device)
@@ -546,11 +556,11 @@ class CompCCDGeneratedDataset(Dataset):
 
                                 full_q = torch.zeros((s + half * (b - 1), c1, c2)).to(pos.device)
                                 full_q[:half] += q[0, :half]
-                                idx = half
+                                id_ = half
                                 for q_slice in merged:
-                                    full_q[idx : idx + half] += q_slice
-                                    idx += half
-                                full_q[idx : idx + half] += q[-1, half:]
+                                    full_q[id_ : id_ + half] += q_slice
+                                    id_ += half
+                                full_q[id_ : id_ + half] += q[-1, half:]
 
                                 # unsqueeze for fk
                                 full_pos = full_pos.unsqueeze(0)
@@ -559,6 +569,8 @@ class CompCCDGeneratedDataset(Dataset):
                                 full_pose = (
                                     self.smpl.forward(full_q, full_pos).detach().cpu().numpy()
                                 )  # b, s, 24, 3
+                                
+                                assert full_pose.shape == (1, 180, 24, 3)
                                 
                                 filename = batch['filename'][idx]
                                 outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
@@ -571,56 +583,58 @@ class CompCCDGeneratedDataset(Dataset):
                                         {
                                             "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
                                             "smpl_trans": pos.squeeze(0).cpu().numpy(),
-                                            "full_pose": full_pose,
+                                            "full_pose": full_pose.squeeze(),
                                         },
                                         file_pickle,
                                     )
+                                    
+                                sample.append(full_pose)
                             
                         # model_kwargs_0['y']['length'] = [len - args.inpainting_frames
                         #                                 for len in model_kwargs_0['y']['length']]
 
-                    sample_0 = sample_0.squeeze().permute(0, 2, 1).cpu().numpy() # B L D
-                    sample_1 = sample_1.squeeze().permute(0, 2, 1).cpu().numpy()
-                    length_0 = batch['length_0']
-                    length_1 = batch['length_1']
-                    length_transition = batch['length_transition']
-                    # length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
-                    # if args.inter_frames > 0:
-                    #     length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
-                    length = [length_0[idx] + length_1[idx] for idx in range(bs)]
-                    def collate_tensor_with_padding(batch):
-                        batch = [torch.tensor(x) for x in batch]
-                        dims = batch[0].dim()
-                        max_size = [max([b.size(i) for b in batch]) for i in range(dims)]
-                        size = (len(batch),) + tuple(max_size)
-                        canvas = batch[0].new_zeros(size=size)
-                        for i, b in enumerate(batch):
-                            sub_tensor = canvas[i]
-                            for d in range(dims):
-                                sub_tensor = sub_tensor.narrow(d, 0, b.size(d))
-                            sub_tensor.add_(b)
-                        canvas = canvas.detach().numpy()
-                        # canvas = [x.detach().numpy() for x in canvas]
-                        return canvas
+                    # sample_0 = sample_0.squeeze().permute(0, 2, 1).cpu().numpy() # B L D
+                    # sample_1 = sample_1.squeeze().permute(0, 2, 1).cpu().numpy()
+                    # length_0 = batch['length_0']
+                    # length_1 = batch['length_1']
+                    # length_transition = batch['length_transition']
+                    # # length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
+                    # # if args.inter_frames > 0:
+                    # #     length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
+                    # length = [length_0[idx] + length_1[idx] for idx in range(bs)]
+                    # def collate_tensor_with_padding(batch):
+                    #     batch = [torch.tensor(x) for x in batch]
+                    #     dims = batch[0].dim()
+                    #     max_size = [max([b.size(i) for b in batch]) for i in range(dims)]
+                    #     size = (len(batch),) + tuple(max_size)
+                    #     canvas = batch[0].new_zeros(size=size)
+                    #     for i, b in enumerate(batch):
+                    #         sub_tensor = canvas[i]
+                    #         for d in range(dims):
+                    #             sub_tensor = sub_tensor.narrow(d, 0, b.size(d))
+                    #         sub_tensor.add_(b)
+                    #     canvas = canvas.detach().numpy()
+                    #     # canvas = [x.detach().numpy() for x in canvas]
+                    #     return canvas
 
-                    def merge(motion_0, length_0, motion_1, length_1, length_transition): # B L D
-                        bs = motion_0.shape[0]
-                        ret = []
-                        for idx in range(bs):
-                            # transition_0 = motion_0[idx, length_0[idx] : length_0[idx] + length_transition[idx]]
-                            # transition_1 = motion_1[idx, length_1[idx] : length_1[idx] + length_transition[idx]]
-                            # transition = (transition_0 + transition_1) / 2
-                            # ret.append(np.concatenate((motion_0[idx,:length_0[idx]], transition, motion_1[idx,:length_1[idx]]), axis=0))
-                            ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
+                    # def merge(motion_0, length_0, motion_1, length_1, length_transition): # B L D
+                    #     bs = motion_0.shape[0]
+                    #     ret = []
+                    #     for idx in range(bs):
+                    #         # transition_0 = motion_0[idx, length_0[idx] : length_0[idx] + length_transition[idx]]
+                    #         # transition_1 = motion_1[idx, length_1[idx] : length_1[idx] + length_transition[idx]]
+                    #         # transition = (transition_0 + transition_1) / 2
+                    #         # ret.append(np.concatenate((motion_0[idx,:length_0[idx]], transition, motion_1[idx,:length_1[idx]]), axis=0))
+                    #         ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
                             
-                        print((torch.from_numpy(np.array(ret))).shape)
+                    #     print((torch.from_numpy(np.array(ret))).shape)
                             
-                        return collate_tensor_with_padding(ret)
+                    #     return collate_tensor_with_padding(ret)
 
-                    sample = merge(sample_0, length_0, sample_1, length_1, length_transition)
+                    # sample = merge(sample_0, length_0, sample_1, length_1, length_transition)
                     if t == 0:
                         sub_dicts = [{'motion': sample[bs_i],
-                                    'length': length[bs_i],
+                                    'length': 180,
                                     'music': torch.cat((model_kwargs_0['y']['music'][bs_i], model_kwargs_1['y']['music'][bs_i]), axis=0),
                                     'filename': batch["filename"][bs_i],
                                     # 'caption': model_kwargs['y']['text'][bs_i],

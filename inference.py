@@ -94,7 +94,7 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
             print(f'Time: {datetime.now()}')
             print(f'Time: {datetime.now()}', file=f, flush=True)
             
-            generating(motion_loaders, out_dir)
+            # generating(motion_loaders, out_dir)
             
             for batch in origin_loader:
                 motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1"], batch["filename"]
