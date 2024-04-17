@@ -34,6 +34,8 @@ from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 from accelerate import Accelerator, DistributedDataParallelKwargs
 from vis import SMPLSkeleton
 
+from model.utils import extract, make_beta_schedule
+
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps, scale_betas=1.):
     """
     Get a pre-defined beta schedule for the given name.
@@ -220,10 +222,14 @@ class GaussianDiffusion():
         self.p2_loss_weight = (self.p2_loss_weight_k + self.alphas_cumprod / (1 - self.alphas_cumprod))** -self.p2_loss_weight_gamma
 
         self.l2_loss = lambda a, b: (a - b) ** 2  # th.nn.MSELoss(reduction='none')  # must be None for handling mask later on.
+        
+        loss_type="l1"
+        self.loss_fn = F.mse_loss if loss_type == "l2" else F.l1_loss
 
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
-        self.smpl = SMPLSkeleton(self.accelerator.device)
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.smpl = SMPLSkeleton(self.device)
         
     def masked_l2(self, a, b, mask):
         # print("GOTO: masked l2")
@@ -1878,7 +1884,6 @@ class GaussianDiffusion():
             # print(f"model output: {model_output.shape}\ntarget: {target.shape}\nx_start: {x_start.shape}")
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            #! currently here
             terms["rot_mse"] = self.masked_l2(target, model_output, mask) # mean_flat(rot_mse)
 
             target_xyz, model_output_xyz = None, None
@@ -2009,147 +2014,124 @@ class GaussianDiffusion():
                 ModelMeanType.EPSILON: noise,
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
-
-            terms["rot_mse"] = self.masked_l2(target, model_output, mask) # mean_flat(rot_mse)
-
-            target_xyz, model_output_xyz = None, None
             
-            #TODO: add loss based on EDGE
+            bs, njoints, nfeats, nframes = model_output.shape
+            model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            
+            # full reconstruction loss
+            loss = self.loss_fn(model_output_loss, target_loss, reduction="none")
+            loss = reduce(loss, "b ... -> b (...)", "mean")
+            loss = loss * extract(self.p2_loss_weight, t, loss.shape)
+            
+            terms["rcxyz_mse"] = loss
 
-            if self.lambda_rcxyz > 0.:
-                target_xyz = get_xyz(target)  # [bs, nvertices(vertices)/njoints(smpl), 3, nframes]
-                model_output_xyz = get_xyz(model_output)  # [bs, nvertices, 3, nframes]
-                terms["rcxyz_mse"] = self.masked_l2(target_xyz, model_output_xyz, mask)  # mean_flat((target_xyz - model_output_xyz) ** 2)
+            # split off contact from the rest
+            model_contact, model_output_loss = torch.split(
+                model_output_loss, (4, model_output_loss.shape[2] - 4), dim=2
+            )
+            target_contact, target_loss = torch.split(target_loss, (4, target_loss.shape[2] - 4), dim=2)
 
-            if self.lambda_vel_rcxyz > 0.:
-                if self.data_rep == 'rot6d' and dataset.dataname in ['humanact12', 'uestc']:
-                    target_xyz = get_xyz(target) if target_xyz is None else target_xyz
-                    model_output_xyz = get_xyz(model_output) if model_output_xyz is None else model_output_xyz
-                    target_xyz_vel = (target_xyz[:, :, :, 1:] - target_xyz[:, :, :, :-1])
-                    model_output_xyz_vel = (model_output_xyz[:, :, :, 1:] - model_output_xyz[:, :, :, :-1])
-                    terms["vel_xyz_mse"] = self.masked_l2(target_xyz_vel, model_output_xyz_vel, mask[:, :, :, 1:])
+            # velocity loss
+            target_v = target_loss[:, 1:] - target_loss[:, :-1]
+            model_output_loss_v = model_output_loss[:, 1:] - model_output_loss[:, :-1]
+            v_loss = self.loss_fn(model_output_loss_v, target_v, reduction="none")
+            v_loss = reduce(v_loss, "b ... -> b (...)", "mean")
+            v_loss = v_loss * extract(self.p2_loss_weight, t, v_loss.shape)
+            
+            terms["vel_mse"] = v_loss
 
-            if self.lambda_fc > 0.:
-                torch.autograd.set_detect_anomaly(True)
-                if self.data_rep == 'rot6d' and dataset.dataname in ['humanact12', 'uestc']:
-                    target_xyz = get_xyz(target) if target_xyz is None else target_xyz
-                    model_output_xyz = get_xyz(model_output) if model_output_xyz is None else model_output_xyz
-                    # 'L_Ankle',  # 7, 'R_Ankle',  # 8 , 'L_Foot',  # 10, 'R_Foot',  # 11
-                    l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx = 7, 8, 10, 11
-                    relevant_joints = [l_ankle_idx, l_foot_idx, r_ankle_idx, r_foot_idx]
-                    gt_joint_xyz = target_xyz[:, relevant_joints, :, :]  # [BatchSize, 4, 3, Frames]
-                    gt_joint_vel = torch.linalg.norm(gt_joint_xyz[:, :, :, 1:] - gt_joint_xyz[:, :, :, :-1], axis=2)  # [BatchSize, 4, Frames]
-                    fc_mask = torch.unsqueeze((gt_joint_vel <= 0.01), dim=2).repeat(1, 1, 3, 1)
-                    pred_joint_xyz = model_output_xyz[:, relevant_joints, :, :]  # [BatchSize, 4, 3, Frames]
-                    pred_vel = pred_joint_xyz[:, :, :, 1:] - pred_joint_xyz[:, :, :, :-1]
-                    pred_vel[~fc_mask] = 0
-                    terms["fc"] = self.masked_l2(pred_vel,
-                                                 torch.zeros(pred_vel.shape, device=pred_vel.device),
-                                                 mask[:, :, :, 1:])
-            if self.lambda_vel > 0.:
-                target_vel = (target[..., 1:] - target[..., :-1])
-                model_output_vel = (model_output[..., 1:] - model_output[..., :-1])
-                terms["vel_mse"] = self.masked_l2(target_vel[:, :-1, :, :], # Remove last joint, is the root location!
-                                                  model_output_vel[:, :-1, :, :],
-                                                  mask[:, :, :, 1:])  # mean_flat((target_vel - model_output_vel) ** 2)
+            # FK loss
+            b, s, c = model_output_loss.shape
+            # unnormalize
+            # model_output_loss = self.normalizer.unnormalize(model_output_loss)
+            # target = self.normalizer.unnormalize(target)
+            # X, Q
+            model_x = model_output_loss[:, :, :3]
+            model_q = ax_from_6v(model_output_loss[:, :, 3:].reshape(b, s, -1, 6))
+            target_x = target_loss[:, :, :3]
+            target_q = ax_from_6v(target_loss[:, :, 3:].reshape(b, s, -1, 6))
 
-            terms["loss"] = terms["rot_mse"] + terms.get('vb', 0.) +\
+            # perform FK
+            model_xp = self.smpl.forward(model_q, model_x)
+            target_xp = self.smpl.forward(target_q, target_x)
+
+            fk_loss = self.loss_fn(model_xp, target_xp, reduction="none")
+            fk_loss = reduce(fk_loss, "b ... -> b (...)", "mean")
+            fk_loss = fk_loss * extract(self.p2_loss_weight, t, fk_loss.shape)
+            
+            terms["rcxyz_mse"] = fk_loss
+
+            # foot skate loss
+            foot_idx = [7, 8, 10, 11]
+
+            # find static indices consistent with model's own predictions
+            static_idx = model_contact > 0.95  # N x S x 4
+            model_feet = model_xp[:, :, foot_idx]  # foot positions (N, S, 4, 3)
+            model_foot_v = torch.zeros_like(model_feet)
+            model_foot_v[:, :-1] = (
+                model_feet[:, 1:, :, :] - model_feet[:, :-1, :, :]
+            )  # (N, S-1, 4, 3)
+            model_foot_v[~static_idx] = 0
+            foot_loss = self.loss_fn(
+                model_foot_v, torch.zeros_like(model_foot_v), reduction="none"
+            )
+            foot_loss = reduce(foot_loss, "b ... -> b (...)", "mean")
+            
+            terms["fc"] = foot_loss
+            
+            terms["loss"] = (self.lambda_mse * terms["rot_mse"]) + terms.get('vb', 0.) +\
                             (self.lambda_vel * terms.get('vel_mse', 0.)) +\
                             (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
                             (self.lambda_fc * terms.get('fc', 0.))
+            
+
+            # if self.lambda_rcxyz > 0.:
+            #     target_xyz = get_xyz(target)  # [bs, nvertices(vertices)/njoints(smpl), 3, nframes]
+            #     model_output_xyz = get_xyz(model_output)  # [bs, nvertices, 3, nframes]
+            #     terms["rcxyz_mse"] = self.masked_l2(target_xyz, model_output_xyz, mask)  # mean_flat((target_xyz - model_output_xyz) ** 2)
+
+            # if self.lambda_vel_rcxyz > 0.:
+            #     if self.data_rep == 'rot6d' and dataset.dataname in ['humanact12', 'uestc']:
+            #         target_xyz = get_xyz(target) if target_xyz is None else target_xyz
+            #         model_output_xyz = get_xyz(model_output) if model_output_xyz is None else model_output_xyz
+            #         target_xyz_vel = (target_xyz[:, :, :, 1:] - target_xyz[:, :, :, :-1])
+            #         model_output_xyz_vel = (model_output_xyz[:, :, :, 1:] - model_output_xyz[:, :, :, :-1])
+            #         terms["vel_xyz_mse"] = self.masked_l2(target_xyz_vel, model_output_xyz_vel, mask[:, :, :, 1:])
+
+            # if self.lambda_fc > 0.:
+            #     torch.autograd.set_detect_anomaly(True)
+            #     if self.data_rep == 'rot6d' and dataset.dataname in ['humanact12', 'uestc']:
+            #         target_xyz = get_xyz(target) if target_xyz is None else target_xyz
+            #         model_output_xyz = get_xyz(model_output) if model_output_xyz is None else model_output_xyz
+            #         # 'L_Ankle',  # 7, 'R_Ankle',  # 8 , 'L_Foot',  # 10, 'R_Foot',  # 11
+            #         l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx = 7, 8, 10, 11
+            #         relevant_joints = [l_ankle_idx, l_foot_idx, r_ankle_idx, r_foot_idx]
+            #         gt_joint_xyz = target_xyz[:, relevant_joints, :, :]  # [BatchSize, 4, 3, Frames]
+            #         gt_joint_vel = torch.linalg.norm(gt_joint_xyz[:, :, :, 1:] - gt_joint_xyz[:, :, :, :-1], axis=2)  # [BatchSize, 4, Frames]
+            #         fc_mask = torch.unsqueeze((gt_joint_vel <= 0.01), dim=2).repeat(1, 1, 3, 1)
+            #         pred_joint_xyz = model_output_xyz[:, relevant_joints, :, :]  # [BatchSize, 4, 3, Frames]
+            #         pred_vel = pred_joint_xyz[:, :, :, 1:] - pred_joint_xyz[:, :, :, :-1]
+            #         pred_vel[~fc_mask] = 0
+            #         terms["fc"] = self.masked_l2(pred_vel,
+            #                                      torch.zeros(pred_vel.shape, device=pred_vel.device),
+            #                                      mask[:, :, :, 1:])
+            # if self.lambda_vel > 0.:
+            #     target_vel = (target[..., 1:] - target[..., :-1])
+            #     model_output_vel = (model_output[..., 1:] - model_output[..., :-1])
+            #     terms["vel_mse"] = self.masked_l2(target_vel[:, :-1, :, :], # Remove last joint, is the root location!
+            #                                       model_output_vel[:, :-1, :, :],
+            #                                       mask[:, :, :, 1:])  # mean_flat((target_vel - model_output_vel) ** 2)
+
+            # terms["loss"] = terms["rot_mse"] + terms.get('vb', 0.) +\
+            #                 (self.lambda_vel * terms.get('vel_mse', 0.)) +\
+            #                 (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
+            #                 (self.lambda_fc * terms.get('fc', 0.))
 
         else:
             raise NotImplementedError(self.loss_type)
 
         return terms, model_output
-        
-        # if self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-        #     loss_fn = F.mse_loss
-        
-        #     # noise = torch.randn_like(x_start)
-        #     # x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-
-        #     # reconstruct
-        #     x_recon = model(x_t, self._scale_timesteps(t), **model_kwargs)
-        #     # x_recon = self.model(x_noisy, cond, t, cond_drop_prob=self.cond_drop_prob)
-        #     assert noise.shape == x_recon.shape
-
-        #     model_output = x_recon
-        #     if predict_epsilon:
-        #         target = noise
-        #     else:
-        #         target = x_start
-                
-        #     model_output = model_output.permute(0, 2, 1)
-        #     target = target.permute(0, 2, 1)
-
-        #     # full reconstruction loss
-        #     loss = loss_fn(model_output, target, reduction="none")
-        #     loss = reduce(loss, "b ... -> b (...)", "mean")
-        #     loss = loss * extract(self.p2_loss_weight, t, loss.shape)
-
-        #     # split off contact from the rest
-        #     model_contact, model_non_contact = torch.split(
-        #         model_output, (4, model_output.shape[2] - 4), dim=2
-        #     )
-        #     target_contact, target_non_contact = torch.split(target, (4, target.shape[2] - 4), dim=2)
-
-        #     # velocity loss
-        #     target_v = target_non_contact[:, 1:] - target_non_contact[:, :-1]
-        #     model_output_v = model_non_contact[:, 1:] - model_non_contact[:, :-1]
-        #     v_loss = loss_fn(model_output_v, target_v, reduction="none")
-        #     v_loss = reduce(v_loss, "b ... -> b (...)", "mean")
-        #     v_loss = v_loss * extract(self.p2_loss_weight, t, v_loss.shape)
-
-        #     # FK loss
-            
-        #     b, s, c = model_non_contact.shape
-        #     # print("model output shape: ", b, s, c)
-        #     # unnormalize
-        #     # model_output = self.normalizer.unnormalize(model_output)
-        #     # target = self.normalizer.unnormalize(target)
-        #     # X, Q
-        #     model_x = model_non_contact[:, :, :3]
-        #     model_q = ax_from_6v(model_non_contact[:, :, 3:].reshape(b, s, -1, 6))
-        #     target_x = target_non_contact[:, :, :3]
-        #     target_q = ax_from_6v(target_non_contact[:, :, 3:].reshape(b, s, -1, 6))
-
-        #     # b, s, nums, c_ = model_q.shape
-        #     model_xp = self.smpl.forward(model_q, model_x)
-        #     target_xp = self.smpl.forward(target_q, target_x)
-
-        #     fk_loss = loss_fn(model_xp, target_xp, reduction="none")
-        #     fk_loss = reduce(fk_loss, "b ... -> b (...)", "mean")
-        #     fk_loss = fk_loss * extract(self.p2_loss_weight, t, fk_loss.shape)
-
-        #     # foot skate loss
-        #     foot_idx = [7, 8, 10, 11]
-
-        #     # find static indices consistent with model's own predictions
-        #     static_idx = model_contact > 0.95  # N x S x 4
-        #     model_feet = model_xp[:, :, foot_idx]  # foot positions (N, S, 4, 3)
-        #     model_foot_v = torch.zeros_like(model_feet)
-        #     model_foot_v[:, :-1] = (
-        #         model_feet[:, 1:, :, :] - model_feet[:, :-1, :, :]
-        #     )  # (N, S-1, 4, 3)
-        #     model_foot_v[~static_idx] = 0
-        #     foot_loss = loss_fn(
-        #         model_foot_v, torch.zeros_like(model_foot_v), reduction="none"
-        #     )
-        #     foot_loss = reduce(foot_loss, "b ... -> b (...)", "mean")
-
-        #     losses = (
-        #         0.636 * loss.mean(),
-        #         2.964 * v_loss.mean(),
-        #         0.646 * fk_loss.mean(),
-        #         10.942 * foot_loss.mean(),
-        #     )
-        #     model_output = model_output.permute(0, 2, 1)
-        #     target = target.permute(0, 2, 1)
-        # else:
-        #     raise NotImplementedError(self.loss_type)
-        
-        # return sum(losses), losses, model_output
     
     def training_losses_inpainting(self, model, x_start, t, inpainting_type='hist', model_kwargs=None, noise=None, dataset=None):
         """
@@ -2225,10 +2207,75 @@ class GaussianDiffusion():
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            terms["rot_mse"] = self.masked_l2(target, model_output, mask) # mean_flat(rot_mse)
+            bs, njoints, nfeats, nframes = model_output.shape
+            model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            
+            # full reconstruction loss
+            loss = self.loss_fn(model_output_loss, target_loss, reduction="none")
+            loss = reduce(loss, "b ... -> b (...)", "mean")
+            loss = loss * extract(self.p2_loss_weight, t, loss.shape)
+            
+            terms["rcxyz_mse"] = loss
 
-            #TODO: add more loss
-            terms["loss"] = terms["rot_mse"]
+            # split off contact from the rest
+            model_contact, model_output_loss = torch.split(
+                model_output_loss, (4, model_output_loss.shape[2] - 4), dim=2
+            )
+            target_contact, target_loss = torch.split(target_loss, (4, target_loss.shape[2] - 4), dim=2)
+
+            # velocity loss
+            target_v = target_loss[:, 1:] - target_loss[:, :-1]
+            model_output_loss_v = model_output_loss[:, 1:] - model_output_loss[:, :-1]
+            v_loss = self.loss_fn(model_output_loss_v, target_v, reduction="none")
+            v_loss = reduce(v_loss, "b ... -> b (...)", "mean")
+            v_loss = v_loss * extract(self.p2_loss_weight, t, v_loss.shape)
+            
+            terms["vel_mse"] = v_loss
+
+            # FK loss
+            b, s, c = model_output_loss.shape
+            # unnormalize
+            # model_output_loss = self.normalizer.unnormalize(model_output_loss)
+            # target = self.normalizer.unnormalize(target)
+            # X, Q
+            model_x = model_output_loss[:, :, :3]
+            model_q = ax_from_6v(model_output_loss[:, :, 3:].reshape(b, s, -1, 6))
+            target_x = target_loss[:, :, :3]
+            target_q = ax_from_6v(target_loss[:, :, 3:].reshape(b, s, -1, 6))
+
+            # perform FK
+            model_xp = self.smpl.forward(model_q, model_x)
+            target_xp = self.smpl.forward(target_q, target_x)
+
+            fk_loss = self.loss_fn(model_xp, target_xp, reduction="none")
+            fk_loss = reduce(fk_loss, "b ... -> b (...)", "mean")
+            fk_loss = fk_loss * extract(self.p2_loss_weight, t, fk_loss.shape)
+            
+            terms["rcxyz_mse"] = fk_loss
+
+            # foot skate loss
+            foot_idx = [7, 8, 10, 11]
+
+            # find static indices consistent with model's own predictions
+            static_idx = model_contact > 0.95  # N x S x 4
+            model_feet = model_xp[:, :, foot_idx]  # foot positions (N, S, 4, 3)
+            model_foot_v = torch.zeros_like(model_feet)
+            model_foot_v[:, :-1] = (
+                model_feet[:, 1:, :, :] - model_feet[:, :-1, :, :]
+            )  # (N, S-1, 4, 3)
+            model_foot_v[~static_idx] = 0
+            foot_loss = self.loss_fn(
+                model_foot_v, torch.zeros_like(model_foot_v), reduction="none"
+            )
+            foot_loss = reduce(foot_loss, "b ... -> b (...)", "mean")
+            
+            terms["fc"] = foot_loss
+            
+            terms["loss"] = (self.lambda_mse * terms["rot_mse"]) + terms.get('vb', 0.) +\
+                            (self.lambda_vel * terms.get('vel_mse', 0.)) +\
+                            (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
+                            (self.lambda_fc * terms.get('fc', 0.))
 
         else:
             raise NotImplementedError(self.loss_type)
