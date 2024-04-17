@@ -51,7 +51,8 @@ class TrainLoop:
         print("RESUME TRAINING") if self.resume_step else print ("INITIALIZE TRAINING")
         self.global_batch = self.batch_size # * dist.get_world_size()
         self.num_steps = args.num_steps
-        self.num_epochs = self.num_steps // len(self.data) + 1
+        # self.num_epochs = self.num_steps // len(self.data) + 1
+        self.num_epochs = args.epochs
         print(f"Total Epochs: {self.num_epochs}")
         self.sync_cuda = torch.cuda.is_available()
 
