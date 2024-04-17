@@ -154,6 +154,7 @@ class GaussianDiffusion():
         lambda_root_vel=0.,
         lambda_vel_rcxyz=0.,
         lambda_fc=0.,
+        cond_drop_prob=0.,
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -234,6 +235,8 @@ class GaussianDiffusion():
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
         
         self.smpl = SMPLSkeleton(self.device)
+        
+        self.cond_drop_prob = cond_drop_prob
         
     def masked_l2(self, a, b, mask):
         # print("GOTO: masked l2")
@@ -2117,6 +2120,7 @@ class GaussianDiffusion():
             model_kwargs = {}
         if noise is None:
             noise = th.randn_like(x_start)
+        x_t = x_t.squeeze().permute(0, 2, 1)
         x_t = self.q_sample(x_start, t, noise=noise)
 
         terms = {}
@@ -2133,7 +2137,8 @@ class GaussianDiffusion():
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            # model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            model_output = model(x_t, model_kwargs['y']["music"], t, cond_drop_prob=self.cond_drop_prob)
 
             if self.model_var_type in [
                 ModelVarType.LEARNED,

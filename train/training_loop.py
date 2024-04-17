@@ -20,7 +20,8 @@ from data_loaders.humanml.networks.evaluator_wrapper import EvaluatorMDMWrapper
 # from eval import eval_humanml, eval_humanact12_uestc
 from data_loaders.get_data import get_dataset_loader
 
-from teach.data.tools import lengths_to_mask    
+from teach.data.tools import lengths_to_mask   
+from model.adan import Adan
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
 # 20-21 within the first ~1K steps of training.
@@ -66,9 +67,10 @@ class TrainLoop:
         self.save_dir = args.save_dir
         self.overwrite = args.overwrite
 
-        self.opt = AdamW(
-            self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay
-        )
+        # self.opt = AdamW(
+        #     self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay
+        # )
+        self.opt = Adan(self.mp_trainer.master_params, lr=elf.lr, weight_decay=self.weight_decay)
         if self.resume_step:
             self._load_optimizer_state()
             # Model was resumed, either due to a restart or a checkpoint

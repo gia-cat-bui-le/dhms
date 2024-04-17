@@ -239,7 +239,7 @@ class DanceDecoder(nn.Module):
     def __init__(
         self,
         nfeats: int,
-        seq_len: int = 90,  # 5 seconds, 30 fps
+        seq_len: int = 90,  # 3 seconds, 30 fps
         latent_dim: int = 256,
         ff_size: int = 1024,
         num_layers: int = 4,

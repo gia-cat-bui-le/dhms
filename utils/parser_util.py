@@ -181,7 +181,7 @@ def add_sampling_options(parser):
                             "if loading dataset from file, this field will be ignored.")
     group.add_argument("--num_repetitions", default=0, type=int,
                        help="Number of repetitions, per sample (text prompt/action)")
-    group.add_argument("--guidance_param", default=2.5, type=float,
+    group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
 
 #TODO: fix motion length
