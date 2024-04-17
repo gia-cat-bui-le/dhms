@@ -70,7 +70,7 @@ class TrainLoop:
         # self.opt = AdamW(
         #     self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay
         # )
-        self.opt = Adan(self.mp_trainer.master_params, lr=elf.lr, weight_decay=self.weight_decay)
+        self.opt = Adan(self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay)
         if self.resume_step:
             self._load_optimizer_state()
             # Model was resumed, either due to a restart or a checkpoint
