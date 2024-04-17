@@ -92,7 +92,8 @@ class TrainLoop:
         
         self.normalizer = normalizer
         
-        self.shuffle_noise = True if args.shuffle_noise else False
+        # self.shuffle_noise = True if args.shuffle_noise else False
+        self.shuffle_noise = False
         
         self.noise_frame = 10
         self.noise_stride = 5
@@ -257,7 +258,7 @@ class TrainLoop:
             
             compute_losses_0 = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.ddp_model,
+                self.model,
                 micro_0,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_0,
@@ -310,7 +311,7 @@ class TrainLoop:
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_1 = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.ddp_model,
+                self.model,
                 micro_1,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_1,
@@ -366,7 +367,7 @@ class TrainLoop:
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_cycle = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.ddp_model,
+                self.model,
                 micro_2,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_2,
