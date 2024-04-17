@@ -2116,11 +2116,11 @@ class GaussianDiffusion():
         mask = model_kwargs['y']['mask']
         # if inpainting_type == 'hist':
         #     mask
+        x_start = x_start.squeeze().permute(0, 2, 1)
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
             noise = th.randn_like(x_start)
-        x_t = x_t.squeeze().permute(0, 2, 1)
         x_t = self.q_sample(x_start, t, noise=noise)
 
         terms = {}
@@ -2171,9 +2171,13 @@ class GaussianDiffusion():
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            bs, njoints, nfeats, nframes = model_output.shape
-            model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
-            target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            # bs, njoints, nfeats, nframes = model_output.shape
+            # model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            # target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            
+            bs, nframes, nfeats = model_output.shape
+            model_output_loss = model_output
+            target_loss = target
             
             # full reconstruction loss
             loss = self.loss_fn(model_output_loss, target_loss, reduction="none")
