@@ -259,7 +259,7 @@ def main():
         load_model_wo_clip(model, state_dict)
         
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+        print("GUIDANCE PARAM: ", args.guidance_param)
         if args.guidance_param != 1:
             model = ClassifierFreeSampleModel(model)   # wrapping model with the classifier-free sampler
         model.to(device)

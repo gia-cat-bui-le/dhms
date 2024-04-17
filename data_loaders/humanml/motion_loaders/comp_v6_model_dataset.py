@@ -435,7 +435,8 @@ class CompCCDGeneratedDataset(Dataset):
                     if args.refine:
                         model_kwargs_0_refine = {}
                         model_kwargs_0_refine['y'] = {}
-                        model_kwargs_0_refine['y']['scale'] = model_kwargs_0['y']['scale']
+                        if scale != 1.:
+                            model_kwargs_0_refine['y']['scale'] = model_kwargs_0['y']['scale']
                         model_kwargs_0_refine['y']['music'] = model_kwargs_0['y']['music']
                         model_kwargs_0_refine['y']['next_motion'] = sample_1_tmp[:,:,:,:args.inpainting_frames]
                         model_kwargs_0_refine['y']['lengths'] = [len + args.inpainting_frames
@@ -581,8 +582,8 @@ class CompCCDGeneratedDataset(Dataset):
                                 with open(out_path, "wb") as file_pickle:
                                     pickle.dump(
                                         {
-                                            "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
-                                            "smpl_trans": pos.squeeze(0).cpu().numpy(),
+                                            "smpl_poses": full_q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                                            "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
                                             "full_pose": full_pose.squeeze(),
                                         },
                                         file_pickle,
@@ -653,7 +654,7 @@ class CompCCDGeneratedDataset(Dataset):
 
                     if is_mm:
                         mm_motions += [{'motion': sample[bs_i].squeeze().permute(1, 0).cpu().numpy(),
-                                        'length': length[bs_i].cpu().numpy(),
+                                        'length': 180,
                                         } for bs_i in range(dataloader.batch_size)]
 
                 if is_mm:
