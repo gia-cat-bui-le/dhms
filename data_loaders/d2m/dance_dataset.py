@@ -367,9 +367,11 @@ class AISTPPDataset(Dataset):
             "length_0": self.data['length_0'],
             "length_1": self.data['length_1'],
             "length_transition": self.data['length_transition'],
-            "music_0": feature_0.reshape(seq_0 * d_0),
+            # "music_0": feature_0.reshape(seq_0 * d_0),
+            "music_0": feature_0,
             # "music_0_with_transition": feature_0_with_transition.reshape(seq_0_with_transition * d_0_with_transition),
-            "music_1": feature_1.reshape(seq_1 * d_1),
+            # "music_1": feature_1.reshape(seq_1 * d_1),
+            "music_1": feature_1,
             # "music_1_with_transition": feature_1_with_transition.reshape(seq_1_with_transition * d_1_with_transition),
             "filename": filename_
         }
