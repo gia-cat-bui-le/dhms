@@ -144,3 +144,8 @@ class _WrappedModel:
         if self.rescale_timesteps:
             new_ts = new_ts.float() * (1000.0 / self.original_num_steps)
         return self.model(x, cond, new_ts, **kwargs)
+    
+    def guided_forward(
+        self, x, cond_embed, times, guidance_weight
+    ):  # pylint: disable=signature-differs
+        return self.model.guided_forward(x, cond_embed, times, guidance_weight)

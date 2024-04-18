@@ -113,7 +113,7 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
                 
                 for full_pose, q_, pos_, filename in zip(full_poses, q, pos, filenames):
                     if out_dir is not None:
-                        outname = f'evaluation/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        outname = f'evaluation/gt_edge/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join(out_dir, outname)
                         # Create the directory if it doesn't exist
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)

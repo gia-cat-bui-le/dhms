@@ -125,4 +125,5 @@ def create_gaussian_diffusion(args):
         lambda_rcxyz=args.lambda_rcxyz,
         lambda_fc=args.lambda_fc,
         cond_drop_prob=args.cond_drop_prob,
+        guidance_weight=args.guidance_param,
     )
