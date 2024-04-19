@@ -208,18 +208,7 @@ def add_generate_options(parser):
         help="folder containing input music",
     )
     group.add_argument(
-        "--test_dir",
-        type=str,
-        default="/raid/nhdang/Vy/data",
-        help="folder containing input music",
-    )
-    group.add_argument(
         "--cache_features",
-        action="store_true",
-        help="Save the jukebox features for later reuse",
-    )
-    group.add_argument(
-        "--custom_input",
         action="store_true",
         help="Save the jukebox features for later reuse",
     )

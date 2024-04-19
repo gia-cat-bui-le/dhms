@@ -27,18 +27,22 @@ def collate_contrastive(lst_elements: List, ) -> Dict:
 
     return batch
 
+def collate_generate(lst_elements: List, ) -> Dict:
+    batch = {"length_0": [x["length"] for x in lst_elements],
+            "length_transition": [x["length_transition"] for x in lst_elements],
+            "music": torch.stack([torch.tensor(x["music"].clone().detach().requires_grad_(True)) for x in lst_elements], dim=0),
+            "filename": [x["filename"] for x in lst_elements],
+            }
+    return batch
+
 def collate_pairs_and_text(lst_elements: List, ) -> Dict:
     batch = {"motion_feats_0": collate_tensors([el["pose_0"] for el in lst_elements]),
             "motion_feats_1": collate_tensors([el["pose_1"] for el in lst_elements]),
-            # "motion_feats_0_with_transition": collate_tensors([el["pose_0_with_transition"] for el in lst_elements]),
-            # "motion_feats_1_with_transition": collate_tensors([el["pose_1_with_transition"] for el in lst_elements]),
             "length_0": [x["length_0"] for x in lst_elements], 
             "length_1": [x["length_1"] for x in lst_elements], 
             "length_transition": [x["length_transition"] for x in lst_elements],
             "music_0": torch.stack([torch.tensor(x["music_0"].clone().detach().requires_grad_(True)) for x in lst_elements], dim=0),
-            # "music_0_with_transition": torch.stack([torch.tensor(x["music_0_with_transition"].clone().detach().requires_grad_(True)) for x in lst_elements], dim=0),
             "music_1": torch.stack([torch.tensor(x["music_1"].clone().detach().requires_grad_(True)) for x in lst_elements], dim=0),
-            # "music_1_with_transition": torch.stack([torch.tensor(x["music_1_with_transition"].clone().detach().requires_grad_(True)) for x in lst_elements], dim=0),
             "filename": [x["filename"] for x in lst_elements],
             }
     return batch
