@@ -16,7 +16,7 @@ from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_to_axis_angle)
 
 # NOTE: import for fixing generate
-from diffusion.gaussian_diffusion import create_first_sample, create_other_sample
+from diffusion.gaussian_diffusion import create_pre_sample, create_post_sample
 
 def build_models(opt):
     if opt.text_enc_mod == 'bigru':
@@ -327,7 +327,7 @@ class CompCCDGeneratedDataset(Dataset):
                 
                 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-                # TODO: bring to line 360
+                # TODO: bring to under loop repeat_times
                 # no condition
                 model_kwargs_0 = {}
                 model_kwargs_0['y'] = {}
@@ -438,7 +438,7 @@ class CompCCDGeneratedDataset(Dataset):
                     shape_0 = (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1])
                     shape_1 = (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1])
 
-                    dump, sample_0 = create_first_sample(
+                    dump, sample_0 = create_pre_sample(
                         model,
                         shape_0,
                         noise_0=noise_0,                                                        
@@ -451,7 +451,7 @@ class CompCCDGeneratedDataset(Dataset):
                         const_noise=False
                     )
 
-                    dump, sample_1 = create_other_sample(
+                    dump, sample_1 = create_post_sample(
                         dump,
                         sample_0,
                         model,
@@ -704,7 +704,6 @@ class CompCCDGeneratedDataset(Dataset):
         self.generated_motion = generated_motion
         self.mm_generated_motion = mm_generated_motions
         # self.w_vectorizer = dataloader.dataset.w_vectorizer
-
 
     def __len__(self):
         return len(self.generated_motion)

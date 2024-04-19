@@ -919,7 +919,7 @@ class GaussianDiffusion():
         #     final_0 = sample
         # NOTE: end original
 
-        dump, final_0 = create_first_sample(model,
+        dump, final_0 = create_pre_sample(model,
                                             shape_0,
                                             noise_0,
                                             clip_denoised,
@@ -985,7 +985,7 @@ class GaussianDiffusion():
         #     final_1 = sample
         # NOTE: end original
 
-        dump, final_1 = create_other_sample(dump,
+        dump, final_1 = create_post_sample(dump,
                                             final_0,
                                             model,
                                             hist_frames,
@@ -2539,7 +2539,7 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
     return res.expand(broadcast_shape)
     
 #NOTE: create first sample
-def create_first_sample(
+def create_pre_sample(
     model,
     shape_0,
     noise_0=None,
@@ -2582,7 +2582,7 @@ def create_first_sample(
     return dump, final_0
 
 #NOTE: create sample for second loop
-def create_other_sample(
+def create_post_sample(
     dump,
     pre_sample,
     model,

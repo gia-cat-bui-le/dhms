@@ -346,6 +346,7 @@ class AISTPPDataset(Dataset):
         #     'pose_1': self.data["pose_1"][idx].permute(1, 0),
         #     'music': feature.reshape(seq*d),
         # }
+        #TODO: modify code to return a list of sample
         filename_ = self.data["filenames"][idx]
         # print("CHECK LENGTH: ", self.data['length_0'], self.data['length_transition'], self.data['length_1'])
         feature = torch.from_numpy(np.load(filename_))

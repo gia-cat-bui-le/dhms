@@ -28,6 +28,7 @@ def collate_contrastive(lst_elements: List, ) -> Dict:
     return batch
 
 def collate_pairs_and_text(lst_elements: List, ) -> Dict:
+    #TODO: modify code to return list of samples
     batch = {"motion_feats_0": collate_tensors([el["pose_0"] for el in lst_elements]),
             "motion_feats_1": collate_tensors([el["pose_1"] for el in lst_elements]),
             # "motion_feats_0_with_transition": collate_tensors([el["pose_0_with_transition"] for el in lst_elements]),
