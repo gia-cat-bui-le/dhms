@@ -28,9 +28,9 @@ def collate_contrastive(lst_elements: List, ) -> Dict:
     return batch
 
 def collate_generate(lst_elements: List, ) -> Dict:
-    batch = {"length_0": [x["length"] for x in lst_elements],
+    batch = {"length": [x["length"] for x in lst_elements],
             "length_transition": [x["length_transition"] for x in lst_elements],
-            "music": torch.stack([torch.tensor(x["music"].clone().detach().requires_grad_(True)) for x in lst_elements], dim=0),
+            "music": [[torch.tensor(x["music"].clone().detach().requires_grad_(True)) for x in lst_elements]],
             "filename": [x["filename"] for x in lst_elements],
             }
     return batch

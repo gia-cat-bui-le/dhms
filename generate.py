@@ -1,4 +1,4 @@
-from utils.parser_util import evaluation_parser
+from utils.parser_util import evaluation_parser, generate_args
 from utils.fixseed import fixseed
 from datetime import datetime
 from data_loaders.humanml.motion_loaders.model_motion_loaders import get_mdm_loader, get_motion_loader
@@ -25,8 +25,8 @@ from pathlib import Path
 from evaluation.features.kinetic import extract_kinetic_features
 from evaluation.features.manual_new import extract_manual_features
 
-from data_loaders.d2m.audio_extraction.jukebox_features import extract as jukebox_extract
-from data_loaders.d2m.audio_extraction.baseline_features import extract as baseline_extract
+from data_loaders.d2m.audio_extraction.jukebox_features import extract_folder as jukebox_extract
+from data_loaders.d2m.audio_extraction.baseline_features import extract_folder as baseline_extract
 
 import scipy 
 from scipy.io import wavfile 
@@ -51,17 +51,10 @@ class GenerateDataset(Dataset):
     ):
         self.data_path = data_path
         # print(self.data_path)
-        self.raw_fps = 60
-        self.data_fps = 30
-        assert self.data_fps <= self.raw_fps
-        self.data_stride = self.raw_fps // self.data_fps
 
         self.feature_type = feature_type
 
         self.normalizer = normalizer
-
-        backup_path = os.path.join(data_path, "dataset_backups")
-        Path(backup_path).mkdir(parents=True, exist_ok=True)
         
         # load raw data
         print("Loading dataset...")
@@ -82,8 +75,7 @@ class GenerateDataset(Dataset):
         data_length = 90
         length_transistion = 60
         
-        print("FEATURE SHAPE: ", feature_slice.feature_slice,
-            "LENGTH SHAPE: ", data_length.shape)
+        print("FEATURE SHAPE: ", feature_slice.shape)
         return {
             "length": data_length,
             "length_transition": length_transistion,
@@ -93,7 +85,7 @@ class GenerateDataset(Dataset):
 
     def load_data(self):
         # open data path
-        sound_path = os.path.join(self.data_path, f"feature")
+        sound_path = os.path.join(self.data_path, "feature")
         # sort motions and sounds
         features = sorted(glob.glob(os.path.join(sound_path, "*.npy")))
         data = {"filenames": features}
@@ -108,19 +100,19 @@ def slice_audio(audio_file, length):
     idx = 0
     window = int(length * FPS)
     audio_slices = []
-    while start_idx <= len(audio):
+    while start_idx < len(audio):
         if start_idx + window <= len(audio):
             audio_slice = audio[start_idx : start_idx + window]
         else:
             missing_length = window - (len(audio) - start_idx)
-            missing_audio_slice = np.zeros(missing_length)
+            missing_audio_slice = np.zeros((missing_length, 35))
             audio_slice = np.concatenate((audio[start_idx:], missing_audio_slice))
             
         audio_slices.append(audio_slice)
         start_idx += window
         idx += 1
         
-    return idx, audio_slices
+    return idx, np.array(audio_slices)
 
 def get_audio_length(audio_file_path):
     try:
@@ -159,14 +151,14 @@ def get_dataset(args):
     loaded_normalizer = checkpoint["normalizer"]
         
     dataset = DATA(
-    data_path=args.data_dir,
+    data_path=os.path.join(args.music_dir),
     normalizer=loaded_normalizer
     )
     
     return dataset
 
 def get_dataset_loader(args, batch_size):
-    dataset = get_dataset()
+    dataset = get_dataset(args)
     num_cpus = multiprocessing.cpu_count()
     
     collate = collate_generate
@@ -178,21 +170,21 @@ def get_dataset_loader(args, batch_size):
         num_workers=2,
         pin_memory=True,
         drop_last=True,
-        collate_fn=collate
+        # collate_fn=collate
     )
     
     return loader, dataset.normalizer
 
 if __name__ == '__main__':
     
-    args = evaluation_parser()
+    args = generate_args()
     fixseed(args.seed)
     #TODO: fix the hardcode
     music_dir_len = len(os.listdir(args.music_dir))
     if music_dir_len > 32:
         args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
     else:
-        args.batch_size = music_dir_len
+        args.batch_size = 1
     name = os.path.basename(os.path.dirname(args.music_dir))
     niter = os.path.basename(args.model_path).replace('model', '').replace('.pt', '')
     log_file = os.path.join(os.path.dirname(args.music_dir), 'log_out', 'inference_{}_{}'.format(name, niter))
@@ -203,7 +195,6 @@ if __name__ == '__main__':
     if args.refine:
         log_file += f'_refine{args.refine_scale}'
     log_file += f'_comp{args.inter_frames}'
-    log_file += f'_{args.eval_mode}'
     log_file += '.log'
     print(f'Will save to log file [{log_file}]')
     
@@ -214,33 +205,13 @@ if __name__ == '__main__':
     
     ########################################################################
 
-    print(f'Eval mode [{args.eval_mode}]')
-    if args.eval_mode == 'debug':
-        num_samples_limit = None  # None means no limit (eval over all dataset)
-        run_mm = False
-        mm_num_samples = 0
-        mm_num_repeats = 0
-        mm_num_times = 0
-        diversity_times = 300
-        replication_times = 1  # about 3 Hrs
-    elif args.eval_mode == 'wo_mm':
-        num_samples_limit = 1000
-        run_mm = False
-        mm_num_samples = 0
-        mm_num_repeats = 0
-        mm_num_times = 0
-        diversity_times = 300
-        replication_times = 10# about 12 Hrs
-    elif args.eval_mode == 'mm_short':
-        num_samples_limit = 1000
-        run_mm = True
-        mm_num_samples = 100
-        mm_num_repeats = 30
-        mm_num_times = 10
-        diversity_times = 300
-        replication_times = 5  # about 15 Hrs
-    else:
-        raise ValueError()
+    num_samples_limit = None  # None means no limit (eval over all dataset)
+    run_mm = False
+    mm_num_samples = 0
+    mm_num_repeats = 0
+    mm_num_times = 0
+    diversity_times = 300
+    replication_times = 1  # about 3 Hrs
 
     dist_util.setup_dist(args.device)
     logger.configure()
@@ -248,12 +219,12 @@ if __name__ == '__main__':
     #################### DATA LOADERS ###########################
     
     # extract feature from each music file 
-    for music_file in os.listdir(args.music_dir):
-        music_path = os.path.join(args.music_dir, music_file)
-        baseline_extract(music_path, dest_dir=os.path.join(args.music_dir, "feature"))
+    baseline_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
 
     logger.log("creating data loader...")
     split = False
+    
+    #!: mỗi batch = 1 bài hát. vd có 2 bài => origin loader gồm 2 batch, mỗi batch sẽ chứa feature được sliced ra từ bài hát load vào
     origin_loader, _ = get_dataset_loader(args, batch_size=args.batch_size)
     
     num_actions = 1
@@ -270,14 +241,14 @@ if __name__ == '__main__':
     model.to("cuda:0" if torch.cuda.is_available() else "cpu")
     model.eval()  # disable random masking
 
-    eval_motion_loaders = {
-        ################
-        ## HumanML3D Dataset##
-        ################
-        'vald': lambda: get_mdm_loader(
-            args, model, diffusion, args.batch_size,
-            origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
-        )
-    }
+    # eval_motion_loaders = {
+    #     ################
+    #     ## HumanML3D Dataset##
+    #     ################
+    #     'vald': lambda: get_mdm_loader(
+    #         args, model, diffusion, args.batch_size,
+    #         origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
+    #     )
+    # }
 
-    inference(eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
+    # inference(eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
