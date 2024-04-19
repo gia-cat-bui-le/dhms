@@ -20,7 +20,8 @@ from data_loaders.humanml.networks.evaluator_wrapper import EvaluatorMDMWrapper
 # from eval import eval_humanml, eval_humanact12_uestc
 from data_loaders.get_data import get_dataset_loader
 
-from teach.data.tools import lengths_to_mask    
+from teach.data.tools import lengths_to_mask   
+from model.adan import Adan
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
 # 20-21 within the first ~1K steps of training.
@@ -33,7 +34,7 @@ class TrainLoop:
         self.train_platform = train_platform
         self.model = model
         self.diffusion = diffusion
-        self.cond_mode = model.cond_mode
+        # self.cond_mode = model.cond_mode
         self.data = data
         self.batch_size = args.batch_size
         self.microbatch = args.batch_size  # deprecating this option
@@ -51,7 +52,8 @@ class TrainLoop:
         print("RESUME TRAINING") if self.resume_step else print ("INITIALIZE TRAINING")
         self.global_batch = self.batch_size # * dist.get_world_size()
         self.num_steps = args.num_steps
-        self.num_epochs = self.num_steps // len(self.data) + 1
+        # self.num_epochs = self.num_steps // len(self.data) + 1
+        self.num_epochs = args.epochs
         print(f"Total Epochs: {self.num_epochs}")
         self.sync_cuda = torch.cuda.is_available()
 
@@ -65,9 +67,10 @@ class TrainLoop:
         self.save_dir = args.save_dir
         self.overwrite = args.overwrite
 
-        self.opt = AdamW(
-            self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay
-        )
+        # self.opt = AdamW(
+        #     self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay
+        # )
+        self.opt = Adan(self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay)
         if self.resume_step:
             self._load_optimizer_state()
             # Model was resumed, either due to a restart or a checkpoint
@@ -89,7 +92,8 @@ class TrainLoop:
         
         self.normalizer = normalizer
         
-        self.shuffle_noise = True if args.shuffle_noise else False
+        # self.shuffle_noise = True if args.shuffle_noise else False
+        self.shuffle_noise = False
         
         self.noise_frame = 10
         self.noise_stride = 5
@@ -254,7 +258,7 @@ class TrainLoop:
             
             compute_losses_0 = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.ddp_model,
+                self.model,
                 micro_0,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_0,
@@ -307,7 +311,7 @@ class TrainLoop:
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_1 = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.ddp_model,
+                self.model,
                 micro_1,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_1,
@@ -363,7 +367,7 @@ class TrainLoop:
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_cycle = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.ddp_model,
+                self.model,
                 micro_2,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_2,

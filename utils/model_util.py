@@ -3,6 +3,7 @@ from diffusion import gaussian_diffusion as gd
 from diffusion.respace import SpacedDiffusion, space_timesteps
 import torch.nn.functional as F
 
+from model.model import DanceDecoder
 
 def load_model_wo_clip(model, state_dict):
     missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
@@ -12,7 +13,31 @@ def load_model_wo_clip(model, state_dict):
 
 def create_model_and_diffusion(args, data):
     # data.dataset  = 'babel'
-    model = MDM(**get_model_args(args, data))
+    # model = MDM(**get_model_args(args, data))
+    
+    if args.dataset == "aistpp":
+        njoints = 151
+        nfeats = 1
+    elif args.dataset == "finedance":
+        #TODO: add this for finedance
+        njoints = 52
+        nfeats = 6
+        
+    horizon_seconds = 3
+    FPS = 30
+    horizon = horizon_seconds * FPS
+        
+    model = DanceDecoder(
+            nfeats=njoints,
+            seq_len=horizon,
+            latent_dim=512,
+            ff_size=1024,
+            num_layers=8,
+            num_heads=8,
+            dropout=0.1,
+            cond_feature_dim=35,
+            activation=F.gelu,
+        )
     diffusion = create_gaussian_diffusion(args)
     return model, diffusion
 
@@ -95,7 +120,10 @@ def create_gaussian_diffusion(args):
         ),
         loss_type=loss_type,
         rescale_timesteps=rescale_timesteps,
+        lambda_mse=args.lambda_mse,
         lambda_vel=args.lambda_vel,
         lambda_rcxyz=args.lambda_rcxyz,
         lambda_fc=args.lambda_fc,
+        cond_drop_prob=args.cond_drop_prob,
+        guidance_weight=args.guidance_param,
     )

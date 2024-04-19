@@ -11,7 +11,11 @@ import os, sys
 import argparse
 # from render import ax_to_6v
 sys.path.append(os.getcwd())
-from dld.data.render_joints.smplfk import SMPLX_Skeleton, do_smplxfk
+# from dld.data.render_joints.smplfk import SMPLX_Skeleton, do_smplxfk
+
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 def normalize(feat, feat2):
     mean = feat.mean(axis=0)
@@ -181,11 +185,13 @@ def calc_and_save_feats(root):
             assert data.shape[-1] == 139
             
             with torch.no_grad():
-                joint3d = do_smplxfk(data, smplx_model)[:,:24,:]
+                pass
+                # joint3d = do_smplxfk(data, smplx_model)[:,:24,:]
         else:
-            continue
-        print(file)
-        joint3d = joint3d[:1024,:22,:]
+            with torch.no_grad():
+                joint3d = torch.from_numpy(np.load(os.path.join(root, file), allow_pickle=True)['full_pose'])
+        # print(file)
+        joint3d = joint3d[:180,:22,:]
         assert len(joint3d.shape) == 3
         joint3d = joint3d.reshape(joint3d.shape[0], 22*3).detach().cpu().numpy()
             
@@ -211,19 +217,19 @@ if __name__ == '__main__':
     ) 
     opt = parser.parse_args()
     device = f"cuda:1"
-    smplx_model = SMPLX_Skeleton(Jpath='data/smplx_neu_J_1.npy')
+    # smplx_model = SMPLX_Skeleton(Jpath='data/smplx_neu_J_1.npy')
     # mod = '_relative'
     # mod = '_global'
 
 
-    gt_root = 'data/finedance/mofea319'
-    pred_root = '/data2/lrh/project/dance/Lodge/lodge_pub/experiments/Local_Module/FineDance_FineTuneV2_Local/samples_dod_2999_299_inpaint_soft_ddim_notranscontrol_2024-03-16-04-29-01/concat/npy'
+    gt_root = 'evaluation\gt_edge'
+    pred_root = 'evaluation\inference_edge'
     print('Calculating and saving features')
 
 
     if opt.modir != 'None':
         pred_root = opt.modir
-    # calc_and_save_feats(gt_root)
+    calc_and_save_feats(gt_root)
     calc_and_save_feats(pred_root)
     
     print('Calculating metrics')

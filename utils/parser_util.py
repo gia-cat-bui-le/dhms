@@ -141,8 +141,8 @@ def add_training_options(parser):
     group.add_argument("--train_platform_type", default='NoPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform'], type=str,
                        help="Choose platform to log results. NoPlatform means no logging.")
     group.add_argument("--lr", default=2e-4, type=float, help="Learning rate.")
-    group.add_argument("--weight_decay", default=0.0, type=float, help="Optimizer weight decay.")
-    group.add_argument("--lr_anneal_steps", default=0, type=int, help="Number of learning rate anneal steps.")
+    group.add_argument("--weight_decay", default=0.0001, type=float, help="Optimizer weight decay.")
+    group.add_argument("--lr_anneal_steps", default=200000, type=int, help="Number of learning rate anneal steps.")
     group.add_argument("--eval_batch_size", default=32, type=int,
                        help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
                             "T2m precision calculation is based on fixed batch size 32.")
@@ -181,7 +181,7 @@ def add_sampling_options(parser):
                             "if loading dataset from file, this field will be ignored.")
     group.add_argument("--num_repetitions", default=0, type=int,
                        help="Number of repetitions, per sample (text prompt/action)")
-    group.add_argument("--guidance_param", default=2.5, type=float,
+    group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
 
 #TODO: fix motion length
@@ -208,18 +208,7 @@ def add_generate_options(parser):
         help="folder containing input music",
     )
     group.add_argument(
-        "--test_dir",
-        type=str,
-        default="/raid/nhdang/Vy/data",
-        help="folder containing input music",
-    )
-    group.add_argument(
         "--cache_features",
-        action="store_true",
-        help="Save the jukebox features for later reuse",
-    )
-    group.add_argument(
-        "--custom_input",
         action="store_true",
         help="Save the jukebox features for later reuse",
     )
@@ -251,7 +240,7 @@ def add_evaluation_options(parser):
                             "mm_short (t2m only) - 5 repetitions with multi-modality metric; "
                             "debug - short run, less accurate results."
                             "full (a2m only) - 20 repetitions.")
-    group.add_argument("--guidance_param", default=2.5, type=float,
+    group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
     group.add_argument(
         "--out_dir",

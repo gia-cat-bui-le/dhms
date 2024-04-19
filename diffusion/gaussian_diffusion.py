@@ -144,6 +144,7 @@ class GaussianDiffusion():
         model_var_type,
         loss_type,
         rescale_timesteps=False,
+        lambda_mse=1.,
         lambda_rcxyz=0.,
         lambda_vel=0.,
         lambda_pose=1.,
@@ -153,6 +154,8 @@ class GaussianDiffusion():
         lambda_root_vel=0.,
         lambda_vel_rcxyz=0.,
         lambda_fc=0.,
+        cond_drop_prob=0.,
+        guidance_weight=3.,
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -167,6 +170,7 @@ class GaussianDiffusion():
         self.lambda_loc = lambda_loc
 
         self.lambda_rcxyz = lambda_rcxyz
+        self.lambda_mse = lambda_mse
         self.lambda_vel = lambda_vel
         self.lambda_root_vel = lambda_root_vel
         self.lambda_vel_rcxyz = lambda_vel_rcxyz
@@ -217,9 +221,11 @@ class GaussianDiffusion():
         
         use_p2 = False
         
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        
         self.p2_loss_weight_k = 1
         self.p2_loss_weight_gamma = 0.5 if use_p2 else 0
-        self.p2_loss_weight = (self.p2_loss_weight_k + self.alphas_cumprod / (1 - self.alphas_cumprod))** -self.p2_loss_weight_gamma
+        self.p2_loss_weight = torch.from_numpy((self.p2_loss_weight_k + self.alphas_cumprod / (1 - self.alphas_cumprod))** -self.p2_loss_weight_gamma).to(self.device)
 
         self.l2_loss = lambda a, b: (a - b) ** 2  # th.nn.MSELoss(reduction='none')  # must be None for handling mask later on.
         
@@ -228,8 +234,12 @@ class GaussianDiffusion():
 
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        
         self.smpl = SMPLSkeleton(self.device)
+        
+        self.cond_drop_prob = cond_drop_prob
+        
+        self.guidance_weight = guidance_weight
         
     def masked_l2(self, a, b, mask):
         # print("GOTO: masked l2")
@@ -337,7 +347,18 @@ class GaussianDiffusion():
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
-        model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+        if t[0] > 1.0 * self.num_timesteps:
+            weight = min(self.guidance_weight, 0)
+        elif t[0] < 0.1 * self.num_timesteps:
+            weight = min(self.guidance_weight, 1)
+        else:
+            weight = self.guidance_weight
+            
+        x_input = x.squeeze().permute(0, 2, 1)
+        model_output = model.guided_forward(x_input, model_kwargs['y']["music"], self._scale_timesteps(t), weight)
+        model_output = model_output.unsqueeze(2).permute(0, 3, 2, 1)
+        # model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+    
 
         if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
             inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
@@ -2154,6 +2175,7 @@ class GaussianDiffusion():
         mask = model_kwargs['y']['mask']
         # if inpainting_type == 'hist':
         #     mask
+        x_start = x_start.squeeze().permute(0, 2, 1)
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
@@ -2174,7 +2196,8 @@ class GaussianDiffusion():
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            # model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            model_output = model(x_t, model_kwargs['y']["music"], t, cond_drop_prob=self.cond_drop_prob)
 
             if self.model_var_type in [
                 ModelVarType.LEARNED,
@@ -2207,16 +2230,20 @@ class GaussianDiffusion():
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            bs, njoints, nfeats, nframes = model_output.shape
-            model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
-            target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            # bs, njoints, nfeats, nframes = model_output.shape
+            # model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            # target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            
+            bs, nframes, nfeats = model_output.shape
+            model_output_loss = model_output
+            target_loss = target
             
             # full reconstruction loss
             loss = self.loss_fn(model_output_loss, target_loss, reduction="none")
             loss = reduce(loss, "b ... -> b (...)", "mean")
             loss = loss * extract(self.p2_loss_weight, t, loss.shape)
             
-            terms["rcxyz_mse"] = loss
+            terms["rot_mse"] = loss
 
             # split off contact from the rest
             model_contact, model_output_loss = torch.split(
@@ -2272,10 +2299,19 @@ class GaussianDiffusion():
             
             terms["fc"] = foot_loss
             
-            terms["loss"] = (self.lambda_mse * terms["rot_mse"]) + terms.get('vb', 0.) +\
-                            (self.lambda_vel * terms.get('vel_mse', 0.)) +\
-                            (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
-                            (self.lambda_fc * terms.get('fc', 0.))
+            losses = (
+            self.lambda_mse * loss.mean(),
+            self.lambda_vel * v_loss.mean(),
+            self.lambda_rcxyz * fk_loss.mean(),
+            self.lambda_fc * foot_loss.mean(),
+            )
+        
+            terms["loss"] = sum(losses)
+            
+            # terms["loss"] = (self.lambda_mse * terms.get('rot_mse', 0.)) + terms.get('vb', 0.) +\
+            #                 (self.lambda_vel * terms.get('vel_mse', 0.)) +\
+            #                 (self.lambda_rcxyz * terms.get('rcxyz_mse', 0.)) + \
+            #                 (self.lambda_fc * terms.get('fc', 0.))
 
         else:
             raise NotImplementedError(self.loss_type)
