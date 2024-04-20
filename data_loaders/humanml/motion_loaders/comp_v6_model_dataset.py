@@ -313,9 +313,9 @@ class CompCCDGeneratedDataset(Dataset):
         
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         
-        if args.dataset == "aistpp":
+        if args.dataset == "finedance":
             self.smpl = SMPLX_Skeleton(Jpath="data_loaders\d2m\\body_models\smpl\smplx_neu_J_1.npy")
-        elif args.dataset == "finedance":
+        elif args.dataset == "aistpp":
             self.smpl = SMPLSkeleton(device=device)
         
         self.smpl = SMPLSkeleton(device)

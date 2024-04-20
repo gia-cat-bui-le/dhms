@@ -34,9 +34,9 @@ from evaluation.metrics_finedance import quantized_metrics, calc_and_save_feats
 
 def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    if args.dataset == "aistpp":
+    if args.dataset == "finedance":
         smpl = SMPLX_Skeleton(Jpath="data_loaders\d2m\\body_models\smpl\smplx_neu_J_1.npy")
-    elif args.dataset == "finedance":
+    elif args.dataset == "aistpp":
         smpl = SMPLSkeleton(device=device)
     
     with open(log_file, 'a') as f:
