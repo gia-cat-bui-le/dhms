@@ -154,8 +154,6 @@ class GaussianDiffusion():
         lambda_root_vel=0.,
         lambda_vel_rcxyz=0.,
         lambda_fc=0.,
-        cond_drop_prob=0.,
-        guidance_weight=3.,
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -236,10 +234,6 @@ class GaussianDiffusion():
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
         
         self.smpl = SMPLSkeleton(self.device)
-        
-        self.cond_drop_prob = cond_drop_prob
-        
-        self.guidance_weight = guidance_weight
         
     def masked_l2(self, a, b, mask):
         # print("GOTO: masked l2")
@@ -347,18 +341,7 @@ class GaussianDiffusion():
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
-        if t[0] > 1.0 * self.num_timesteps:
-            weight = min(self.guidance_weight, 0)
-        elif t[0] < 0.1 * self.num_timesteps:
-            weight = min(self.guidance_weight, 1)
-        else:
-            weight = self.guidance_weight
-            
-        x_input = x.squeeze().permute(0, 2, 1)
-        model_output = model.guided_forward(x_input, model_kwargs['y']["music"], self._scale_timesteps(t), weight)
-        model_output = model_output.unsqueeze(2).permute(0, 3, 2, 1)
-        # model_output = model(x, self._scale_timesteps(t), **model_kwargs)
-    
+        model_output = model(x, self._scale_timesteps(t), **model_kwargs)
 
         if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
             inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
@@ -2130,7 +2113,6 @@ class GaussianDiffusion():
         mask = model_kwargs['y']['mask']
         # if inpainting_type == 'hist':
         #     mask
-        x_start = x_start.squeeze().permute(0, 2, 1)
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
@@ -2151,8 +2133,7 @@ class GaussianDiffusion():
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            # model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
-            model_output = model(x_t, model_kwargs['y']["music"], t, cond_drop_prob=self.cond_drop_prob)
+            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
 
             if self.model_var_type in [
                 ModelVarType.LEARNED,
@@ -2185,13 +2166,9 @@ class GaussianDiffusion():
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            # bs, njoints, nfeats, nframes = model_output.shape
-            # model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
-            # target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
-            
-            bs, nframes, nfeats = model_output.shape
-            model_output_loss = model_output
-            target_loss = target
+            bs, njoints, nfeats, nframes = model_output.shape
+            model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
             
             # full reconstruction loss
             loss = self.loss_fn(model_output_loss, target_loss, reduction="none")

@@ -190,7 +190,7 @@ def calc_and_save_feats(root):
         else:
             with torch.no_grad():
                 joint3d = torch.from_numpy(np.load(os.path.join(root, file), allow_pickle=True)['full_pose'])
-        # print(file)
+        print(file)
         joint3d = joint3d[:180,:22,:]
         assert len(joint3d.shape) == 3
         joint3d = joint3d.reshape(joint3d.shape[0], 22*3).detach().cpu().numpy()
@@ -222,8 +222,8 @@ if __name__ == '__main__':
     # mod = '_global'
 
 
-    gt_root = 'evaluation\gt_edge'
-    pred_root = 'evaluation\inference_edge'
+    gt_root = 'evaluation\gt_lr'
+    pred_root = 'evaluation\inference_lr'
     print('Calculating and saving features')
 
 
