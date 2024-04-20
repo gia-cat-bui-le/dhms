@@ -335,7 +335,7 @@ if __name__ == '__main__':
                                                 progress=True,
                                                 dump_steps=None,
                                                 const_noise=False)
-                    print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
+                    # print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
                     assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
                     
                     sample_0_refine = sample_0_refine[:,:,:,:-args.inpainting_frames]

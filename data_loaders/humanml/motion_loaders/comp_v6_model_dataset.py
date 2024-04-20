@@ -315,6 +315,8 @@ class CompCCDGeneratedDataset(Dataset):
         self.smpl = SMPLSkeleton(device)
 
         model.eval()
+        
+        # print(len(dataloader))
 
         with torch.no_grad():
             for i, batch in tqdm(enumerate(dataloader)):
@@ -407,6 +409,8 @@ class CompCCDGeneratedDataset(Dataset):
                             ] = noise_1[:, :, :, list_index]
                     else:
                         noise_1, noise_0 = None, None
+                        
+                    sample = []
                     
                     sample_0, sample_1 = sample_fn(
                         model,
@@ -574,7 +578,7 @@ class CompCCDGeneratedDataset(Dataset):
                                 assert full_pose.shape == (1, 180, 24, 3)
                                 
                                 filename = batch['filename'][idx]
-                                outname = f'evaluation/inference_edge/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                                outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                                 out_path = os.path.join("./", outname)
                                 # Create the directory if it doesn't exist
                                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -633,6 +637,7 @@ class CompCCDGeneratedDataset(Dataset):
                     #     return collate_tensor_with_padding(ret)
 
                     # sample = merge(sample_0, length_0, sample_1, length_1, length_transition)
+                    
                     if t == 0:
                         sub_dicts = [{'motion': sample[bs_i],
                                     'length': 180,
@@ -652,18 +657,18 @@ class CompCCDGeneratedDataset(Dataset):
                     #                 } for bs_i in range(dataloader.batch_size)]
                     #     generated_motion += sub_dicts
 
-                    if is_mm:
-                        mm_motions += [{'motion': sample[bs_i].squeeze().permute(1, 0).cpu().numpy(),
-                                        'length': 180,
-                                        } for bs_i in range(dataloader.batch_size)]
+                    # if is_mm:
+                    #     mm_motions += [{'motion': sample[bs_i].squeeze().permute(1, 0).cpu().numpy(),
+                    #                     'length': 180,
+                    #                     } for bs_i in range(dataloader.batch_size)]
 
-                if is_mm:
-                    mm_generated_motions += [{
-                                    # 'caption': model_kwargs['y']['text'][bs_i],
-                                    # 'tokens': tokens[bs_i],
-                                    # 'cap_len': len(tokens[bs_i]),
-                                    'mm_motions': mm_motions[bs_i::dataloader.batch_size],  # collect all 10 repeats from the (32*10) generated motions
-                                    } for bs_i in range(dataloader.batch_size)]
+                # if is_mm:
+                #     mm_generated_motions += [{
+                #                     # 'caption': model_kwargs['y']['text'][bs_i],
+                #                     # 'tokens': tokens[bs_i],
+                #                     # 'cap_len': len(tokens[bs_i]),
+                #                     'mm_motions': mm_motions[bs_i::dataloader.batch_size],  # collect all 10 repeats from the (32*10) generated motions
+                #                     } for bs_i in range(dataloader.batch_size)]
                     
         self.generated_motion = generated_motion
         self.mm_generated_motion = mm_generated_motions
@@ -672,7 +677,6 @@ class CompCCDGeneratedDataset(Dataset):
 
     def __len__(self):
         return len(self.generated_motion)
-
 
     def __getitem__(self, item):
         data = self.generated_motion[item]

@@ -230,7 +230,6 @@ def add_edit_options(parser):
     group.add_argument("--suffix_start", default=0.75, type=float,
                        help="For in_between editing - Defines the start of input suffix (ratio from all frames).")
 
-
 def add_evaluation_options(parser):
     group = parser.add_argument_group('eval')
     group.add_argument("--model_path", required=True, type=str, default='./',
@@ -242,13 +241,33 @@ def add_evaluation_options(parser):
                             "full (a2m only) - 20 repetitions.")
     group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
+    group.add_argument("--eval_batch_size", default=32, type=int,
+                       help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
+                            "T2m precision calculation is based on fixed batch size 32.")
     group.add_argument(
         "--out_dir",
         type=str,
         default="./",
         help="folder containing input music",
     )
-
+    
+def add_evaluation_during_training_options(parser):
+    group = parser.add_argument_group('eval')
+    group.add_argument("--model_path", type=str, default='./',
+                       help="Path to model####.pt file to be sampled.")
+    group.add_argument("--guidance_param", default=1.0, type=float,
+                       help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
+    group.add_argument("--eval_mode", default='debug', choices=['wo_mm', 'mm_short', 'debug', 'full'], type=str,
+                       help="wo_mm (t2m only) - 20 repetitions without multi-modality metric; "
+                            "mm_short (t2m only) - 5 repetitions with multi-modality metric; "
+                            "debug - short run, less accurate results."
+                            "full (a2m only) - 20 repetitions.")
+    group.add_argument(
+        "--out_dir",
+        type=str,
+        default="./",
+        help="folder containing input music",
+    )
 
 def train_args():
     parser = ArgumentParser()
@@ -257,6 +276,7 @@ def train_args():
     add_model_options(parser)
     add_diffusion_options(parser)
     add_training_options(parser)
+    add_evaluation_during_training_options(parser)
     return parser.parse_args()
 
 

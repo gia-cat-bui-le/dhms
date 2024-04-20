@@ -177,11 +177,19 @@ class TrainLoop:
             return
         start_eval = time.time()
         
-        add_evaluation_options(self.args)
+        # eval_group = self.args.add_argument_group('eval')
+        # eval_group.add_argument("--model_path", required=True, type=str, default='./',
+        #                 help="Path to model####.pt file to be sampled.")
+        # eval_group.add_argument("--guidance_param", default=1.0, type=float,
+        #             help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
+        
+        # add_evaluation_options(self.args)
         filename = self.ckpt_file_name()
         self.args.model_path = os.path.join(self.save_dir, filename)
     
-        log_file = os.path.join(self.save_dir, f'eval_humanml_{(self.step + self.resume_step):09d}.log')
+        log_file = os.path.join(self.save_dir, f'eval_aistpp.log')
+        
+        print(f"{self.step + self.resume_step}", file=log_file, flush=True)
         
         diversity_times = 300
         mm_num_times = 0  # mm is super slow hence we won't run it during training

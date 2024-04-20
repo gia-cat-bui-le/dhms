@@ -29,6 +29,8 @@ from evaluation.features.manual_new import extract_manual_features
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+from evaluation.metrics_finedance import quantized_metrics, calc_and_save_feats
+
 # def generating(motion_loaders, out_dir):
 #     print('========== GENERATING ==========')
 #     for motion_loader_name, motion_loader in motion_loaders.items():
@@ -82,6 +84,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
     # all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
 
 def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
+    smpl = SMPLSkeleton(device="cpu")
     with open(log_file, 'a') as f:
         for replication in range(replication_times):
             motion_loaders = {}
@@ -113,11 +116,10 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
                 
                 for full_pose, q_, pos_, filename in zip(full_poses, q, pos, filenames):
                     if out_dir is not None:
-                        outname = f'evaluation/gt_edge/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        outname = f'evaluation/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join(out_dir, outname)
                         # Create the directory if it doesn't exist
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        print(out_path)
                         with open(out_path, "wb") as file_pickle:
                             pickle.dump(
                                 {
@@ -129,37 +131,35 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
                             )
                 
                 # print(batch["length_0"], batch["length_1"])
+            
+            gt_root = 'evaluation\gt'
+            pred_root = 'evaluation\inference'
+            
+            print('Calculating and saving features')
+            calc_and_save_feats(gt_root)
+            calc_and_save_feats(pred_root)
+            
+            print('Calculating metrics')
+            print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
 
             print(f'!!! DONE !!!')
             print(f'!!! DONE !!!', file=f, flush=True)
 
-def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times):
+def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times, during_train=False):
     
     #TODO: fix the hardcode
-    args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
-    
-    ########################################################################
-    # LOAD SMPL
-    
-    smpl = SMPLSkeleton(device="cpu")
-    
-    ########################################################################
+    # args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
 
     print(f'Eval mode [{args.eval_mode}]')
-    
-    if args.dataset == "aistpp":
-        args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
-    elif args.dataset == "finedance":
-        args.data_dir = os.path.join(args.data_dir, "finedance")
 
     dist_util.setup_dist(args.device)
     logger.configure()
 
     logger.log("creating data loader...")
     split = False
-    origin_loader, _ = get_dataset_loader(args, name=args.dataset, batch_size=args.batch_size, split=split)
+    origin_loader, _ = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=split)
     
-    # gt_loader = get_dataset_loader(name=args.dataset, batch_size=args.batch_size, split=split, hml_mode='eval')
+    # gt_loader = get_dataset_loader(name=args.dataset, eval_batch_size=args.eval_batch_size, split=split, hml_mode='eval')
     # num_actions = gen_loader.dataset.num_actions
     num_actions = 1
 
@@ -180,11 +180,11 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
         ## HumanML3D Dataset##
         ################
         'vald': lambda: get_mdm_loader(
-            args, model, diffusion, args.batch_size,
+            args, model, diffusion, args.eval_batch_size,
             origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
         )
         # 'vald': lambda: get_motion_loader(
-        #     args, model, diffusion, args.batch_size,
+        #     args, model, diffusion, args.eval_batch_size,
         #     origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
         # )
     }
@@ -209,6 +209,11 @@ if __name__ == '__main__':
     log_file += f'_{args.eval_mode}'
     log_file += '.log'
     print(f'Will save to log file [{log_file}]')
+    
+    if args.dataset == "aistpp":
+        args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
+    elif args.dataset == "finedance":
+        args.data_dir = os.path.join(args.data_dir, "finedance")
     
     if args.eval_mode == 'debug':
         num_samples_limit = None  # None means no limit (eval over all dataset)
