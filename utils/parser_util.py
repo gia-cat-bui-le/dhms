@@ -233,7 +233,7 @@ def add_edit_options(parser):
 
 def add_evaluation_options(parser):
     group = parser.add_argument_group('eval')
-    group.add_argument("--model_path", required=True, type=str,
+    group.add_argument("--model_path", required=True, type=str, default='./',
                        help="Path to model####.pt file to be sampled.")
     group.add_argument("--eval_mode", default='debug', choices=['wo_mm', 'mm_short', 'debug', 'full'], type=str,
                        help="wo_mm (t2m only) - 20 repetitions without multi-modality metric; "

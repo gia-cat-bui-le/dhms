@@ -133,10 +133,8 @@ def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication
             print(f'!!! DONE !!!')
             print(f'!!! DONE !!!', file=f, flush=True)
 
-if __name__ == '__main__':
+def evaluation(args):
     
-    args = evaluation_parser()
-    fixseed(args.seed)
     #TODO: fix the hardcode
     args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
     name = os.path.basename(os.path.dirname(args.model_path))
@@ -233,3 +231,9 @@ if __name__ == '__main__':
 
     # eval_wrapper = EvaluatorCCDWrapper(args.dataset, dist_util.dev())
     inference(eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
+
+if __name__ == '__main__':
+    args = evaluation_parser()
+    fixseed(args.seed)
+    evaluation(args)
+    

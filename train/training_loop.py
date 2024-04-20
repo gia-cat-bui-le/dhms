@@ -21,6 +21,8 @@ from data_loaders.humanml.networks.evaluator_wrapper import EvaluatorMDMWrapper
 from data_loaders.get_data import get_dataset_loader
 
 from teach.data.tools import lengths_to_mask    
+from inference import evaluation
+from utils.parser_util import add_evaluation_options
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
 # 20-21 within the first ~1K steps of training.
@@ -174,24 +176,32 @@ class TrainLoop:
         if not self.args.eval_during_training:
             return
         start_eval = time.time()
-        if self.eval_wrapper is not None:
-            print('Running evaluation loop: [Should take about 90 min]')
-            log_file = os.path.join(self.save_dir, f'eval_humanml_{(self.step + self.resume_step):09d}.log')
-            diversity_times = 300
-            mm_num_times = 0  # mm is super slow hence we won't run it during training
-            eval_dict = eval_humanml.evaluation(
-                self.eval_wrapper, self.eval_gt_data, self.eval_data, log_file,
-                replication_times=self.args.eval_rep_times, diversity_times=diversity_times, mm_num_times=mm_num_times, run_mm=False)
-            print(eval_dict)
-            for k, v in eval_dict.items():
-                if k.startswith('R_precision'):
-                    for i in range(len(v)):
-                        self.train_platform.report_scalar(name=f'top{i + 1}_' + k, value=v[i],
-                                                          iteration=self.step + self.resume_step,
-                                                          group_name='Eval')
-                else:
-                    self.train_platform.report_scalar(name=k, value=v, iteration=self.step + self.resume_step,
-                                                      group_name='Eval')
+        
+        add_evaluation_options(self.args)
+        filename = self.ckpt_file_name()
+        self.args.model_path = os.path.join(self.save_dir, filename)
+        
+        evaluation(self.args)
+        # if self.eval_wrapper is not None:
+        #     print('Running evaluation loop: [Should take about 90 min]')
+        #     log_file = os.path.join(self.save_dir, f'eval_humanml_{(self.step + self.resume_step):09d}.log')
+        #     diversity_times = 300
+        #     mm_num_times = 0  # mm is super slow hence we won't run it during training
+        #     eval_dict = eval_humanml.evaluation(
+        #         self.eval_wrapper, self.eval_gt_data, self.eval_data, log_file,
+        #         replication_times=self.args.eval_rep_times, diversity_times=diversity_times, mm_num_times=mm_num_times, run_mm=False)
+        #     print(eval_dict)
+        #     for k, v in eval_dict.items():
+        #         if k.startswith('R_precision'):
+        #             for i in range(len(v)):
+        #                 self.train_platform.report_scalar(name=f'top{i + 1}_' + k, value=v[i],
+        #                                                   iteration=self.step + self.resume_step,
+        #                                                   group_name='Eval')
+        #         else:
+        #             self.train_platform.report_scalar(name=k, value=v, iteration=self.step + self.resume_step,
+        #                                               group_name='Eval')
+        
+        
 
         end_eval = time.time()
         print(f'Evaluation time: {round(end_eval-start_eval)/60}min')
