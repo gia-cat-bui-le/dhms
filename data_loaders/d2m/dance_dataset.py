@@ -313,7 +313,7 @@ class FineDanceDataset(Dataset):
             # print("contacts_d.shape", contacts_d.shape)
             # print("root_pos.shape", root_pos.shape)
             # print("local_q_312.shape", local_q_312.shape)
-            mofeats_input = np.concatenate( [contacts_d, root_pos, local_q_312] ,axis=-1)
+            mofeats_input = np.concatenate( [contacts_d, root_pos.cpu().numpy(), local_q_312] ,axis=-1)
             # np.save(os.path.join(mooutputs_dir, fname+".npy"), mofeats_input)
             # print("mofeats_input", mofeats_input.shape)
             
