@@ -146,3 +146,4 @@ dmypy.json
 *.npy
 *.wav
 *.pt
+data_loaders/d2m/aistpp_dataset.zip
