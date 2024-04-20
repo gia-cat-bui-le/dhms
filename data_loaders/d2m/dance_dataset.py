@@ -161,7 +161,7 @@ class FineDanceDataset(Dataset):
         # }
         filename_ = self.data["filenames"][idx]
         # print("CHECK LENGTH: ", self.data['length_0'], self.data['length_transition'], self.data['length_1'])
-        feature = torch.from_numpy(np.load(filename_))
+        feature = torch.from_numpy(np.load(filename_).astype(np.float32))
         # print("FEATURE SHAPE: ", feature.shape)
         feature_0 = feature[: self.data['length_0']]
         # feature_0_with_transition = feature[: self.data['length_0'] + self.data['length_transition']]

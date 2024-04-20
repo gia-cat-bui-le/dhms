@@ -189,7 +189,8 @@ class TrainLoop:
     
         log_file = os.path.join(self.save_dir, f'eval_aistpp.log')
         
-        print(f"{self.step + self.resume_step}", file=log_file, flush=True)
+        with open(log_file, 'a') as f:
+            print(f"{self.step + self.resume_step}", file=f, flush=True)
         
         diversity_times = 300
         mm_num_times = 0  # mm is super slow hence we won't run it during training
