@@ -15,6 +15,7 @@ import os
 from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_to_axis_angle)
 
+from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
 from vis import SMPLSkeleton
 
 def build_models(opt):
@@ -312,9 +313,19 @@ class CompCCDGeneratedDataset(Dataset):
         
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         
+        if args.dataset == "aistpp":
+            self.smpl = SMPLX_Skeleton(Jpath="data_loaders\d2m\\body_models\smpl\smplx_neu_J_1.npy")
+        elif args.dataset == "finedance":
+            self.smpl = SMPLSkeleton(device=device)
+        
         self.smpl = SMPLSkeleton(device)
 
         model.eval()
+        
+        if args.dataset == "aistpp":
+            nfeats = 151
+        elif args.dataset == "finedance":
+            nfeats = 139
         
         # print(len(dataloader))
 
@@ -369,46 +380,7 @@ class CompCCDGeneratedDataset(Dataset):
                     # else:
                     #     arg_frames = args.inpainting_frames if not args.composition else args.inter_frames
                     
-                    if args.shuffle_noise:
-                        feats = 151
-                        nframe = model_kwargs_0['y']['mask'].shape[-1]
-                        
-                        noise_frame = 10
-                        noise_stride = 5
-            
-                        noise_0 = torch.randn(
-                            [1, feats, 1, nframe], device=device
-                        ).repeat(bs, 1, 1, 1)
-                        for frame_index in range(noise_frame, nframe, noise_stride):
-                            list_index = list(
-                                range(
-                                    frame_index - noise_frame,
-                                    frame_index + noise_stride - noise_frame,
-                                )
-                            )
-                            random.shuffle(list_index)
-                            noise_0[
-                                :, :, :, frame_index : frame_index + noise_stride
-                            ] = noise_0[:, :, :, list_index]
-                            
-                        nframe = model_kwargs_1['y']['mask'].shape[-1]
-            
-                        noise_1 = torch.randn(
-                            [1, feats, 1, nframe], device=device
-                        ).repeat(bs, 1, 1, 1)
-                        for frame_index in range(noise_frame, nframe, noise_stride):
-                            list_index = list(
-                                range(
-                                    frame_index - noise_frame,
-                                    frame_index + noise_stride - noise_frame,
-                                )
-                            )
-                            random.shuffle(list_index)
-                            noise_1[
-                                :, :, :, frame_index : frame_index + noise_stride
-                            ] = noise_1[:, :, :, list_index]
-                    else:
-                        noise_1, noise_0 = None, None
+                    noise_1, noise_0 = None, None
                         
                     sample = []
                     
@@ -416,8 +388,8 @@ class CompCCDGeneratedDataset(Dataset):
                         model,
                         args.hist_frames,
                         args.inpainting_frames if not args.composition else args.inter_frames,
-                        (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1]),
-                        (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1]),
+                        (bs, nfeats, 1, model_kwargs_0['y']['mask'].shape[-1]),
+                        (bs, nfeats, 1, model_kwargs_1['y']['mask'].shape[-1]),
                         noise_0=noise_0,
                         noise_1=noise_1,
                         clip_denoised=clip_denoised,
@@ -447,34 +419,11 @@ class CompCCDGeneratedDataset(Dataset):
                                                         for len in model_kwargs_0['y']['lengths']]
                         model_kwargs_0_refine['y']['mask'] = lengths_to_mask(model_kwargs_0_refine['y']['lengths'], dist_util.dev()).unsqueeze(1).unsqueeze(2)
                         
-                        if args.shuffle_noise:
-                            feats = 151
-                            nframe = model_kwargs_0_refine['y']['mask'].shape[-1]
-                            
-                            noise_frame = 10
-                            noise_stride = 5
-                
-                            noise_0_refine = torch.randn(
-                                [1, feats, 1, nframe], device=device
-                            ).repeat(bs, 1, 1, 1)
-                            for frame_index in range(noise_frame, nframe, noise_stride):
-                                list_index = list(
-                                    range(
-                                        frame_index - noise_frame,
-                                        frame_index + noise_stride - noise_frame,
-                                    )
-                                )
-                                random.shuffle(list_index)
-                                noise_0_refine[
-                                    :, :, :, frame_index : frame_index + noise_stride
-                                ] = noise_0_refine[:, :, :, list_index]
-                                
-                        else:
-                            noise_0_refine = None
+                        noise_0_refine = None
                         
                         sample_0_refine = sample_fn_refine( # bs 135 1 len+inpainting 
                                                     model,
-                                                    (bs, 151, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
+                                                    (bs, nfeats, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
                                                     noise=noise_0_refine,
                                                     clip_denoised=False,
                                                     model_kwargs=model_kwargs_0_refine,
@@ -484,7 +433,7 @@ class CompCCDGeneratedDataset(Dataset):
                                                     dump_steps=None,
                                                     const_noise=False)
                         print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
-                        assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
+                        assert sample_0_refine.shape == sample_1.shape == (bs, nfeats, 1, 120)
                         
                         sample_0_refine = sample_0_refine[:,:,:,:-args.inpainting_frames]
                         to_stack = sample_0_refine[:, :, :, -args.inpainting_frames:]
@@ -493,7 +442,7 @@ class CompCCDGeneratedDataset(Dataset):
                         sample_0 = torch.cat((sample_0, to_stack), axis=-1)
                         
                         # print(sample_0.shape, sample_1.shape)
-                        assert sample_0.shape == sample_1.shape == (bs, 151, 1, 120)
+                        assert sample_0.shape == sample_1.shape == (bs, nfeats, 1, 120)
                         
                         sample = []
                         
@@ -501,15 +450,15 @@ class CompCCDGeneratedDataset(Dataset):
                             motion_0_result = sample_0[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                             motion_1_result = sample_1[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                             
-                            assert motion_0_result.shape == motion_1_result.shape == (1, 120, 151)
+                            assert motion_0_result.shape == motion_1_result.shape == (1, 120, nfeats)
                             
                             motion_result = torch.cat((motion_0_result, motion_1_result), dim=0)
                             
                             # print(motion_result.shape)
                             
-                            assert motion_result.shape == (2, 120, 151)
+                            assert motion_result.shape == (2, 120, nfeats)
                             
-                            if motion_result.shape[2] == 151:
+                            if motion_result.shape[2] == nfeats:
                                 sample_contact, motion_result = torch.split(
                                     motion_result, (4, motion_result.shape[2] - 4), dim=2
                                 )

@@ -48,8 +48,8 @@ def get_model_args(args, data):
         nfeats = 1
     elif args.dataset == "finedance":
         #TODO: add this for finedance
-        njoints = 52
-        nfeats = 6
+        njoints = 139
+        nfeats = 1
     
     feature_dim = 35 if args.feature_type == "baseline" else 4800
     cond_drop_prob = args.cond_drop_prob

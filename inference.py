@@ -15,6 +15,7 @@ from data_loaders.get_data import get_dataset_loader
 from model.cfg_sampler import ClassifierFreeSampleModel
 
 from vis import SMPLSkeleton
+from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
 from data_loaders.d2m.quaternion import ax_from_6v
 
 from scipy.ndimage import gaussian_filter as G
@@ -31,60 +32,13 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 from evaluation.metrics_finedance import quantized_metrics, calc_and_save_feats
 
-# def generating(motion_loaders, out_dir):
-#     print('========== GENERATING ==========')
-#     for motion_loader_name, motion_loader in motion_loaders.items():
-#         all_motion_embedding = []
-#         all_motion_embeddings = []
-#         with torch.no_grad():
-#             for idx, batch in enumerate(motion_loader):
-#                 if motion_loader_name != 'vald':
-#                     motion, length, music, filenames = batch["motion_feats"], batch["length"], batch["music"], batch["filename"]
-#                 else:
-#                     motion, length, music, filenames = batch
-                    
-#                 b, s, c = motion.shape
-                
-#                 sample_contact, motion = torch.split(
-#                 motion, (4, motion.shape[2] - 4), dim=2)
-#                 pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-#                 q = motion[:, :, 3:].reshape(b, s, 24, 6)
-#                 # go 6d to ax
-#                 q = ax_from_6v(q).to(motion.device)
-                
-#                 full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
-                
-#                 print(full_poses.shape)
-                
-#                 for full_pose, filename in zip(full_poses, filenames):
-#                     print(full_pose.shape)
-#                     if out_dir is not None:
-#                         outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
-#                         out_path = os.path.join(out_dir, outname)
-#                         # Create the directory if it doesn't exist
-#                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-#                         # print(out_path)
-#                         with open(out_path, "wb") as file_pickle:
-#                             pickle.dump(
-#                                 {
-#                                     "smpl_poses": q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
-#                                     "smpl_trans": pos.squeeze(0).cpu().numpy(),
-#                                     "full_pose": full_pose,
-#                                 },
-#                                 file_pickle,
-#                             )
-                
-#                 #TODO: code save generated motion
-
-    #             all_motion_embedding.append(full_poses)
-                
-    #         all_motion_embedding = np.concatenate(all_motion_embedding, axis=0)
-    #     all_motion_embeddings.append(all_motion_embedding)
-        
-    # all_motion_embeddings = np.concatenate(all_motion_embeddings, axis=0)
-
-def inference(eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
-    smpl = SMPLSkeleton(device="cpu")
+def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    if args.dataset == "aistpp":
+        smpl = SMPLX_Skeleton(Jpath="data_loaders\d2m\\body_models\smpl\smplx_neu_J_1.npy")
+    elif args.dataset == "finedance":
+        smpl = SMPLSkeleton(device=device)
+    
     with open(log_file, 'a') as f:
         for replication in range(replication_times):
             motion_loaders = {}
@@ -190,7 +144,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
     }
 
     # eval_wrapper = EvaluatorCCDWrapper(args.dataset, dist_util.dev())
-    inference(eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
+    inference(args, eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
 
 if __name__ == '__main__':
     args = evaluation_parser()

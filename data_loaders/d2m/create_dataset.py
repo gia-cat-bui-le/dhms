@@ -19,6 +19,10 @@ def create_dataset(opt):
     print("Creating train / test split")
     split_data(path_folder, opt.dataset_name)
     
+    inpainting_frame = opt.inpainting_frame
+    motion_len = opt.motion_len
+    slice_len = motion_len*2
+    
     # process dataset to extract audio features
     if opt.dataset_name == "aistpp":
         if opt.extract_baseline:
@@ -35,18 +39,14 @@ def create_dataset(opt):
         # slice motions/music into sliding windows to create training dataset
         print("Slicing train data")
         
-        inpainting_frame = opt.inpainting_frame
-        motion_len = opt.motion_len
-        slice_len = motion_len*2
-        
         slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
         slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
     else:
         print("Slicing train data")
-        slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
+        slice_finedance(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
-        slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
+        slice_finedance(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
     
 
 def parse_opt():
