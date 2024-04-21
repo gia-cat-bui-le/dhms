@@ -96,7 +96,7 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
             # print('Calculating metrics')
             print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
 
-            # print(f'!!! DONE !!!')
+            print(f'!!! DONE !!!')
             print(f'!!! DONE !!!', file=f, flush=True)
 
 def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times, during_train=False):

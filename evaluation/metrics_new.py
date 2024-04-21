@@ -75,7 +75,7 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
     # print(gt_freatures_k)
     # print(gt_freatures_m)
 
-    print('Calculating metrics')
+    # print('Calculating metrics')
 
     fid_k = calc_fid(pred_features_k, gt_freatures_k)
     fid_m = calc_fid(pred_features_m, gt_freatures_m)
