@@ -130,6 +130,8 @@ def add_data_options(parser):
     group.add_argument(
         "--force_reload", action="store_true", help="force reloads the datasets"
     )
+    group.add_argument("--inference_dir", default="/raid/nhdang/Vy/data/evaluation", type=str,
+                       help="If empty, will use defaults according to the specified dataset.")
     
 
 def add_training_options(parser):

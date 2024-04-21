@@ -527,7 +527,7 @@ class CompCCDGeneratedDataset(Dataset):
                                 assert full_pose.shape == (1, 180, 24, 3)
                                 
                                 filename = batch['filename'][idx]
-                                outname = f'evaluation/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                                outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                                 out_path = os.path.join("./", outname)
                                 # Create the directory if it doesn't exist
                                 os.makedirs(os.path.dirname(out_path), exist_ok=True)

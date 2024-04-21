@@ -70,7 +70,7 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 
                 for full_pose, q_, pos_, filename in zip(full_poses, q, pos, filenames):
                     if out_dir is not None:
-                        outname = f'evaluation/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join(out_dir, outname)
                         # Create the directory if it doesn't exist
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -86,8 +86,8 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 
                 # print(batch["length_0"], batch["length_1"])
             
-            gt_root = 'evaluation\gt'
-            pred_root = 'evaluation\inference'
+            gt_root = f'{args.inference_dir}/gt'
+            pred_root = f'{args.inference_dir}/inference'
             
             print('Calculating and saving features')
             calc_and_save_feats(gt_root)
