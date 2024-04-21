@@ -172,6 +172,7 @@ class FineDanceDataset(Dataset):
         # seq_0_with_transition, d_0_with_transition = feature_0_with_transition.shape
         # seq_1_with_transition, d_1_with_transition = feature_1_with_transition.shape
         seq_1, d_1 = feature_1.shape
+        print(self.data)
         return {
             "pose_0": self.data['pose_0'][idx],
             "pose_1": self.data['pose_1'][idx],
