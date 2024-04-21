@@ -46,9 +46,9 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 motion_loader = motion_loader_getter()
                 motion_loaders[motion_loader_name] = motion_loader
 
-            print(f'==================== Replication {replication} ====================')
+            # print(f'==================== Replication {replication} ====================')
             print(f'==================== Replication {replication} ====================', file=f, flush=True)
-            print(f'Time: {datetime.now()}')
+            # print(f'Time: {datetime.now()}')
             print(f'Time: {datetime.now()}', file=f, flush=True)
             
             # generating(motion_loaders, out_dir)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     log_file += f'_comp{args.inter_frames}'
     log_file += f'_{args.eval_mode}'
     log_file += '.log'
-    print(f'Will save to log file [{log_file}]')
+    # print(f'Will save to log file [{log_file}]')
     
     if args.dataset == "aistpp":
         args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")

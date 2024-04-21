@@ -309,7 +309,7 @@ class CompCCDGeneratedDataset(Dataset):
             mm_idxs = np.sort(mm_idxs)
         else:
             mm_idxs = []
-        print('mm_idxs', mm_idxs)
+        # print('mm_idxs', mm_idxs)
         
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         
@@ -432,7 +432,7 @@ class CompCCDGeneratedDataset(Dataset):
                                                     progress=True,
                                                     dump_steps=None,
                                                     const_noise=False)
-                        print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
+                        # print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
                         assert sample_0_refine.shape == sample_1.shape == (bs, nfeats, 1, 120)
                         
                         sample_0_refine = sample_0_refine[:,:,:,:-args.inpainting_frames]

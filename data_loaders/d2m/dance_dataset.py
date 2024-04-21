@@ -120,12 +120,12 @@ class FineDanceDataset(Dataset):
             with open(os.path.join(backup_path, pickle_name), "wb") as f:
                 pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
-        print(
-            f"Loaded {self.name} Dataset With Dimensions:\n\tPos_0: {data['pos_0'].shape}, Q_0: {data['q_0'].shape}"
-            f"\n\tPos_1: {data['pos_1'].shape}, Q_1: {data['q_1'].shape}"
-            # f"\n\tPos_0_with_transition: {data['pos_0_with_transition'].shape}, Q_0_with_transition: {data['q_0_with_transition'].shape}"
-            # f"\n\tPos_1_with_transition: {data['pos_1_with_transition'].shape}, Q_1_with_transition: {data['q_1_with_transition'].shape}"
-        )
+        # print(
+        #     f"Loaded {self.name} Dataset With Dimensions:\n\tPos_0: {data['pos_0'].shape}, Q_0: {data['q_0'].shape}"
+        #     f"\n\tPos_1: {data['pos_1'].shape}, Q_1: {data['q_1'].shape}"
+        #     # f"\n\tPos_0_with_transition: {data['pos_0_with_transition'].shape}, Q_0_with_transition: {data['q_0_with_transition'].shape}"
+        #     # f"\n\tPos_1_with_transition: {data['pos_1_with_transition'].shape}, Q_1_with_transition: {data['q_1_with_transition'].shape}"
+        # )
 
         # process data, convert to 6dof etc
         pose_input_0 = self.process_dataset(data["pos_0"], data["q_0"])
@@ -224,7 +224,7 @@ class FineDanceDataset(Dataset):
         # all_pos_0_with_transition = []
         # all_q_0_with_transition = []
         assert len(motions) == len(features)
-        print(len(motions), len(features))
+        # print(len(motions), len(features))
         for motion, feature in zip(motions, features):
             # print(motion)
             # make sure name is matching
@@ -332,7 +332,7 @@ class FineDanceDataset(Dataset):
         
         # print("mofeats_input", mofeats_input.shape)
 
-        print(f"{data_name} Dataset Motion Features Dim: {global_pose_vec_input.shape}")
+        # print(f"{data_name} Dataset Motion Features Dim: {global_pose_vec_input.shape}")
 
         return global_pose_vec_input
 
@@ -385,12 +385,12 @@ class AISTPPDataset(Dataset):
             with open(os.path.join(backup_path, pickle_name), "wb") as f:
                 pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
-        print(
-            f"Loaded {self.name} Dataset With Dimensions:\n\tPos_0: {data['pos_0'].shape}, Q_0: {data['q_0'].shape}"
-            f"\n\tPos_1: {data['pos_1'].shape}, Q_1: {data['q_1'].shape}"
-            # f"\n\tPos_0_with_transition: {data['pos_0_with_transition'].shape}, Q_0_with_transition: {data['q_0_with_transition'].shape}"
-            # f"\n\tPos_1_with_transition: {data['pos_1_with_transition'].shape}, Q_1_with_transition: {data['q_1_with_transition'].shape}"
-        )
+        # print(
+        #     f"Loaded {self.name} Dataset With Dimensions:\n\tPos_0: {data['pos_0'].shape}, Q_0: {data['q_0'].shape}"
+        #     f"\n\tPos_1: {data['pos_1'].shape}, Q_1: {data['q_1'].shape}"
+        #     # f"\n\tPos_0_with_transition: {data['pos_0_with_transition'].shape}, Q_0_with_transition: {data['q_0_with_transition'].shape}"
+        #     # f"\n\tPos_1_with_transition: {data['pos_1_with_transition'].shape}, Q_1_with_transition: {data['q_1_with_transition'].shape}"
+        # )
 
         # process data, convert to 6dof etc
         pose_input_0 = self.process_dataset(data["pos_0"], data["q_0"])
@@ -489,7 +489,7 @@ class AISTPPDataset(Dataset):
         # all_pos_0_with_transition = []
         # all_q_0_with_transition = []
         assert len(motions) == len(features)
-        print(len(motions), len(features))
+        # print(len(motions), len(features))
         for motion, feature in zip(motions, features):
             # print(motion)
             # make sure name is matching
@@ -554,7 +554,7 @@ class AISTPPDataset(Dataset):
         local_q = torch.Tensor(local_q)
         # to ax
         bs, sq, c = local_q.shape
-        print(local_q.shape)
+        # print(local_q.shape)
         local_q = local_q.reshape((bs, sq, -1, 3))
 
         # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
@@ -591,7 +591,7 @@ class AISTPPDataset(Dataset):
         if self.train:
             self.normalizer = Normalizer(global_pose_vec_input)
         else:
-            print(self.normalizer)
+            # print(self.normalizer)
             assert self.normalizer is not None
         global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
 
@@ -604,6 +604,6 @@ class AISTPPDataset(Dataset):
 
         global_pose_vec_input = global_pose_vec_input
 
-        print(f"{data_name} Dataset Motion Features Dim: {global_pose_vec_input.shape}")
+        # print(f"{data_name} Dataset Motion Features Dim: {global_pose_vec_input.shape}")
 
         return global_pose_vec_input
