@@ -18,6 +18,9 @@ from data_loaders.d2m.quaternion import ax_to_6v
 from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton, do_smplxfk, ax_to_6v, ax_from_6v
 from vis import SMPLSkeleton
 
+torch.cuda.set_device(0)
+torch.use_cuda_dsa()
+
 floor_height = 0
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
