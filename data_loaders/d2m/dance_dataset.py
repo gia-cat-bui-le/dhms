@@ -111,11 +111,11 @@ class FineDanceDataset(Dataset):
             )
         # load raw data
         if not force_reload and pickle_name in os.listdir(backup_path):
-            print("Using cached dataset...")
+            # print("Using cached dataset...")
             with open(os.path.join(backup_path, pickle_name), "rb") as f:
                 data = pickle.load(f)
         else:
-            print("Loading dataset...")
+            # print("Loading dataset...")
             data = self.load_aistpp()  # Call this last
             with open(os.path.join(backup_path, pickle_name), "wb") as f:
                 pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
@@ -376,11 +376,11 @@ class AISTPPDataset(Dataset):
             )
         # load raw data
         if not force_reload and pickle_name in os.listdir(backup_path):
-            print("Using cached dataset...")
+            # print("Using cached dataset...")
             with open(os.path.join(backup_path, pickle_name), "rb") as f:
                 data = pickle.load(f)
         else:
-            print("Loading dataset...")
+            # print("Loading dataset...")
             data = self.load_aistpp()  # Call this last
             with open(os.path.join(backup_path, pickle_name), "wb") as f:
                 pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)

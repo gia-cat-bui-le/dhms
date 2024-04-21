@@ -638,7 +638,7 @@ class MDM(nn.Module):
                 self.seperation_token = nn.Parameter(torch.randn(latent_dim))
                 self.skel_embedding = nn.Linear(self.njoints, self.latent_dim)
         if self.arch == 'trans_enc' or self.arch == 'past_cond' or self.arch == 'inpainting':
-            print("TRANS_ENC init")
+            # print("TRANS_ENC init")
             seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
                                                               nhead=self.num_heads,
                                                               dim_feedforward=self.ff_size,
@@ -676,7 +676,7 @@ class MDM(nn.Module):
                 print('EMBED ACTION')
             if 'music' in self.cond_mode:
                 self.embed_music = nn.Linear(self.music_dim, self.latent_dim)
-                print("EMBED MUSIC")
+                # print("EMBED MUSIC")
 
         self.output_process = OutputProcess(self.data_rep, self.input_feats, self.latent_dim, self.njoints,
                                             self.nfeats)

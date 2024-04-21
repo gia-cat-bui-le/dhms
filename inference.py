@@ -89,14 +89,14 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
             gt_root = f'{args.inference_dir}/gt'
             pred_root = f'{args.inference_dir}/inference'
             
-            print('Calculating and saving features')
+            # print('Calculating and saving features')
             calc_and_save_feats(gt_root)
             calc_and_save_feats(pred_root)
             
-            print('Calculating metrics')
+            # print('Calculating metrics')
             print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
 
-            print(f'!!! DONE !!!')
+            # print(f'!!! DONE !!!')
             print(f'!!! DONE !!!', file=f, flush=True)
 
 def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times, during_train=False):
