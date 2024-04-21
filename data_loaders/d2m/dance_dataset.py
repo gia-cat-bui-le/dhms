@@ -161,7 +161,7 @@ class FineDanceDataset(Dataset):
         # }
         filename_ = self.data["filenames"][idx]
         # print("CHECK LENGTH: ", self.data['length_0'], self.data['length_transition'], self.data['length_1'])
-        feature = torch.from_numpy(np.load(filename_).astype(np.float32))
+        feature = torch.from_numpy(np.load(filename_))
         # print("FEATURE SHAPE: ", feature.shape)
         feature_0 = feature[: self.data['length_0']]
         # feature_0_with_transition = feature[: self.data['length_0'] + self.data['length_transition']]
@@ -172,7 +172,6 @@ class FineDanceDataset(Dataset):
         # seq_0_with_transition, d_0_with_transition = feature_0_with_transition.shape
         # seq_1_with_transition, d_1_with_transition = feature_1_with_transition.shape
         seq_1, d_1 = feature_1.shape
-        print(self.data)
         return {
             "pose_0": self.data['pose_0'][idx],
             "pose_1": self.data['pose_1'][idx],
@@ -329,7 +328,23 @@ class FineDanceDataset(Dataset):
             global_pose_vec_input.append(mofeats_input)
         
         data_name = "Train" if self.train else "Test"
-        global_pose_vec_input = torch.Tensor(global_pose_vec_input).to(device)
+        global_pose_vec_input = torch.Tensor(global_pose_vec_input).float().to(device)
+        
+        if self.train:
+            self.normalizer = Normalizer(global_pose_vec_input)
+        else:
+            # print(self.normalizer)
+            assert self.normalizer is not None
+        global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
+
+        assert not torch.isnan(global_pose_vec_input).any()
+        data_name = "Train" if self.train else "Test"
+
+        # cut the dataset
+        if self.data_len > 0:
+            global_pose_vec_input = global_pose_vec_input[: self.data_len]
+
+        global_pose_vec_input = global_pose_vec_input
         
         # print("mofeats_input", mofeats_input.shape)
 

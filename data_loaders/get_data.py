@@ -43,6 +43,7 @@ def parse_resume_step_from_filename(filename):
 
 def get_dataset(args, name, split=True):
     DATA = get_dataset_class(name)
+    
     if split is False:
         
         step = parse_resume_step_from_filename(args.model_path)
@@ -61,11 +62,20 @@ def get_dataset(args, name, split=True):
         normalizer=loaded_normalizer
     )
     else:
-        dataset = DATA(
-            data_path=args.data_dir,
-            train=split,
-            force_reload=args.force_reload,
-        )
+        if name == "finedance":
+            renorm = torch.load(f'{args.data_dir}/finedance/Normalizertest.pth')
+            dataset = DATA(
+                data_path=args.data_dir,
+                train=split,
+                force_reload=args.force_reload,
+                normalizer=renorm
+            )
+        else:
+            dataset = DATA(
+                data_path=args.data_dir,
+                train=split,
+                force_reload=args.force_reload,
+            )
     return dataset
 
 def get_dataset_loader(args, name, batch_size, split=True, hml_mode='train'):
