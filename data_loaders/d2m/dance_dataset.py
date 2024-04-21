@@ -18,9 +18,6 @@ from data_loaders.d2m.quaternion import ax_to_6v
 from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton, do_smplxfk, ax_to_6v, ax_from_6v
 from vis import SMPLSkeleton
 
-torch.cuda.set_device(0)
-torch.use_cuda_dsa()
-
 floor_height = 0
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
@@ -166,9 +163,9 @@ class FineDanceDataset(Dataset):
         # print("CHECK LENGTH: ", self.data['length_0'], self.data['length_transition'], self.data['length_1'])
         feature = torch.from_numpy(np.load(filename_))
         # print("FEATURE SHAPE: ", feature.shape)
-        feature_0 = feature[: self.data['length_0']]
+        feature_0 = feature[: self.data['length_0']].float()
         # feature_0_with_transition = feature[: self.data['length_0'] + self.data['length_transition']]
-        feature_1 = feature[self.data['length_0'] :]
+        feature_1 = feature[self.data['length_0'] :].float()
         # feature_1_with_transition = feature[self.data['length_0']:]
         # print(feature_0.shape, feature_0_with_transition.shape, feature_1.shape)
         seq_0, d_0 = feature_0.shape
@@ -331,7 +328,7 @@ class FineDanceDataset(Dataset):
             global_pose_vec_input.append(mofeats_input)
         
         data_name = "Train" if self.train else "Test"
-        global_pose_vec_input = torch.Tensor(global_pose_vec_input).float().to(device)
+        global_pose_vec_input = torch.Tensor(global_pose_vec_input).float().detach()
         
         if self.train:
             self.normalizer = Normalizer(global_pose_vec_input)
