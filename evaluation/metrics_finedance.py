@@ -88,7 +88,7 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
     # print(gt_freatures_k)
     # print(gt_freatures_m)
 
-    print('Calculating metrics')
+    # print('Calculating metrics')
 
     fid_k = calc_fid(pred_features_k, gt_freatures_k)
     fid_m = calc_fid(pred_features_m, gt_freatures_m)
@@ -106,8 +106,8 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
 
 def calc_fid(kps_gen, kps_gt):
 
-    print(kps_gen.shape)
-    print(kps_gt.shape)
+    # print(kps_gen.shape)
+    # print(kps_gt.shape)
 
     # kps_gen = kps_gen[:20, :]
 
@@ -231,5 +231,5 @@ if __name__ == '__main__':
     calc_and_save_feats(gt_root)
     calc_and_save_feats(pred_root)
     
-    print('Calculating metrics')
+    # print('Calculating metrics')
     print(quantized_metrics(pred_root, gt_root))
