@@ -32,7 +32,7 @@ def slice_audio(audio_file, stride, length, out_dir, num_slices, inpainting_fram
 
 def slice_motion_finedance(motion_file, stride, length, out_dir, inpainting_frames, motion_len):
     motion = pickle.load(open(motion_file, "rb"))
-    pos, q = motion["pos"], motion["q"]
+    pos, q, full_pose = motion["pos"], motion["q"], motion["full_pose"]
     scale = motion["scale"][0]
 
     file_name = os.path.splitext(os.path.basename(motion_file))[0]
@@ -46,20 +46,19 @@ def slice_motion_finedance(motion_file, stride, length, out_dir, inpainting_fram
     slice_count = 0
     # slice until done or until matching audio slices
     while start_idx <= len(pos) - window:
-        pos_0, q_0 = (
-            pos[start_idx : start_idx + motion_len_],
-            q[start_idx : start_idx + motion_len_],
-        ) # lenght_0
+        # pos_0, q_0 = (
+        #     pos[start_idx : start_idx + motion_len_],
+        #     q[start_idx : start_idx + motion_len_],
+        # ) # lenght_0
        
-        pos_1, q_1 = (
-            pos[start_idx + motion_len_ : start_idx + window],
-            q[start_idx + motion_len_ : start_idx + window],
-        ) # lenght_0
-                    
-        out = {"pos_0": pos_0, 
-                "q_0":q_0,
-                "pos_1": pos_1,
-                "q_1": q_1,
+        # pos_1, q_1 = (
+        #     pos[start_idx + motion_len_ : start_idx + window],
+        #     q[start_idx + motion_len_ : start_idx + window],
+        # ) # lenght_0
+        full_pose_0 = full_pose[start_idx : start_idx + motion_len_]
+        full_pose_1 = full_pose[start_idx + motion_len_ : start_idx + window]
+        out = { "full_pose_0": full_pose_0,
+               "full_pose_1": full_pose_1,
                 "length_0": int(motion_len_),
                 "length_1": int(motion_len_),
                 "length_transition": int(inpainting_frames_),
@@ -144,13 +143,14 @@ def slice_finedance(motion_dir, wav_dir, stride=0.5, length=5, inpainting_frames
         # make sure name is matching
         music_fea = np.load(wav)
         motion_fea = pickle.load(open(motion, "rb"))
-        pos, q, scale = motion_fea["pos"], motion_fea["q"], motion_fea["scale"]
+        pos, q, scale, full_pose = motion_fea["pos"], motion_fea["q"], motion_fea["scale"], motion_fea["full_pose"]
         max_length = min(music_fea.shape[0], q.shape[0])
 
         music_fea = music_fea[:max_length, :]
         pos = pos[:max_length, :]
         q = q[:max_length, :]
-        out_data = {"pos": pos, "q": q, "scale": scale}
+        full_pose = full_pose[:max_length, :]
+        out_data = {"pos": pos, "q": q, "scale": scale, "full_pose": full_pose}
         
         pickle.dump(out_data, open(motion, "wb"))
         np.save(wav, music_fea)

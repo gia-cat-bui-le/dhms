@@ -22,43 +22,30 @@ floor_height = 0
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
-def set_on_ground_139(data, smplx_model, ground_h=0):
-    length = data.shape[0]
-    assert len(data.shape) == 2
-    assert data.shape[1] == 139
-    positions = do_smplxfk(data, smplx_model)
-    l_toe_h = positions[0, 10, 1] - floor_height
-    r_toe_h = positions[0, 11, 1] - floor_height
-    if abs(l_toe_h - r_toe_h) < 0.02:
-        height = (l_toe_h + r_toe_h)/2
-    else:
-        height = min(l_toe_h, r_toe_h)
-    data[:, 5] = data[:, 5] - (height -  ground_h)
-
-    return data
-
 def set_on_ground(root_pos, local_q_156, smplx_model):
     # root_pos = root_pos[:, :] - root_pos[:1, :]
-    length = root_pos.shape[0]
+    print(local_q_156.shape)
+    bs, length = root_pos.shape[0], root_pos.shape[1]
     # model_q = model_q.view(b*s, -1)
     # model_x = model_x.view(-1, 3)
     positions = smplx_model.forward(local_q_156, root_pos)
-    positions = positions.view(length, -1, 3)   # bxt, j, 3
+    positions = positions.view(bs, length, -1, 3)   # bxt, j, 3
     
-    l_toe_h = positions[0, 10, 1] - floor_height
-    r_toe_h = positions[0, 11, 1] - floor_height
-    if abs(l_toe_h - r_toe_h) < 0.02:
-        height = (l_toe_h + r_toe_h)/2
-    else:
-        height = min(l_toe_h, r_toe_h)
-    root_pos[:, 1] = root_pos[:, 1] - height
+    l_toe_h = positions[:, 0, 10, 1] - floor_height
+    r_toe_h = positions[:, 0, 11, 1] - floor_height
+    for idx, (l_toe, r_toe) in enumerate(zip(l_toe_h, r_toe_h)):
+        if abs(l_toe - r_toe) < 0.02:
+            height = (l_toe + r_toe)/2
+        else:
+            height = min(l_toe, r_toe)
+        root_pos[idx, :, 1] = root_pos[idx, :, 1] - height
 
     return root_pos, local_q_156
 
 def set_on_ground_139(data, smplx_model, ground_h=0):
     length = data.shape[0]
     assert len(data.shape) == 2
-    assert data.shape[1] == 139
+    assert data.shape[1] == 151
     positions = do_smplxfk(data, smplx_model)
     l_toe_h = positions[0, 10, 1] - floor_height
     r_toe_h = positions[0, 11, 1] - floor_height
@@ -120,21 +107,9 @@ class FineDanceDataset(Dataset):
             with open(os.path.join(backup_path, pickle_name), "wb") as f:
                 pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
-        # print(
-        #     f"Loaded {self.name} Dataset With Dimensions:\n\tPos_0: {data['pos_0'].shape}, Q_0: {data['q_0'].shape}"
-        #     f"\n\tPos_1: {data['pos_1'].shape}, Q_1: {data['q_1'].shape}"
-        #     # f"\n\tPos_0_with_transition: {data['pos_0_with_transition'].shape}, Q_0_with_transition: {data['q_0_with_transition'].shape}"
-        #     # f"\n\tPos_1_with_transition: {data['pos_1_with_transition'].shape}, Q_1_with_transition: {data['q_1_with_transition'].shape}"
-        # )
-
-        # process data, convert to 6dof etc
-        pose_input_0 = self.process_dataset(data["pos_0"], data["q_0"])
-        pose_input_1 = self.process_dataset(data["pos_1"], data["q_1"])
-        # pose_input_0_with_transition = self.process_dataset(data["pos_0_with_transition"], data["q_0_with_transition"])
-        # pose_input_1_with_transition = self.process_dataset(data["pos_1_with_transition"], data["q_1_with_transition"])
         self.data = {
-            "pose_0": pose_input_0,
-            "pose_1": pose_input_1,
+            "pose_0": data["full_pose_0"][:, :, :151],
+            "pose_1": data["full_pose_1"][:, :, :151],
             # "pose_0_with_transition": pose_input_0_with_transition,
             # "pose_1_with_transition": pose_input_1_with_transition,
             "length_0": data['length_0'],
@@ -142,8 +117,9 @@ class FineDanceDataset(Dataset):
             "length_transition": data['length_transition'],
             "filenames": data["filenames"],
         }
-        assert len(pose_input_0) == len(data["filenames"])
-        self.length = len(pose_input_0)
+        # print("full pose: ", torch.Tensor(self.data["pose_0"]).shape, torch.Tensor(self.data["pose_1"]).shape)
+        assert len(data["full_pose_0"]) == len(data["filenames"])
+        self.length = len(data["full_pose_0"])
         
         # print(f'DATA SHAPE: \n\tPose: {self.data["pose_0"].shape}\n\tMusic: {len(self.data["filenames"])}')
 
@@ -151,14 +127,6 @@ class FineDanceDataset(Dataset):
         return self.length
 
     def __getitem__(self, idx):
-        # filename_ = self.data["filenames"][idx]
-        # feature = torch.from_numpy(np.load(filename_))
-        # seq, d = feature.shape
-        # return {
-        #     'pose': self.data["pose"][idx].permute(1, 0), 
-        #     'pose_1': self.data["pose_1"][idx].permute(1, 0),
-        #     'music': feature.reshape(seq*d),
-        # }
         filename_ = self.data["filenames"][idx]
         # print("CHECK LENGTH: ", self.data['length_0'], self.data['length_transition'], self.data['length_1'])
         feature = torch.from_numpy(np.load(filename_))
@@ -173,8 +141,8 @@ class FineDanceDataset(Dataset):
         # seq_1_with_transition, d_1_with_transition = feature_1_with_transition.shape
         seq_1, d_1 = feature_1.shape
         return {
-            "pose_0": self.data['pose_0'][idx],
-            "pose_1": self.data['pose_1'][idx],
+            "pose_0": torch.from_numpy(self.data['pose_0'][idx]).float(),
+            "pose_1": torch.from_numpy(self.data['pose_1'][idx]).float(),
             # "pose_0_with_transition": self.data['pose_0_with_transition'][idx],
             # "pose_1_with_transition": self.data['pose_1_with_transition'][idx],
             "length_0": self.data['length_0'],
@@ -214,15 +182,9 @@ class FineDanceDataset(Dataset):
         # wavs = sorted(glob.glob(os.path.join(wav_path, "*.wav")))
 
         # stack the motions and features together
-        all_pos = []
-        all_q = []
-        all_pos1 = []
-        all_q1 = []
         all_names = []
-        # all_pos_1_with_transition = []
-        # all_q_1_with_transition = []
-        # all_pos_0_with_transition = []
-        # all_q_0_with_transition = []
+        all_full_pose_0 = []
+        all_full_pose_1 = []
         assert len(motions) == len(features)
         # print(len(motions), len(features))
         for motion, feature in zip(motions, features):
@@ -235,122 +197,27 @@ class FineDanceDataset(Dataset):
             # load motion
             
             data = pickle.load(open(motion, "rb"))
-            pos_0 = data["pos_0"]
-            q_0 = data["q_0"]
-            # pos_0_with_transition = data["pos_0_with_transition"]
-            # q_0_with_transition = data["q_0_with_transition"]
-            # pos_1_with_transition = data["pos_1_with_transition"]
-            # q_1_with_transition = data["q_1_with_transition"]
-            pos1 = data["pos_1"]
-            q1 = data["q_1"]
-            all_pos.append(pos_0)
-            all_q.append(q_0)
-            # all_pos_0_with_transition.append(pos_0_with_transition)
-            # all_q_0_with_transition.append(q_0_with_transition)
-            all_pos1.append(pos1)
-            all_q1.append(q1)
-            # all_pos_1_with_transition.append(pos_1_with_transition)
-            # all_q_1_with_transition.append(q_1_with_transition)
+            full_pose_0 = data["full_pose_0"]
+            full_pose_1 = data["full_pose_1"]
+            
+            all_full_pose_0.append(full_pose_0)
+            all_full_pose_1.append(full_pose_1)
+            
             all_names.append(feature)
-            # all_wavs.append(wav)
 
-        all_pos = np.array(all_pos)  # N x seq x 3
-        all_q = np.array(all_q)  # N x seq x (joint * 3)
-        all_pos1 = np.array(all_pos1)  # N x seq x 3
-        all_q1 = np.array(all_q1)  # N x seq x (joint * 3)
-        # all_pos_1_with_transition = np.array(all_pos_1_with_transition)  # N x seq x 3
-        # all_q_1_with_transition = np.array(all_q_1_with_transition) 
-        # all_pos_0_with_transition = np.array(all_pos_0_with_transition)  # N x seq x 3
-        # all_q_0_with_transition = np.array(all_q_0_with_transition) 
+        all_full_pose_0 = np.array(all_full_pose_0)
+        all_full_pose_1 = np.array(all_full_pose_1)
         # downsample the motions to the data fps
-        all_pos = all_pos[:, :: self.data_stride, :]
-        all_q = all_q[:, :: self.data_stride, :]
-        all_pos1 = all_pos1[:, :: self.data_stride, :]
-        all_q1 = all_q1[:, :: self.data_stride, :]
-        # all_pos_1_with_transition = all_pos_1_with_transition[:, :: self.data_stride, :]
-        # all_q_1_with_transition = all_q_1_with_transition[:, :: self.data_stride, :]
-        # all_pos_0_with_transition = all_pos_0_with_transition[:, :: self.data_stride, :]
-        # all_q_0_with_transition = all_q_0_with_transition[:, :: self.data_stride, :]
-        data = {"pos_0": all_pos, "q_0": all_q, 
-                "pos_1": all_pos1, "q_1": all_q1, 
-                # "pos_0_with_transition": all_pos_0_with_transition, "q_0_with_transition": all_q_0_with_transition,
-                # "pos_1_with_transition": all_pos_1_with_transition, "q_1_with_transition": all_q_1_with_transition,
+        all_full_pose_0 = all_full_pose_0[:, :: self.data_stride, :]
+        all_full_pose_1 = all_full_pose_1[:, :: self.data_stride, :]
+        
+        data = {"full_pose_0": all_full_pose_0,
+                "full_pose_1": all_full_pose_1,
                 "length_0": data['length_0'],
                 "length_1": data['length_1'],
                 "length_transition": data['length_transition'],
                 "filenames": all_names}
         return data
-
-    def process_dataset(self, root_positions, local_qs):
-        smplx_model = SMPLX_Skeleton(Jpath='data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy')
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        global_pose_vec_input = []
-        
-        for pos, q in zip(root_positions, local_qs):
-            # print("pos.shape", pos.shape)
-            # print("q.shape", q.shape)
-            root_pos = torch.Tensor(pos).to(device) # 150, 3
-            local_q = torch.Tensor(q).to(device).view(q.shape[0], 52, 6)    # 150, 165
-            local_q = ax_from_6v(local_q)
-            length = root_pos.shape[0]
-            local_q = local_q.view(length, -1, 3)  
-            # print("local_q", local_q.shape)
-            local_q_156 = local_q.view(length, 156)
-            root_pos, local_q_156 = set_on_ground(root_pos, local_q_156, smplx_model)
-            positions = smplx_model.forward(local_q_156, root_pos)
-            positions = positions.view(length, -1, 3)   # bxt, j, 3
-
-            # contacts
-
-            feet = positions[:, (7, 8, 10, 11)]  # # 150, 4, 3
-            contacts_d_ankle = (feet[:,:2,1] < 0.12).to(local_q_156)
-            contacts_d_teo = (feet[:,2:,1] < 0.05).to(local_q_156)
-            contacts_d = torch.cat([contacts_d_ankle, contacts_d_teo], dim=-1).detach().cpu().numpy()
-
-
-            local_q_156 = local_q_156.view(length, 52, 3)  
-            local_q_312 = ax_to_6v(local_q_156).view(length,312).detach().cpu().numpy()
-            # print("contacts_d.shape", contacts_d.shape)
-            # print("root_pos.shape", root_pos.shape)
-            # print("local_q_312.shape", local_q_312.shape)
-            mofeats_input = np.concatenate( [contacts_d, root_pos.cpu().numpy(), local_q_312] ,axis=-1)
-            # np.save(os.path.join(mooutputs_dir, fname+".npy"), mofeats_input)
-            # print("mofeats_input", mofeats_input.shape)
-            
-            if mofeats_input.shape[-1] == 319:
-                mofeats_input = mofeats_input[:,:139]
-            elif mofeats_input.shape[-1] == 139:
-                pass
-            else:
-                # print("motion.shape", mofeats_input.shape)
-                raise("input motion shape error!")
-            
-            global_pose_vec_input.append(mofeats_input)
-        
-        data_name = "Train" if self.train else "Test"
-        global_pose_vec_input = torch.Tensor(global_pose_vec_input).float().detach()
-        
-        if self.train:
-            self.normalizer = Normalizer(global_pose_vec_input)
-        else:
-            # print(self.normalizer)
-            assert self.normalizer is not None
-        global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
-
-        assert not torch.isnan(global_pose_vec_input).any()
-        data_name = "Train" if self.train else "Test"
-
-        # cut the dataset
-        if self.data_len > 0:
-            global_pose_vec_input = global_pose_vec_input[: self.data_len]
-
-        global_pose_vec_input = global_pose_vec_input
-        
-        # print("mofeats_input", mofeats_input.shape)
-
-        # print(f"{data_name} Dataset Motion Features Dim: {global_pose_vec_input.shape}")
-
-        return global_pose_vec_input
 
 class AISTPPDataset(Dataset):
     def __init__(

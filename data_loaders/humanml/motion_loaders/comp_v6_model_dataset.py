@@ -313,12 +313,9 @@ class CompCCDGeneratedDataset(Dataset):
         
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         
-        if args.dataset == "finedance":
-            self.smpl = SMPLX_Skeleton(Jpath="data_loaders\d2m\\body_models\smpl\smplx_neu_J_1.npy")
-        elif args.dataset == "aistpp":
-            self.smpl = SMPLSkeleton(device=device)
+        self.smpl = SMPLSkeleton(device=device)
         
-        self.smpl = SMPLSkeleton(device)
+        # self.smpl = SMPLSkeleton(device)
 
         model.eval()
         
@@ -326,8 +323,8 @@ class CompCCDGeneratedDataset(Dataset):
             nfeats = 151
             njoints = 24
         elif args.dataset == "finedance":
-            nfeats = 139
-            njoints = 22
+            nfeats = 151
+            njoints = 24
         
         # print(len(dataloader))
 
@@ -523,10 +520,11 @@ class CompCCDGeneratedDataset(Dataset):
                                 full_q = full_q.unsqueeze(0)
                                 
                                 full_pose = (
-                                    self.smpl.forward(full_q, full_pos).detach().cpu().numpy()
+                                    self.smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
                                 )  # b, s, 24, 3
                                 
-                                assert full_pose.shape == (1, 180, njoints, 3)
+                                # print(full_pose.shape)
+                                assert full_pose.shape == (180, njoints, 3)
                                 
                                 filename = batch['filename'][idx]
                                 outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'

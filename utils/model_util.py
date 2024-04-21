@@ -48,7 +48,7 @@ def get_model_args(args, data):
         nfeats = 1
     elif args.dataset == "finedance":
         #TODO: add this for finedance
-        njoints = 139
+        njoints = 151
         nfeats = 1
     
     feature_dim = 35 if args.feature_type == "baseline" else 4800

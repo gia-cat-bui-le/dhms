@@ -135,5 +135,5 @@ def split_data(dataset_path, dataset_name):
                 # print("pos.shape", pos.shape)
                 # print("q.shape", q.shape)
                 
-                out_data = {"pos": pos, "q": q, "scale": [1]}
+                out_data = {"pos": pos, "q": q, "scale": [1], "full_pose": data}
                 pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.pkl", "wb"))

@@ -30,16 +30,12 @@ from evaluation.features.manual_new import extract_manual_features
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-from evaluation.metrics_finedance import quantized_metrics, calc_and_save_feats
+from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
 
 def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    if args.dataset == "finedance":
-        smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
-        njoints = 22
-    elif args.dataset == "aistpp":
-        smpl = SMPLSkeleton(device=device)
-        njoints = 24
+    smpl = SMPLSkeleton(device=device)
+    njoints = 24
     
     with open(log_file, 'a') as f:
         for replication in range(replication_times):
@@ -68,7 +64,7 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 # go 6d to ax
                 q = ax_from_6v(q).to(motion.device)
                 
-                full_poses = (smpl.forward(q, pos).detach().cpu().numpy())
+                full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
                 
                 for full_pose, q_, pos_, filename in zip(full_poses, q, pos, filenames):
                     if out_dir is not None:
@@ -89,14 +85,21 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 # print(batch["length_0"], batch["length_1"])
             
             gt_root = f'{args.inference_dir}/gt'
-            pred_root = f'{args.inference_dir}/inference'
+            pred_root = [f'{args.inference_dir}/inference']
             
             # print('Calculating and saving features')
             calc_and_save_feats(gt_root)
-            calc_and_save_feats(pred_root)
             
-            # print('Calculating metrics')
-            print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
+            for pred_root in pred_root:
+                print(pred_root, file=f, flush=True)
+                calc_and_save_feats(pred_root)
+
+                print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
+            
+            # calc_and_save_feats(pred_root)
+            
+            # # print('Calculating metrics')
+            # print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
 
             print(f'!!! DONE !!!')
             print(f'!!! DONE !!!', file=f, flush=True)
