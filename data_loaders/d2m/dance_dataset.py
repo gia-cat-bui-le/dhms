@@ -282,7 +282,7 @@ class FineDanceDataset(Dataset):
         return data
 
     def process_dataset(self, root_positions, local_qs):
-        smplx_model = SMPLX_Skeleton(Jpath='data_loaders\\d2m\\body_models\smpl\smplx_neu_J_1.npy')
+        smplx_model = SMPLX_Skeleton(Jpath='data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy')
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         global_pose_vec_input = []
         

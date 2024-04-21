@@ -73,7 +73,7 @@ class GenerateDataset(Dataset):
         data_length = 90
         length_transistion = 60
         
-        print("FEATURE SHAPE: ", feature_slice.shape)
+        # print("FEATURE SHAPE: ", feature_slice.shape)
         return {
             "length": data_length,
             "music": feature_slice,
@@ -191,7 +191,7 @@ if __name__ == '__main__':
         log_file += f'_refine{args.refine_scale}'
     log_file += f'_comp{args.inter_frames}'
     log_file += '.log'
-    print(f'Will save to log file [{log_file}]')
+    # print(f'Will save to log file [{log_file}]')
     
     ########################################################################
     # LOAD SMPL
