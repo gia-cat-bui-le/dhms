@@ -36,8 +36,10 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     if args.dataset == "finedance":
         smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
+        njoints = 22
     elif args.dataset == "aistpp":
         smpl = SMPLSkeleton(device=device)
+        njoints = 24
     
     with open(log_file, 'a') as f:
         for replication in range(replication_times):
@@ -62,7 +64,7 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 sample_contact, motion = torch.split(
                 motion, (4, motion.shape[2] - 4), dim=2)
                 pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-                q = motion[:, :, 3:].reshape(b, s, 24, 6)
+                q = motion[:, :, 3:].reshape(b, s, njoints, 6)
                 # go 6d to ax
                 q = ax_from_6v(q).to(motion.device)
                 
@@ -77,7 +79,7 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                         with open(out_path, "wb") as file_pickle:
                             pickle.dump(
                                 {
-                                    "smpl_poses": q_.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                                    "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
                                     "smpl_trans": pos_.squeeze(0).cpu().numpy(),
                                     "full_pose": full_pose,
                                 },

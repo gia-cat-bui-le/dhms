@@ -324,8 +324,10 @@ class CompCCDGeneratedDataset(Dataset):
         
         if args.dataset == "aistpp":
             nfeats = 151
+            njoints = 24
         elif args.dataset == "finedance":
             nfeats = 139
+            njoints = 22
         
         # print(len(dataloader))
 
@@ -467,7 +469,7 @@ class CompCCDGeneratedDataset(Dataset):
                             # do the FK all at once
                             b, s, c = motion_result.shape
                             pos = motion_result[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
-                            q = motion_result[:, :, 3:].reshape(b, s, 24, 6)
+                            q = motion_result[:, :, 3:].reshape(b, s, njoints, 6)
                             # go 6d to ax
                             q = ax_from_6v(q).to(device)
 
@@ -524,7 +526,7 @@ class CompCCDGeneratedDataset(Dataset):
                                     self.smpl.forward(full_q, full_pos).detach().cpu().numpy()
                                 )  # b, s, 24, 3
                                 
-                                assert full_pose.shape == (1, 180, 24, 3)
+                                assert full_pose.shape == (1, 180, njoints, 3)
                                 
                                 filename = batch['filename'][idx]
                                 outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
@@ -535,7 +537,7 @@ class CompCCDGeneratedDataset(Dataset):
                                 with open(out_path, "wb") as file_pickle:
                                     pickle.dump(
                                         {
-                                            "smpl_poses": full_q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                                            "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
                                             "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
                                             "full_pose": full_pose.squeeze(),
                                         },
