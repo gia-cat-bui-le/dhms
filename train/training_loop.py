@@ -251,37 +251,12 @@ class TrainLoop:
             micro_cond_0['y']['mask'] = lengths_to_mask(micro_cond_0['y']['lengths'], micro_0.device).unsqueeze(1).unsqueeze(2)
             micro_cond_0['y']['music'] = batch['music_0'].to(batch['motion_feats_0'].device)
             
-            # print("COND shape: ", micro_cond_0['y']['music'].shape)
-                
-            # print(micro_cond_0['y']['music'])
-            
-            if self.shuffle_noise:
-                bs, feats, _, nframe = micro_0.shape
-                
-                noise_0 = torch.randn(
-                    [1, feats, 1, nframe], device=micro_0.device
-                ).repeat(bs, 1, 1, 1)
-                for frame_index in range(self.noise_frame, nframe, self.noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - self.noise_frame,
-                            frame_index + self.noise_stride - self.noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_0[
-                        :, :, :, frame_index : frame_index + self.noise_stride
-                    ] = noise_0[:, :, :, list_index]
-            else:
-                noise_0 = None
-            
             compute_losses_0 = functools.partial(
                 self.diffusion.training_losses_inpainting,
                 self.ddp_model,
                 micro_0,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_0,
-                noise=noise_0,
                 dataset=self.data.dataset,
             )
             if last_batch or not self.use_ddp:
@@ -307,26 +282,6 @@ class TrainLoop:
             micro_1 = torch.cat((hist_frames, micro_1), axis=-1)
             # micro_cond = cond
             
-            if self.shuffle_noise:
-                bs, feats, _, nframe = micro_1.shape
-                
-                noise_1 = torch.randn(
-                    [1, feats, 1, nframe], device=micro_1.device
-                ).repeat(bs, 1, 1, 1)
-                for frame_index in range(self.noise_frame, nframe, self.noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - self.noise_frame,
-                            frame_index + self.noise_stride - self.noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_1[
-                        :, :, :, frame_index : frame_index + self.noise_stride
-                    ] = noise_1[:, :, :, list_index]
-            else:
-                noise_1 = None
-            
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_1 = functools.partial(
                 self.diffusion.training_losses_inpainting,
@@ -334,7 +289,7 @@ class TrainLoop:
                 micro_1,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_1,
-                noise=noise_1,
+                noise=None,
                 dataset=self.data.dataset
             )
             if last_batch or not self.use_ddp:
@@ -363,26 +318,6 @@ class TrainLoop:
             # micro_2 = torch.cat((micro_2, fut_frames), axis=-1)
             # micro_cond = cond
             
-            if self.shuffle_noise:
-                bs, feats, _, nframe = micro_2.shape
-                
-                noise_2 = torch.randn(
-                    [1, feats, 1, nframe], device=micro_2.device
-                ).repeat(bs, 1, 1, 1)
-                for frame_index in range(self.noise_frame, nframe, self.noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - self.noise_frame,
-                            frame_index + self.noise_stride - self.noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_2[
-                        :, :, :, frame_index : frame_index + self.noise_stride
-                    ] = noise_2[:, :, :, list_index]
-            else:
-                noise_2=None
-            
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_cycle = functools.partial(
                 self.diffusion.training_losses_inpainting,
@@ -390,7 +325,7 @@ class TrainLoop:
                 micro_2,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_2,
-                noise=noise_2,
+                noise=None,
                 dataset=self.data.dataset
             )
             if last_batch or not self.use_ddp:
