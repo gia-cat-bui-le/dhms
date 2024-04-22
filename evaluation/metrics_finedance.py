@@ -2,8 +2,8 @@ import numpy as np
 import pickle
 
 from tqdm  import tqdm
-from evaluation.features.kinetic import extract_kinetic_features
-from evaluation.features.manual_new import extract_manual_features
+from features.kinetic import extract_kinetic_features
+from features.manual_new import extract_manual_features
 from scipy import linalg
 # kinetic, manual
 import torch
@@ -221,8 +221,8 @@ if __name__ == '__main__':
     # mod = '_global'
 
 
-    gt_root = 'evaluation\gt_lr'
-    pred_root = 'evaluation\inference_lr'
+    gt_root = 'evaluation\gt'
+    pred_root = 'evaluation\inference'
     print('Calculating and saving features')
 
 

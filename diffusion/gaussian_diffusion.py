@@ -1102,12 +1102,12 @@ class GaussianDiffusion():
                     # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
                     # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
                 if 'hist_motion' in model_kwargs['y'].keys():
-                    print("hist motion")
+                    # print("hist motion")
                     hist_len =  model_kwargs['y']['hist_motion'].shape[-1]
                     hist_motion = model_kwargs['y']['hist_motion']
                     img[:,:,:,:hist_len] = hist_motion
                 elif 'next_motion' in model_kwargs['y'].keys():
-                    print("next motion")
+                    # print("next motion")
                     next_len = model_kwargs['y']['next_motion'].shape[-1]
                     for idx in range(shape[0]):
                         len  = model_kwargs['y']['lengths'][idx]
