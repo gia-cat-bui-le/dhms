@@ -26,9 +26,6 @@ def get_model_args(args, data):
 
     # SMPL defaults
     data_rep = 'rot6d'
-    
-    njoints = 25
-    nfeats = 6
 
     if args.dataset == 'humanml':
         data_rep = 'hml_vec'
@@ -48,7 +45,7 @@ def get_model_args(args, data):
         nfeats = 1
     elif args.dataset == "finedance":
         #TODO: add this for finedance
-        njoints = 151
+        njoints = 139
         nfeats = 1
     
     feature_dim = 35 if args.feature_type == "baseline" else 4800
@@ -61,10 +58,18 @@ def get_model_args(args, data):
             'cond_mask_prob': args.cond_mask_prob, 'action_emb': action_emb, 'arch': args.arch,
             'emb_trans_dec': args.emb_trans_dec, 'dataset': args.dataset,
             'hist_frames': args.hist_frames, 'motion_mask': args.motion_mask, 'music_dim': feature_dim,
-            'cond_drop_prob': cond_drop_prob}
+            'cond_drop_prob': cond_drop_prob,
+            # FlowMDM
+            'diffusion_steps': args.diffusion_steps,
+            'max_seq_att': args.max_seq_att, 
+            'bpe_denoising_step': args.bpe_denoising_step,
+            'bpe_training_ratio': args.bpe_training_ratio,
+            'rpe_horizon': args.rpe_horizon,
+            'use_chunked_att': args.use_chunked_att,}
 
 def create_gaussian_diffusion(args):
     # default params
+    dataset_name = args.dataset
     predict_xstart = True  # we always predict x_start (a.k.a. x0), that's our deal!
     steps = 1000
     scale_beta = 1.  # no scaling
@@ -99,4 +104,5 @@ def create_gaussian_diffusion(args):
         lambda_vel=args.lambda_vel,
         lambda_rcxyz=args.lambda_rcxyz,
         lambda_fc=args.lambda_fc,
+        dataset_name=dataset_name,
     )

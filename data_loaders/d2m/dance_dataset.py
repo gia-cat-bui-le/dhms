@@ -22,42 +22,6 @@ floor_height = 0
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
-def set_on_ground(root_pos, local_q_156, smplx_model):
-    # root_pos = root_pos[:, :] - root_pos[:1, :]
-    print(local_q_156.shape)
-    bs, length = root_pos.shape[0], root_pos.shape[1]
-    # model_q = model_q.view(b*s, -1)
-    # model_x = model_x.view(-1, 3)
-    positions = smplx_model.forward(local_q_156, root_pos)
-    positions = positions.view(bs, length, -1, 3)   # bxt, j, 3
-    
-    l_toe_h = positions[:, 0, 10, 1] - floor_height
-    r_toe_h = positions[:, 0, 11, 1] - floor_height
-    for idx, (l_toe, r_toe) in enumerate(zip(l_toe_h, r_toe_h)):
-        if abs(l_toe - r_toe) < 0.02:
-            height = (l_toe + r_toe)/2
-        else:
-            height = min(l_toe, r_toe)
-        root_pos[idx, :, 1] = root_pos[idx, :, 1] - height
-
-    return root_pos, local_q_156
-
-def set_on_ground_139(data, smplx_model, ground_h=0):
-    length = data.shape[0]
-    assert len(data.shape) == 2
-    assert data.shape[1] == 151
-    positions = do_smplxfk(data, smplx_model)
-    l_toe_h = positions[0, 10, 1] - floor_height
-    r_toe_h = positions[0, 11, 1] - floor_height
-    if abs(l_toe_h - r_toe_h) < 0.02:
-        height = (l_toe_h + r_toe_h)/2
-    else:
-        height = min(l_toe_h, r_toe_h)
-    data[:, 5] = data[:, 5] - (height -  ground_h)
-
-    return data
-
-
 class FineDanceDataset(Dataset):
     def __init__(
         self,
@@ -108,8 +72,8 @@ class FineDanceDataset(Dataset):
                 pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
         self.data = {
-            "pose_0": data["full_pose_0"][:, :, :151],
-            "pose_1": data["full_pose_1"][:, :, :151],
+            "pose_0": data["full_pose_0"][:, :, :139],
+            "pose_1": data["full_pose_1"][:, :, :139],
             # "pose_0_with_transition": pose_input_0_with_transition,
             # "pose_1_with_transition": pose_input_1_with_transition,
             "length_0": data['length_0'],

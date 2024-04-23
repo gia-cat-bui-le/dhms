@@ -313,7 +313,7 @@ class CompCCDGeneratedDataset(Dataset):
         
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         
-        self.smpl = SMPLSkeleton(device=device)
+        # self.smpl = SMPLSkeleton(device=device)
         
         # self.smpl = SMPLSkeleton(device)
 
@@ -322,9 +322,11 @@ class CompCCDGeneratedDataset(Dataset):
         if args.dataset == "aistpp":
             nfeats = 151
             njoints = 24
+            self.smpl = SMPLSkeleton(device=device)
         elif args.dataset == "finedance":
-            nfeats = 151
-            njoints = 24
+            nfeats = 139
+            njoints = 22
+            self.smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
         
         # print(len(dataloader))
 

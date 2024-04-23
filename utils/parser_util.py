@@ -86,6 +86,25 @@ def add_diffusion_options(parser):
 
 def add_model_options(parser):
     group = parser.add_argument_group('model')
+    # =================== FlowMDM specific arguments ===================
+    group.add_argument("--bpe_training_ratio", default=0.5, type=float,
+                       help="Ratio of usage for absolute positional embeddings (APE) during training versus relative ones (RPE).")
+    group.add_argument("--bpe_denoising_step", default=100, type=int,
+                       help="Denoising step where transitioning from absolute to relative positional embeddings (APE -> RPE) at inference --i.e.--> schedule of Blended Positional Embeddings (BPE). 0 for all RPE, -1 or >= than 'diffusion_steps' for all APE")
+    group.add_argument("--rpe_horizon", default=-1, type=int,
+                       help="Window size, or horizon (H), for the local/relative attention")
+    group.add_argument("--use_chunked_att", action='store_true',
+                       help="If True, it uses chunked windowed local/relative attention like in LongFormer.")
+    # =================== MDM related arguments  ===================
+    group.add_argument("--max_seq_att", default=1024, type=int,
+                       help="Max window size for attention")
+    group.add_argument("--layers", default=8, type=int,
+                       help="Number of layers.")
+    group.add_argument("--num_heads", default=4, type=int,
+                       help="Number of heads per layer.")
+    group.add_argument("--latent_dim", default=512, type=int,
+                       help="Transformer/GRU width.")
+    
     group.add_argument("--feature_type", default="baseline", type=str)
     group.add_argument("--cond_drop_prob", default=0.25, type=float)
     group.add_argument("--arch", default='inpainting',
@@ -94,10 +113,6 @@ def add_model_options(parser):
     group.add_argument("--emb_trans_dec", default=False, type=bool,
                        help="For trans_dec architecture only, if true, will inject condition as a class token"
                             " (in addition to cross-attention).")
-    group.add_argument("--layers", default=8, type=int,
-                       help="Number of layers.")
-    group.add_argument("--latent_dim", default=512, type=int,
-                       help="Transformer/GRU width.")
     group.add_argument("--cond_mask_prob", default=.1, type=float,
                        help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")

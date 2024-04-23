@@ -33,6 +33,7 @@ from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
 from vis import SMPLSkeleton
+from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
 
 from model.utils import extract, make_beta_schedule
 
@@ -154,6 +155,7 @@ class GaussianDiffusion():
         lambda_root_vel=0.,
         lambda_vel_rcxyz=0.,
         lambda_fc=0.,
+        dataset_name='aistpp'
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -233,7 +235,10 @@ class GaussianDiffusion():
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
         
-        self.smpl = SMPLSkeleton(self.device)
+        if dataset_name == "aistpp":
+            self.smpl = SMPLSkeleton(device=self.device)
+        elif dataset_name == "finedance":
+            self.smpl = SMPLX_Skeleton(device=self.device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
         
     def masked_l2(self, a, b, mask):
         # print("GOTO: masked l2")
