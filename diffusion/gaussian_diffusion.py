@@ -155,7 +155,7 @@ class GaussianDiffusion():
         lambda_root_vel=0.,
         lambda_vel_rcxyz=0.,
         lambda_fc=0.,
-        dataset_name='aistpp'
+        dataset_name='aistpp',
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -175,6 +175,8 @@ class GaussianDiffusion():
         self.lambda_root_vel = lambda_root_vel
         self.lambda_vel_rcxyz = lambda_vel_rcxyz
         self.lambda_fc = lambda_fc
+        
+        # self.normalizer = normalizer
 
         if self.lambda_rcxyz > 0. or self.lambda_vel > 0. or self.lambda_root_vel > 0. or \
                 self.lambda_vel_rcxyz > 0. or self.lambda_fc > 0.:
@@ -2205,6 +2207,10 @@ class GaussianDiffusion():
             loss = loss * extract(self.p2_loss_weight, t, loss.shape)
             
             terms["rot_mse"] = loss
+            
+            # if self.normalizer is not None:
+            #     model_output_loss = self.normalizer.unnormalize(model_output_loss)
+            #     target_loss = self.normalizer.unnormalize(target_loss)
 
             # split off contact from the rest
             model_contact, model_output_loss = torch.split(
@@ -2235,6 +2241,11 @@ class GaussianDiffusion():
             # perform FK
             model_xp = self.smpl.forward(model_q, model_x)
             target_xp = self.smpl.forward(target_q, target_x)
+            
+            #!here
+            if len(model_xp.shape) != 4:
+                model_xp = model_xp.view(b, s, -1, 3)
+                target_xp = target_xp.view(b, s, -1, 3)
 
             fk_loss = self.loss_fn(model_xp, target_xp, reduction="none")
             fk_loss = reduce(fk_loss, "b ... -> b (...)", "mean")

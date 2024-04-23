@@ -15,8 +15,10 @@ import os
 from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_to_axis_angle)
 
-from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
+from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton, ax_to_6v
 from vis import SMPLSkeleton
+
+from smplx import SMPL, SMPLX, SMPLH
 
 def build_models(opt):
     if opt.text_enc_mod == 'bigru':
@@ -525,8 +527,10 @@ class CompCCDGeneratedDataset(Dataset):
                                     self.smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
                                 )  # b, s, 24, 3
                                 
-                                # print(full_pose.shape)
-                                assert full_pose.shape == (180, njoints, 3)
+                                if njoints == 24:
+                                    assert full_pose.shape == (180, njoints, 3)
+                                else:
+                                    assert full_pose.shape == (180, 55, 3)
                                 
                                 filename = batch['filename'][idx]
                                 outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'

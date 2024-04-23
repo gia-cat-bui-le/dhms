@@ -2,8 +2,8 @@ import numpy as np
 import pickle
 
 from tqdm  import tqdm
-from features.kinetic import extract_kinetic_features
-from features.manual_new import extract_manual_features
+from evaluation.features.kinetic import extract_kinetic_features
+from evaluation.features.manual_new import extract_manual_features
 from scipy import linalg
 # kinetic, manual
 import torch

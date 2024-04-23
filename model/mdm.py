@@ -228,17 +228,20 @@ class MDM(nn.Module):
         rotary_kwargs = {'timesteps': timesteps, 'pos_pe_abs': y.get("pos_pe_abs", None), 'training': self.training, 'pe_bias': pe_bias }
         ##########
         
-        emb = self.embed_timestep(timesteps)  # [1, bs, d]
+        time_emb = self.embed_timestep(timesteps)  # [1, bs, d]
 
         force_mask = y.get('uncond', False)
-        music_emb = self.embed_music(y['music'])
-        emb += self.mask_cond(music_emb, force_mask=force_mask)
-
+        music_emb = self.embed_music(self.mask_cond(y['music'], force_mask=force_mask))
+        # print("music emb before: ", music_emb.shape)
+        music_emb = music_emb.unsqueeze(0).expand(nframes, -1, -1)
+        # print("music emb after: ", music_emb.shape)
+        emb = time_emb + music_emb
         x = self.input_process(x)
         
         # ============== MAIN ARCHITECTURE ==============
         # APE or RPE is injected inside seqTransEncoder forward function
         x, emb = x.permute(1, 0, 2), emb.permute(1, 0, 2)
+        # print("x: ", x.shape, "emb: ", emb.shape)
         output = self.seqTransEncoder(x, mask=mask, cond_tokens=emb, attn_bias=pe_bias, rotary_kwargs=rotary_kwargs, chunked_attn=chunked_attn)  # [bs, seqlen, d]
         output = output.permute(1, 0, 2)  # [seqlen, bs, d]
 

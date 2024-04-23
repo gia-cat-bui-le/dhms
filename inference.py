@@ -31,6 +31,7 @@ from evaluation.features.manual_new import extract_manual_features
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
+from evaluation.metrics_finedance import quantized_metrics as quantized_metrics_finedance, calc_and_save_feats as calc_and_save_feats_finedance
 
 def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -68,10 +69,13 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 # go 6d to ax
                 q = ax_from_6v(q).to(motion.device)
                 
-                full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
+                # full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
                 
-                for full_pose, q_, pos_, filename in zip(full_poses, q, pos, filenames):
+                # print("full pose: ", full_poses.shape)
+                
+                for q_, pos_, filename in zip(q, pos, filenames):
                     if out_dir is not None:
+                        full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
                         outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join(out_dir, outname)
                         # Create the directory if it doesn't exist
@@ -92,13 +96,22 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
             pred_root = [f'{args.inference_dir}/inference']
             
             # print('Calculating and saving features')
-            calc_and_save_feats(gt_root)
+            if args.dataset == "finedance":
+                calc_and_save_feats_finedance(gt_root)
+            else:
+                calc_and_save_feats(gt_root)
+            
             
             for pred_root in pred_root:
                 print(pred_root, file=f, flush=True)
-                calc_and_save_feats(pred_root)
+                if args.dataset == "finedance":
+                    calc_and_save_feats_finedance(pred_root)
 
-                print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
+                    print(quantized_metrics_finedance(pred_root, gt_root), file=f, flush=True)
+                else:
+                    calc_and_save_feats(pred_root)
+
+                    print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
             
             # calc_and_save_feats(pred_root)
             
