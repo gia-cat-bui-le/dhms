@@ -314,10 +314,6 @@ class CompCCDGeneratedDataset(Dataset):
         # print('mm_idxs', mm_idxs)
         
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        
-        # self.smpl = SMPLSkeleton(device=device)
-        
-        # self.smpl = SMPLSkeleton(device)
 
         model.eval()
         
@@ -336,11 +332,6 @@ class CompCCDGeneratedDataset(Dataset):
             for i, batch in tqdm(enumerate(dataloader)):
                 if num_samples_limit is not None and len(generated_motion) >= num_samples_limit:
                     break
-
-                # if args.inter_frames > 0:
-                #     assert args.inter_frames % 2 == 0
-                #     batch['length_0'] = [len + args.inter_frames // 2 for len in batch['length_0']]
-                #     batch['length_1_with_transition'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
 
                 bs = len(batch['length_0'])
 
@@ -378,10 +369,6 @@ class CompCCDGeneratedDataset(Dataset):
                 mm_motions = []
 
                 for t in range(repeat_times):
-                    # if args.hist_frames > 0:
-                    #     arg_frames = args.hist_frames
-                    # else:
-                    #     arg_frames = args.inpainting_frames if not args.composition else args.inter_frames
                     
                     noise_1, noise_0 = None, None
                         
@@ -549,85 +536,17 @@ class CompCCDGeneratedDataset(Dataset):
                                     )
                                     
                                 sample.append(full_pose)
-                            
-                        # model_kwargs_0['y']['length'] = [len - args.inpainting_frames
-                        #                                 for len in model_kwargs_0['y']['length']]
-
-                    # sample_0 = sample_0.squeeze().permute(0, 2, 1).cpu().numpy() # B L D
-                    # sample_1 = sample_1.squeeze().permute(0, 2, 1).cpu().numpy()
-                    # length_0 = batch['length_0']
-                    # length_1 = batch['length_1']
-                    # length_transition = batch['length_transition']
-                    # # length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
-                    # # if args.inter_frames > 0:
-                    # #     length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
-                    # length = [length_0[idx] + length_1[idx] for idx in range(bs)]
-                    # def collate_tensor_with_padding(batch):
-                    #     batch = [torch.tensor(x) for x in batch]
-                    #     dims = batch[0].dim()
-                    #     max_size = [max([b.size(i) for b in batch]) for i in range(dims)]
-                    #     size = (len(batch),) + tuple(max_size)
-                    #     canvas = batch[0].new_zeros(size=size)
-                    #     for i, b in enumerate(batch):
-                    #         sub_tensor = canvas[i]
-                    #         for d in range(dims):
-                    #             sub_tensor = sub_tensor.narrow(d, 0, b.size(d))
-                    #         sub_tensor.add_(b)
-                    #     canvas = canvas.detach().numpy()
-                    #     # canvas = [x.detach().numpy() for x in canvas]
-                    #     return canvas
-
-                    # def merge(motion_0, length_0, motion_1, length_1, length_transition): # B L D
-                    #     bs = motion_0.shape[0]
-                    #     ret = []
-                    #     for idx in range(bs):
-                    #         # transition_0 = motion_0[idx, length_0[idx] : length_0[idx] + length_transition[idx]]
-                    #         # transition_1 = motion_1[idx, length_1[idx] : length_1[idx] + length_transition[idx]]
-                    #         # transition = (transition_0 + transition_1) / 2
-                    #         # ret.append(np.concatenate((motion_0[idx,:length_0[idx]], transition, motion_1[idx,:length_1[idx]]), axis=0))
-                    #         ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
-                            
-                    #     print((torch.from_numpy(np.array(ret))).shape)
-                            
-                    #     return collate_tensor_with_padding(ret)
-
-                    # sample = merge(sample_0, length_0, sample_1, length_1, length_transition)
                     
                     if t == 0:
                         sub_dicts = [{'motion': sample[bs_i],
                                     'length': 180,
                                     'music': torch.cat((model_kwargs_0['y']['music'][bs_i], model_kwargs_1['y']['music'][bs_i]), axis=0),
                                     'filename': batch["filename"][bs_i],
-                                    # 'caption': model_kwargs['y']['text'][bs_i],
-                                    # 'tokens': tokens[bs_i],
-                                    # 'cap_len': len(tokens[bs_i]),
                                     } for bs_i in range(dataloader.batch_size)]
                         generated_motion += sub_dicts
-                    # if t == 0:
-                    #     sub_dicts = [{'motion': sample[bs_i].squeeze().permute(1,0).cpu().numpy(),
-                    #                 'length': model_kwargs['y']['lengths'][bs_i].cpu().numpy(),
-                    #                 'caption': model_kwargs['y']['text'][bs_i],
-                    #                 # 'tokens': tokens[bs_i],
-                    #                 # 'cap_len': len(tokens[bs_i]),
-                    #                 } for bs_i in range(dataloader.batch_size)]
-                    #     generated_motion += sub_dicts
-
-                    # if is_mm:
-                    #     mm_motions += [{'motion': sample[bs_i].squeeze().permute(1, 0).cpu().numpy(),
-                    #                     'length': 180,
-                    #                     } for bs_i in range(dataloader.batch_size)]
-
-                # if is_mm:
-                #     mm_generated_motions += [{
-                #                     # 'caption': model_kwargs['y']['text'][bs_i],
-                #                     # 'tokens': tokens[bs_i],
-                #                     # 'cap_len': len(tokens[bs_i]),
-                #                     'mm_motions': mm_motions[bs_i::dataloader.batch_size],  # collect all 10 repeats from the (32*10) generated motions
-                #                     } for bs_i in range(dataloader.batch_size)]
                     
         self.generated_motion = generated_motion
         self.mm_generated_motion = mm_generated_motions
-        # self.w_vectorizer = dataloader.dataset.w_vectorizer
 
 
     def __len__(self):
@@ -636,25 +555,8 @@ class CompCCDGeneratedDataset(Dataset):
     def __getitem__(self, item):
         data = self.generated_motion[item]
         motion, length, music, filename = data['motion'], data['length'], data['music'], data['filename']
-        # sent_len = data['cap_len']
-
-        # if self.dataset.mode == 'eval':
-        #     normed_motion = motion
-        #     denormed_motion = self.dataset.t2m_dataset.inv_transform(normed_motion)
-        #     renormed_motion = (denormed_motion - self.dataset.mean_for_eval) / self.dataset.std_for_eval  # according to T2M norms
-        #     motion = renormed_motion
-        #     # This step is needed because T2M evaluators expect their norm convention
-
-        # pos_one_hots = []
-        # word_embeddings = []
-        # for token in tokens:
-        #     word_emb, pos_oh = self.w_vectorizer[token]
-        #     pos_one_hots.append(pos_oh[None, :])
-        #     word_embeddings.append(word_emb[None, :])
-        # pos_one_hots = np.concatenate(pos_one_hots, axis=0)
-        # word_embeddings = np.concatenate(word_embeddings, axis=0)
+        
         return motion, length, music, filename
-        # return word_embeddings, pos_one_hots, caption, sent_len, motion, m_length, '_'.join(tokens)
 
 class CompTEACHGeneratedDataset(Dataset):
 

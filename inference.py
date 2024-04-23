@@ -41,6 +41,42 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
     elif args.dataset == "finedance":
         njoints = 22
         smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
+        
+    for batch in origin_loader:
+        motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1"], batch["filename"]
+        motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=1)).to(device)
+        
+        b, s, c = motion.shape
+        
+        sample_contact, motion = torch.split(
+        motion, (4, motion.shape[2] - 4), dim=2)
+        pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+        q = motion[:, :, 3:].reshape(b, s, njoints, 6)
+        # go 6d to ax
+        q = ax_from_6v(q).to(motion.device)
+        
+        # full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
+        
+        # print("full pose: ", full_poses.shape)
+        
+        for q_, pos_, filename in zip(q, pos, filenames):
+            if out_dir is not None:
+                full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
+                outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                out_path = os.path.join(out_dir, outname)
+                # Create the directory if it doesn't exist
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                with open(out_path, "wb") as file_pickle:
+                    pickle.dump(
+                        {
+                            "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                            "smpl_trans": pos_.squeeze(0).cpu().numpy(),
+                            "full_pose": full_pose,
+                        },
+                        file_pickle,
+                    )
+        
+        # print(batch["length_0"], batch["length_1"])
     
     with open(log_file, 'a') as f:
         for replication in range(replication_times):
@@ -55,42 +91,6 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
             print(f'Time: {datetime.now()}', file=f, flush=True)
             
             # generating(motion_loaders, out_dir)
-            
-            for batch in origin_loader:
-                motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1"], batch["filename"]
-                motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=1)).to(device)
-                
-                b, s, c = motion.shape
-                
-                sample_contact, motion = torch.split(
-                motion, (4, motion.shape[2] - 4), dim=2)
-                pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-                q = motion[:, :, 3:].reshape(b, s, njoints, 6)
-                # go 6d to ax
-                q = ax_from_6v(q).to(motion.device)
-                
-                # full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
-                
-                # print("full pose: ", full_poses.shape)
-                
-                for q_, pos_, filename in zip(q, pos, filenames):
-                    if out_dir is not None:
-                        full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
-                        outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
-                        out_path = os.path.join(out_dir, outname)
-                        # Create the directory if it doesn't exist
-                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        with open(out_path, "wb") as file_pickle:
-                            pickle.dump(
-                                {
-                                    "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-                                    "smpl_trans": pos_.squeeze(0).cpu().numpy(),
-                                    "full_pose": full_pose,
-                                },
-                                file_pickle,
-                            )
-                
-                # print(batch["length_0"], batch["length_1"])
             
             gt_root = f'{args.inference_dir}/gt'
             pred_root = [f'{args.inference_dir}/inference']
@@ -118,8 +118,8 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
             # # print('Calculating metrics')
             # print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
 
-            print(f'!!! DONE !!!')
-            print(f'!!! DONE !!!', file=f, flush=True)
+        print(f'!!! DONE !!!')
+        print(f'!!! DONE !!!', file=f, flush=True)
 
 def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times, during_train=False):
     
@@ -152,20 +152,12 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
     model.eval()  # disable random masking
 
     eval_motion_loaders = {
-        ################
-        ## HumanML3D Dataset##
-        ################
         'vald': lambda: get_mdm_loader(
             args, model, diffusion, args.eval_batch_size,
             origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
         )
-        # 'vald': lambda: get_motion_loader(
-        #     args, model, diffusion, args.eval_batch_size,
-        #     origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
-        # )
     }
 
-    # eval_wrapper = EvaluatorCCDWrapper(args.dataset, dist_util.dev())
     inference(args, eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
 
 if __name__ == '__main__':
