@@ -44,9 +44,9 @@ def create_dataset(opt):
         slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
     else:
         print("Slicing train data")
-        slice_finedance(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
+        slice_finedance(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", 1.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
-        slice_finedance(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 0.5, slice_len, inpainting_frame, motion_len)
+        slice_finedance(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", 1.5, slice_len, inpainting_frame, motion_len)
     
 
 def parse_opt():
