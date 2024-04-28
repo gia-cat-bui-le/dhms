@@ -91,7 +91,7 @@ def add_model_options(parser):
                        help="Ratio of usage for absolute positional embeddings (APE) during training versus relative ones (RPE).")
     group.add_argument("--bpe_denoising_step", default=100, type=int,
                        help="Denoising step where transitioning from absolute to relative positional embeddings (APE -> RPE) at inference --i.e.--> schedule of Blended Positional Embeddings (BPE). 0 for all RPE, -1 or >= than 'diffusion_steps' for all APE")
-    group.add_argument("--rpe_horizon", default=100, type=int,
+    group.add_argument("--rpe_horizon", default=30, type=int,
                        help="Window size, or horizon (H), for the local/relative attention")
     group.add_argument("--use_chunked_att", action='store_true',
                        help="If True, it uses chunked windowed local/relative attention like in LongFormer.")
