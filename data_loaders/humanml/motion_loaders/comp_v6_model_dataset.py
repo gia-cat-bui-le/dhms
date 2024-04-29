@@ -615,7 +615,7 @@ class CompCCDGeneratedDataset(Dataset):
                                 full_q = full_q.unsqueeze(0)
                                 
                                 full_pose = (
-                                    self.smpl.forward(full_q, full_pos).detach().cpu().numpy()
+                                    smpl.forward(full_q, full_pos).detach().cpu().numpy()
                                 )  # b, s, 24, 3
                                 
                                 assert full_pose.shape == (1, 180, 24, 3)
