@@ -33,7 +33,6 @@ from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
 from vis import SMPLSkeleton
-from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
 
 from model.utils import extract, make_beta_schedule
 
@@ -155,7 +154,8 @@ class GaussianDiffusion():
         lambda_root_vel=0.,
         lambda_vel_rcxyz=0.,
         lambda_fc=0.,
-        dataset_name='aistpp',
+        cond_drop_prob=0.,
+        guidance_weight=3.,
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -175,8 +175,6 @@ class GaussianDiffusion():
         self.lambda_root_vel = lambda_root_vel
         self.lambda_vel_rcxyz = lambda_vel_rcxyz
         self.lambda_fc = lambda_fc
-        
-        # self.normalizer = normalizer
 
         if self.lambda_rcxyz > 0. or self.lambda_vel > 0. or self.lambda_root_vel > 0. or \
                 self.lambda_vel_rcxyz > 0. or self.lambda_fc > 0.:
@@ -237,10 +235,11 @@ class GaussianDiffusion():
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
         
-        if dataset_name == "aistpp":
-            self.smpl = SMPLSkeleton(device=self.device)
-        elif dataset_name == "finedance":
-            self.smpl = SMPLX_Skeleton(device=self.device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
+        self.smpl = SMPLSkeleton(self.device)
+        
+        self.cond_drop_prob = cond_drop_prob
+        
+        self.guidance_weight = guidance_weight
         
     def masked_l2(self, a, b, mask):
         # print("GOTO: masked l2")
@@ -348,26 +347,36 @@ class GaussianDiffusion():
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
-        model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+        if t[0] > 1.0 * self.num_timesteps:
+            weight = min(self.guidance_weight, 0)
+        elif t[0] < 0.1 * self.num_timesteps:
+            weight = min(self.guidance_weight, 1)
+        else:
+            weight = self.guidance_weight
+            
+        x_input = x.squeeze().permute(0, 2, 1)
+        model_output = model.guided_forward(x_input, model_kwargs['y']["music"], self._scale_timesteps(t), weight)
+        model_output = model_output.unsqueeze(2).permute(0, 3, 2, 1)
+        # model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+    
 
-        #! uncomment here
-        # if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
-        #     inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
-        #     assert self.model_mean_type == ModelMeanType.START_X, 'This feature supports only X_start pred for mow!'
-        #     assert model_output.shape == inpainting_mask.shape == inpainted_motion.shape
-        #     model_output = (model_output * ~inpainting_mask) + (inpainted_motion * inpainting_mask)
-        #     # print('model_output', model_output.shape, model_output)
-        #     # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
-        #     # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
-        # if 'hist_motion' in model_kwargs['y'].keys():
-        #     hist_len =  model_kwargs['y']['hist_motion'].shape[-1]
-        #     hist_motion = model_kwargs['y']['hist_motion']
-        #     model_output[:,:,:,:hist_len] = hist_motion
-        # elif 'next_motion' in model_kwargs['y'].keys():
-        #     next_len = model_kwargs['y']['next_motion'].shape[-1]
-        #     for idx in range(B):
-        #         len  = model_kwargs['y']['lengths'][idx]
-        #         model_output[idx,:,:,len-next_len:len] = model_kwargs['y']['next_motion'][idx,:,:,:]
+        if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
+            inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
+            assert self.model_mean_type == ModelMeanType.START_X, 'This feature supports only X_start pred for mow!'
+            assert model_output.shape == inpainting_mask.shape == inpainted_motion.shape
+            model_output = (model_output * ~inpainting_mask) + (inpainted_motion * inpainting_mask)
+            # print('model_output', model_output.shape, model_output)
+            # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
+            # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
+        if 'hist_motion' in model_kwargs['y'].keys():
+            hist_len =  model_kwargs['y']['hist_motion'].shape[-1]
+            hist_motion = model_kwargs['y']['hist_motion']
+            model_output[:,:,:,:hist_len] = hist_motion
+        elif 'next_motion' in model_kwargs['y'].keys():
+            next_len = model_kwargs['y']['next_motion'].shape[-1]
+            for idx in range(B):
+                len  = model_kwargs['y']['lengths'][idx]
+                model_output[idx,:,:,len-next_len:len] = model_kwargs['y']['next_motion'][idx,:,:,:]
             # model_output[:,:,:,-next_len:] = model_kwargs['y']['next_motion']
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
@@ -453,7 +462,7 @@ class GaussianDiffusion():
         x_0, x_1 = extract_fn(x, model_kwargs_0['y'], model_kwargs_1['y'], inter_frames)
         output_0 = model(x_0, self._scale_timesteps(t), **model_kwargs_0)
         if hist_frames > 0:
-            hist_motion = torch.ones(B, C, 1, hist_frames).to(output_0.device)
+            hist_motion = torch.ones(B, 151, 1, hist_frames).to(output_0.device)
             for idx in range(B):
                 len  = model_kwargs_0['y']['lengths'][idx]
                 hist_motion[idx,:,:,:] = output_0[idx,:,:,len-hist_frames:len]
@@ -975,26 +984,6 @@ class GaussianDiffusion():
         #     model_kwargs_1['y']['hist_motion'] = hist_motion
         # # model_kwargs_1['y']['hist_motion'] = [len + ]
         # # shape_1 = (shape_1[0], shape_1[1], shape_1[2], shape_1[3] +  hist_frames)
-        B = shape_0[0]
-        nfeats = shape_0[1]
-
-        if hist_frames > 0:
-            # FIXME
-            hist_motion = torch.ones(B, nfeats, 1, hist_frames).to(final_0['sample'].device)
-            for idx in range(B):
-                len  = model_kwargs_0['y']['lengths'][idx]
-                hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-hist_frames:len]
-            model_kwargs_1['y']['hframes'] = hist_motion
-
-        if inpainting_frames > 0:
-            # FIXME
-            hist_motion = torch.ones(B, nfeats, 1, inpainting_frames).to(final_0['sample'].device)
-            for idx in range(B):
-                len  = model_kwargs_0['y']['lengths'][idx]
-                hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-inpainting_frames:len]
-            model_kwargs_1['y']['hist_motion'] = hist_motion
-        # model_kwargs_1['y']['hist_motion'] = [len + ]
-        # shape_1 = (shape_1[0], shape_1[1], shape_1[2], shape_1[3] +  hist_frames)
         
         # for i, sample in enumerate(self.p_sample_loop_progressive(
         #     model,
@@ -1161,28 +1150,6 @@ class GaussianDiffusion():
                 )
                 yield out
                 img = out["sample"]
-                
-                #!: i fix here. if anything bad, delete these lines
-                
-                if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
-                    inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
-                    assert self.model_mean_type == ModelMeanType.START_X, 'This feature supports only X_start pred for mow!'
-                    assert img.shape == inpainting_mask.shape == inpainted_motion.shape
-                    img = (img * ~inpainting_mask) + (inpainted_motion * inpainting_mask)
-                    # print('img', img.shape, img)
-                    # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
-                    # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
-                if 'hist_motion' in model_kwargs['y'].keys():
-                    # print("hist motion")
-                    hist_len =  model_kwargs['y']['hist_motion'].shape[-1]
-                    hist_motion = model_kwargs['y']['hist_motion']
-                    img[:,:,:,:hist_len] = hist_motion
-                elif 'next_motion' in model_kwargs['y'].keys():
-                    # print("next motion")
-                    next_len = model_kwargs['y']['next_motion'].shape[-1]
-                    for idx in range(shape[0]):
-                        len  = model_kwargs['y']['lengths'][idx]
-                        img[idx,:,:,len-next_len:len] = model_kwargs['y']['next_motion'][idx,:,:,:]
 
 
     def p_sample_loop_progressive_comp(
@@ -2208,6 +2175,7 @@ class GaussianDiffusion():
         mask = model_kwargs['y']['mask']
         # if inpainting_type == 'hist':
         #     mask
+        x_start = x_start.squeeze().permute(0, 2, 1)
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
@@ -2228,7 +2196,8 @@ class GaussianDiffusion():
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            # model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            model_output = model(x_t, model_kwargs['y']["music"], t, cond_drop_prob=self.cond_drop_prob)
 
             if self.model_var_type in [
                 ModelVarType.LEARNED,
@@ -2261,9 +2230,13 @@ class GaussianDiffusion():
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            bs, njoints, nfeats, nframes = model_output.shape
-            model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
-            target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            # bs, njoints, nfeats, nframes = model_output.shape
+            # model_output_loss = model_output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            # target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            
+            bs, nframes, nfeats = model_output.shape
+            model_output_loss = model_output
+            target_loss = target
             
             # full reconstruction loss
             loss = self.loss_fn(model_output_loss, target_loss, reduction="none")
@@ -2271,10 +2244,6 @@ class GaussianDiffusion():
             loss = loss * extract(self.p2_loss_weight, t, loss.shape)
             
             terms["rot_mse"] = loss
-            
-            # if self.normalizer is not None:
-            #     model_output_loss = self.normalizer.unnormalize(model_output_loss)
-            #     target_loss = self.normalizer.unnormalize(target_loss)
 
             # split off contact from the rest
             model_contact, model_output_loss = torch.split(
@@ -2305,11 +2274,6 @@ class GaussianDiffusion():
             # perform FK
             model_xp = self.smpl.forward(model_q, model_x)
             target_xp = self.smpl.forward(target_q, target_x)
-            
-            #!here
-            if len(model_xp.shape) != 4:
-                model_xp = model_xp.view(b, s, -1, 3)
-                target_xp = target_xp.view(b, s, -1, 3)
 
             fk_loss = self.loss_fn(model_xp, target_xp, reduction="none")
             fk_loss = reduce(fk_loss, "b ... -> b (...)", "mean")

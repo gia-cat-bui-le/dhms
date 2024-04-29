@@ -713,7 +713,7 @@ class SMPLX_Skeleton:
 
         if len(root_positions.shape) == 3:
             b, s, c = root_positions.shape
-            root_positions = root_positions.reshape(b*s, -1)
+            root_positions = root_positions.view(b*s, -1)
         if len(rotations.shape) == 4:               # (B, S, 55, 3)  或 (B, S, 52, 3)
             b, s, c, _ = rotations.shape
             rotations = rotations.view(b*s, -1)     # (B, S, 55*3)  (B, S, 52*3)

@@ -2,8 +2,8 @@ import numpy as np
 import pickle
 
 from tqdm  import tqdm
-from evaluation.features.kinetic import extract_kinetic_features
-from evaluation.features.manual_new import extract_manual_features
+from features.kinetic import extract_kinetic_features
+from features.manual_new import extract_manual_features
 from scipy import linalg
 # kinetic, manual
 import torch
@@ -75,20 +75,20 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
     # pred_features_k = normalize(pred_features_k)
     # pred_features_m = normalize(pred_features_m)
     
-    # # print(gt_freatures_k.mean(axis=0))
-    # print(pred_features_k.mean(axis=0))
-    # # print(gt_freatures_m.mean(axis=0))
-    # print(pred_features_m.mean(axis=0))
-    # # print(gt_freatures_k.std(axis=0))
-    # print(pred_features_k.std(axis=0))
-    # # print(gt_freatures_m.std(axis=0))
-    # print(pred_features_m.std(axis=0))
+    # print(gt_freatures_k.mean(axis=0))
+    print(pred_features_k.mean(axis=0))
+    # print(gt_freatures_m.mean(axis=0))
+    print(pred_features_m.mean(axis=0))
+    # print(gt_freatures_k.std(axis=0))
+    print(pred_features_k.std(axis=0))
+    # print(gt_freatures_m.std(axis=0))
+    print(pred_features_m.std(axis=0))
 
     
     # print(gt_freatures_k)
     # print(gt_freatures_m)
 
-    # print('Calculating metrics')
+    print('Calculating metrics')
 
     fid_k = calc_fid(pred_features_k, gt_freatures_k)
     fid_m = calc_fid(pred_features_m, gt_freatures_m)
@@ -106,8 +106,8 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
 
 def calc_fid(kps_gen, kps_gt):
 
-    # print(kps_gen.shape)
-    # print(kps_gt.shape)
+    print(kps_gen.shape)
+    print(kps_gt.shape)
 
     # kps_gen = kps_gen[:20, :]
 
@@ -190,6 +190,7 @@ def calc_and_save_feats(root):
         else:
             with torch.no_grad():
                 joint3d = torch.from_numpy(np.load(os.path.join(root, file), allow_pickle=True)['full_pose'])
+        # print(file)
         joint3d = joint3d[:180,:22,:]
         assert len(joint3d.shape) == 3
         joint3d = joint3d.reshape(joint3d.shape[0], 22*3).detach().cpu().numpy()
@@ -221,8 +222,8 @@ if __name__ == '__main__':
     # mod = '_global'
 
 
-    gt_root = 'evaluation\gt'
-    pred_root = 'evaluation\inference'
+    gt_root = 'evaluation\gt_edge'
+    pred_root = 'evaluation\inference_edge'
     print('Calculating and saving features')
 
 
@@ -231,5 +232,9 @@ if __name__ == '__main__':
     calc_and_save_feats(gt_root)
     calc_and_save_feats(pred_root)
     
-    # print('Calculating metrics')
+    print('Calculating metrics')
+    print("gt_root", gt_root)
+    print("pred_root", pred_root)
     print(quantized_metrics(pred_root, gt_root))
+    print("gt_root", gt_root)
+    print("pred_root", pred_root)

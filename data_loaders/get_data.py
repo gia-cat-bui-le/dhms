@@ -43,7 +43,6 @@ def parse_resume_step_from_filename(filename):
 
 def get_dataset(args, name, split=True):
     DATA = get_dataset_class(name)
-    
     if split is False:
         
         step = parse_resume_step_from_filename(args.model_path)

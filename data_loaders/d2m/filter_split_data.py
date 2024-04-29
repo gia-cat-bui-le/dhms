@@ -4,14 +4,7 @@ import pickle
 import shutil
 from pathlib import Path
 import numpy as np
-import torch
-import sys
-import glob
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-sys.path.append(os.getcwd()) 
 
-from finedance.render_joints.smplfk import SMPLX_Skeleton, do_smplxfk, ax_to_6v, ax_from_6v
 
 def fileToList(f):
     out = open(f, "r").readlines()
@@ -61,6 +54,7 @@ def split_data(dataset_path, dataset_name):
                     continue
                 motion = f"{dataset_path}/motions/{sequence}.pkl"
                 wav = f"{dataset_path}/wavs/{sequence}.wav"
+                print(motion, wav)
                 assert os.path.isfile(motion)
                 assert os.path.isfile(wav)
                 motion_data = pickle.load(open(motion, "rb"))
@@ -78,8 +72,9 @@ def split_data(dataset_path, dataset_name):
             for sequence in split_list:
                 if sequence in filter_list:
                     continue
-                motion = f"{dataset_path}/mofea319/{sequence}.npy"
-                wav = f"{dataset_path}/music_npy_new/{sequence}.npy"
+                motion = f"{dataset_path}/motion/{sequence}.npy"
+                wav = f"{dataset_path}/music_npy/{sequence}.npy"
+                print(motion, wav)
                 assert os.path.isfile(motion)
                 assert os.path.isfile(wav)
                 data = np.load(motion)
@@ -134,6 +129,5 @@ def split_data(dataset_path, dataset_name):
                 # print("data.shape", data.shape)
                 # print("pos.shape", pos.shape)
                 # print("q.shape", q.shape)
-                
-                out_data = {"pos": pos, "q": q, "scale": [1], "full_pose": data}
+                out_data = {"pos": pos, "q": q, "scale": [1]}
                 pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.pkl", "wb"))

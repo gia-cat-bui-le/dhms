@@ -17,10 +17,7 @@ from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_to_axis_a
 
 # NOTE: import for fixing generate
 from diffusion.gaussian_diffusion import create_pre_sample, create_post_sample
-from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton, ax_to_6v
 from vis import SMPLSkeleton
-
-from smplx import SMPL, SMPLX, SMPLH
 
 def build_models(opt):
     if opt.text_enc_mod == 'bigru':
@@ -313,27 +310,23 @@ class CompCCDGeneratedDataset(Dataset):
             mm_idxs = np.sort(mm_idxs)
         else:
             mm_idxs = []
-        # print('mm_idxs', mm_idxs)
+        print('mm_idxs', mm_idxs)
         
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        
+        self.smpl = SMPLSkeleton(device)
 
         model.eval()
-        
-        if args.dataset == "aistpp":
-            nfeats = 151
-            njoints = 24
-            self.smpl = SMPLSkeleton(device=device)
-        elif args.dataset == "finedance":
-            nfeats = 139
-            njoints = 22
-            self.smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
-        
-        # print(len(dataloader))
 
         with torch.no_grad():
             for i, batch in tqdm(enumerate(dataloader)):
                 if num_samples_limit is not None and len(generated_motion) >= num_samples_limit:
                     break
+
+                # if args.inter_frames > 0:
+                #     assert args.inter_frames % 2 == 0
+                #     batch['length_0'] = [len + args.inter_frames // 2 for len in batch['length_0']]
+                #     batch['length_1_with_transition'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
 
                 bs = len(batch['length_0'])
 
@@ -382,9 +375,46 @@ class CompCCDGeneratedDataset(Dataset):
                     # else:
                     #     arg_frames = args.inpainting_frames if not args.composition else args.inter_frames
                     
-                    noise_1, noise_0 = None, None
+                    if args.shuffle_noise:
+                        feats = 151
+                        nframe = model_kwargs_0['y']['mask'].shape[-1]
                         
-                    sample = []
+                        noise_frame = 10
+                        noise_stride = 5
+            
+                        noise_0 = torch.randn(
+                            [1, feats, 1, nframe], device=device
+                        ).repeat(bs, 1, 1, 1)
+                        for frame_index in range(noise_frame, nframe, noise_stride):
+                            list_index = list(
+                                range(
+                                    frame_index - noise_frame,
+                                    frame_index + noise_stride - noise_frame,
+                                )
+                            )
+                            random.shuffle(list_index)
+                            noise_0[
+                                :, :, :, frame_index : frame_index + noise_stride
+                            ] = noise_0[:, :, :, list_index]
+                            
+                        nframe = model_kwargs_1['y']['mask'].shape[-1]
+            
+                        noise_1 = torch.randn(
+                            [1, feats, 1, nframe], device=device
+                        ).repeat(bs, 1, 1, 1)
+                        for frame_index in range(noise_frame, nframe, noise_stride):
+                            list_index = list(
+                                range(
+                                    frame_index - noise_frame,
+                                    frame_index + noise_stride - noise_frame,
+                                )
+                            )
+                            random.shuffle(list_index)
+                            noise_1[
+                                :, :, :, frame_index : frame_index + noise_stride
+                            ] = noise_1[:, :, :, list_index]
+                    else:
+                        noise_1, noise_0 = None, None
                     
                     # TODO: tách xử lý sample_0 và sample_1 thành 2 fn
                     # NOTE: original
@@ -429,11 +459,10 @@ class CompCCDGeneratedDataset(Dataset):
                         sample_0,
                         model,
                         args.hist_frames,
-                        args.inpainting_frames if not args.composition else args.inter_frames,
-                        (bs, nfeats, 1, model_kwargs_0['y']['mask'].shape[-1]),
-                        (bs, nfeats, 1, model_kwargs_1['y']['mask'].shape[-1]),
-                        noise_0=noise_0,
-                        noise_1=noise_1,
+                        args.inpainting_frames,
+                        shape_0,
+                        shape_1,                                                  
+                        noise_1=noise_1,                                                        
                         clip_denoised=clip_denoised,
                         model_kwargs_0=model_kwargs_0,
                         model_kwargs_1=model_kwargs_1,
@@ -460,12 +489,35 @@ class CompCCDGeneratedDataset(Dataset):
                                                         for len in model_kwargs_0['y']['lengths']]
                         model_kwargs_0_refine['y']['mask'] = lengths_to_mask(model_kwargs_0_refine['y']['lengths'], dist_util.dev()).unsqueeze(1).unsqueeze(2)
                         
-                        noise_0_refine = None
+                        if args.shuffle_noise:
+                            feats = 151
+                            nframe = model_kwargs_0_refine['y']['mask'].shape[-1]
+                            
+                            noise_frame = 10
+                            noise_stride = 5
+                
+                            noise_0_refine = torch.randn(
+                                [1, feats, 1, nframe], device=device
+                            ).repeat(bs, 1, 1, 1)
+                            for frame_index in range(noise_frame, nframe, noise_stride):
+                                list_index = list(
+                                    range(
+                                        frame_index - noise_frame,
+                                        frame_index + noise_stride - noise_frame,
+                                    )
+                                )
+                                random.shuffle(list_index)
+                                noise_0_refine[
+                                    :, :, :, frame_index : frame_index + noise_stride
+                                ] = noise_0_refine[:, :, :, list_index]
+                                
+                        else:
+                            noise_0_refine = None
                         
                         # TODO: tách ra 1 fn để refine
                         sample_0_refine = sample_fn_refine( # bs 135 1 len+inpainting 
                                                     model,
-                                                    (bs, nfeats, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
+                                                    (bs, 151, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
                                                     noise=noise_0_refine,
                                                     clip_denoised=False,
                                                     model_kwargs=model_kwargs_0_refine,
@@ -474,8 +526,8 @@ class CompCCDGeneratedDataset(Dataset):
                                                     progress=True,
                                                     dump_steps=None,
                                                     const_noise=False)
-                        # print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
-                        assert sample_0_refine.shape == sample_1.shape == (bs, nfeats, 1, 120)
+                        print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
+                        assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
                         
                         sample_0_refine = sample_0_refine[:,:,:,:-args.inpainting_frames]
                         to_stack = sample_0_refine[:, :, :, -args.inpainting_frames:]
@@ -484,7 +536,7 @@ class CompCCDGeneratedDataset(Dataset):
                         sample_0 = torch.cat((sample_0, to_stack), axis=-1)
                         
                         # print(sample_0.shape, sample_1.shape)
-                        assert sample_0.shape == sample_1.shape == (bs, nfeats, 1, 120)
+                        assert sample_0.shape == sample_1.shape == (bs, 151, 1, 120)
                         
                         sample = []
                         
@@ -492,15 +544,15 @@ class CompCCDGeneratedDataset(Dataset):
                             motion_0_result = sample_0[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                             motion_1_result = sample_1[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                             
-                            assert motion_0_result.shape == motion_1_result.shape == (1, 120, nfeats)
+                            assert motion_0_result.shape == motion_1_result.shape == (1, 120, 151)
                             
                             motion_result = torch.cat((motion_0_result, motion_1_result), dim=0)
                             
                             # print(motion_result.shape)
                             
-                            assert motion_result.shape == (2, 120, nfeats)
+                            assert motion_result.shape == (2, 120, 151)
                             
-                            if motion_result.shape[2] == nfeats:
+                            if motion_result.shape[2] == 151:
                                 sample_contact, motion_result = torch.split(
                                     motion_result, (4, motion_result.shape[2] - 4), dim=2
                                 )
@@ -509,7 +561,7 @@ class CompCCDGeneratedDataset(Dataset):
                             # do the FK all at once
                             b, s, c = motion_result.shape
                             pos = motion_result[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
-                            q = motion_result[:, :, 3:].reshape(b, s, njoints, 6)
+                            q = motion_result[:, :, 3:].reshape(b, s, 24, 6)
                             # go 6d to ax
                             q = ax_from_6v(q).to(device)
 
@@ -563,16 +615,13 @@ class CompCCDGeneratedDataset(Dataset):
                                 full_q = full_q.unsqueeze(0)
                                 
                                 full_pose = (
-                                    self.smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
+                                    smpl.forward(full_q, full_pos).detach().cpu().numpy()
                                 )  # b, s, 24, 3
                                 
-                                if njoints == 24:
-                                    assert full_pose.shape == (180, njoints, 3)
-                                else:
-                                    assert full_pose.shape == (180, 55, 3)
+                                assert full_pose.shape == (1, 180, 24, 3)
                                 
                                 filename = batch['filename'][idx]
-                                outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                                outname = f'evaluation/inference_edge/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                                 out_path = os.path.join("./", outname)
                                 # Create the directory if it doesn't exist
                                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -580,7 +629,7 @@ class CompCCDGeneratedDataset(Dataset):
                                 with open(out_path, "wb") as file_pickle:
                                     pickle.dump(
                                         {
-                                            "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                                            "smpl_poses": full_q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
                                             "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
                                             "full_pose": full_pose.squeeze(),
                                         },
@@ -588,26 +637,112 @@ class CompCCDGeneratedDataset(Dataset):
                                     )
                                     
                                 sample.append(full_pose)
-                    
+                            
+                        # model_kwargs_0['y']['length'] = [len - args.inpainting_frames
+                        #                                 for len in model_kwargs_0['y']['length']]
+                    # TODO: condition hết, sau đó refine ngược lại
+
+                    # sample_0 = sample_0.squeeze().permute(0, 2, 1).cpu().numpy() # B L D
+                    # sample_1 = sample_1.squeeze().permute(0, 2, 1).cpu().numpy()
+                    # length_0 = batch['length_0']
+                    # length_1 = batch['length_1']
+                    # length_transition = batch['length_transition']
+                    # # length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
+                    # # if args.inter_frames > 0:
+                    # #     length_1 = [len - args.inter_frames for len in batch['length_1_with_transition']]
+                    # length = [length_0[idx] + length_1[idx] for idx in range(bs)]
+                    # def collate_tensor_with_padding(batch):
+                    #     batch = [torch.tensor(x) for x in batch]
+                    #     dims = batch[0].dim()
+                    #     max_size = [max([b.size(i) for b in batch]) for i in range(dims)]
+                    #     size = (len(batch),) + tuple(max_size)
+                    #     canvas = batch[0].new_zeros(size=size)
+                    #     for i, b in enumerate(batch):
+                    #         sub_tensor = canvas[i]
+                    #         for d in range(dims):
+                    #             sub_tensor = sub_tensor.narrow(d, 0, b.size(d))
+                    #         sub_tensor.add_(b)
+                    #     canvas = canvas.detach().numpy()
+                    #     # canvas = [x.detach().numpy() for x in canvas]
+                    #     return canvas
+
+                    # def merge(motion_0, length_0, motion_1, length_1, length_transition): # B L D
+                    #     bs = motion_0.shape[0]
+                    #     ret = []
+                    #     for idx in range(bs):
+                    #         # transition_0 = motion_0[idx, length_0[idx] : length_0[idx] + length_transition[idx]]
+                    #         # transition_1 = motion_1[idx, length_1[idx] : length_1[idx] + length_transition[idx]]
+                    #         # transition = (transition_0 + transition_1) / 2
+                    #         # ret.append(np.concatenate((motion_0[idx,:length_0[idx]], transition, motion_1[idx,:length_1[idx]]), axis=0))
+                    #         ret.append(np.concatenate((motion_0[idx,:length_0[idx]], motion_1[idx,:length_1[idx]]), axis=0))
+                            
+                    #     print((torch.from_numpy(np.array(ret))).shape)
+                            
+                    #     return collate_tensor_with_padding(ret)
+
+                    # sample = merge(sample_0, length_0, sample_1, length_1, length_transition)
                     if t == 0:
                         sub_dicts = [{'motion': sample[bs_i],
                                     'length': 180,
                                     'music': torch.cat((model_kwargs_0['y']['music'][bs_i], model_kwargs_1['y']['music'][bs_i]), axis=0),
                                     'filename': batch["filename"][bs_i],
+                                    # 'caption': model_kwargs['y']['text'][bs_i],
+                                    # 'tokens': tokens[bs_i],
+                                    # 'cap_len': len(tokens[bs_i]),
                                     } for bs_i in range(dataloader.batch_size)]
                         generated_motion += sub_dicts
+                    # if t == 0:
+                    #     sub_dicts = [{'motion': sample[bs_i].squeeze().permute(1,0).cpu().numpy(),
+                    #                 'length': model_kwargs['y']['lengths'][bs_i].cpu().numpy(),
+                    #                 'caption': model_kwargs['y']['text'][bs_i],
+                    #                 # 'tokens': tokens[bs_i],
+                    #                 # 'cap_len': len(tokens[bs_i]),
+                    #                 } for bs_i in range(dataloader.batch_size)]
+                    #     generated_motion += sub_dicts
+
+                    if is_mm:
+                        mm_motions += [{'motion': sample[bs_i].squeeze().permute(1, 0).cpu().numpy(),
+                                        'length': 180,
+                                        } for bs_i in range(dataloader.batch_size)]
+
+                if is_mm:
+                    mm_generated_motions += [{
+                                    # 'caption': model_kwargs['y']['text'][bs_i],
+                                    # 'tokens': tokens[bs_i],
+                                    # 'cap_len': len(tokens[bs_i]),
+                                    'mm_motions': mm_motions[bs_i::dataloader.batch_size],  # collect all 10 repeats from the (32*10) generated motions
+                                    } for bs_i in range(dataloader.batch_size)]
                     
         self.generated_motion = generated_motion
         self.mm_generated_motion = mm_generated_motions
+        # self.w_vectorizer = dataloader.dataset.w_vectorizer
 
     def __len__(self):
         return len(self.generated_motion)
 
+
     def __getitem__(self, item):
         data = self.generated_motion[item]
         motion, length, music, filename = data['motion'], data['length'], data['music'], data['filename']
-        
+        # sent_len = data['cap_len']
+
+        # if self.dataset.mode == 'eval':
+        #     normed_motion = motion
+        #     denormed_motion = self.dataset.t2m_dataset.inv_transform(normed_motion)
+        #     renormed_motion = (denormed_motion - self.dataset.mean_for_eval) / self.dataset.std_for_eval  # according to T2M norms
+        #     motion = renormed_motion
+        #     # This step is needed because T2M evaluators expect their norm convention
+
+        # pos_one_hots = []
+        # word_embeddings = []
+        # for token in tokens:
+        #     word_emb, pos_oh = self.w_vectorizer[token]
+        #     pos_one_hots.append(pos_oh[None, :])
+        #     word_embeddings.append(word_emb[None, :])
+        # pos_one_hots = np.concatenate(pos_one_hots, axis=0)
+        # word_embeddings = np.concatenate(word_embeddings, axis=0)
         return motion, length, music, filename
+        # return word_embeddings, pos_one_hots, caption, sent_len, motion, m_length, '_'.join(tokens)
 
 class CompTEACHGeneratedDataset(Dataset):
 
