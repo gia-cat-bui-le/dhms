@@ -20,8 +20,9 @@ from data_loaders.humanml.networks.evaluator_wrapper import EvaluatorMDMWrapper
 # from eval import eval_humanml, eval_humanact12_uestc
 from data_loaders.get_data import get_dataset_loader
 
-from teach.data.tools import lengths_to_mask   
-from model.adan import Adan
+from teach.data.tools import lengths_to_mask    
+from inference import evaluation
+from utils.parser_util import add_evaluation_options
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
 # 20-21 within the first ~1K steps of training.
@@ -34,7 +35,7 @@ class TrainLoop:
         self.train_platform = train_platform
         self.model = model
         self.diffusion = diffusion
-        # self.cond_mode = model.cond_mode
+        self.cond_mode = model.cond_mode
         self.data = data
         self.batch_size = args.batch_size
         self.microbatch = args.batch_size  # deprecating this option
@@ -67,10 +68,9 @@ class TrainLoop:
         self.save_dir = args.save_dir
         self.overwrite = args.overwrite
 
-        # self.opt = AdamW(
-        #     self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay
-        # )
-        self.opt = Adan(self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay)
+        self.opt = AdamW(
+            self.mp_trainer.master_params, lr=self.lr, weight_decay=self.weight_decay
+        )
         if self.resume_step:
             self._load_optimizer_state()
             # Model was resumed, either due to a restart or a checkpoint
@@ -92,8 +92,7 @@ class TrainLoop:
         
         self.normalizer = normalizer
         
-        # self.shuffle_noise = True if args.shuffle_noise else False
-        self.shuffle_noise = False
+        self.shuffle_noise = True if args.shuffle_noise else False
         
         self.noise_frame = 10
         self.noise_stride = 5
@@ -177,24 +176,44 @@ class TrainLoop:
         if not self.args.eval_during_training:
             return
         start_eval = time.time()
-        if self.eval_wrapper is not None:
-            print('Running evaluation loop: [Should take about 90 min]')
-            log_file = os.path.join(self.save_dir, f'eval_humanml_{(self.step + self.resume_step):09d}.log')
-            diversity_times = 300
-            mm_num_times = 0  # mm is super slow hence we won't run it during training
-            eval_dict = eval_humanml.evaluation(
-                self.eval_wrapper, self.eval_gt_data, self.eval_data, log_file,
-                replication_times=self.args.eval_rep_times, diversity_times=diversity_times, mm_num_times=mm_num_times, run_mm=False)
-            print(eval_dict)
-            for k, v in eval_dict.items():
-                if k.startswith('R_precision'):
-                    for i in range(len(v)):
-                        self.train_platform.report_scalar(name=f'top{i + 1}_' + k, value=v[i],
-                                                          iteration=self.step + self.resume_step,
-                                                          group_name='Eval')
-                else:
-                    self.train_platform.report_scalar(name=k, value=v, iteration=self.step + self.resume_step,
-                                                      group_name='Eval')
+        
+        # eval_group = self.args.add_argument_group('eval')
+        # eval_group.add_argument("--model_path", required=True, type=str, default='./',
+        #                 help="Path to model####.pt file to be sampled.")
+        # eval_group.add_argument("--guidance_param", default=1.0, type=float,
+        #             help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
+        
+        # add_evaluation_options(self.args)
+        filename = self.ckpt_file_name()
+        self.args.model_path = os.path.join(self.save_dir, filename)
+    
+        log_file = os.path.join(self.save_dir, f'eval_aistpp.log')
+        
+        with open(log_file, 'a') as f:
+            print(f"{self.step + self.resume_step}", file=f, flush=True)
+        
+        diversity_times = 300
+        mm_num_times = 0  # mm is super slow hence we won't run it during training
+        
+        evaluation(self.args, log_file, None, False, 0, 0, mm_num_times=mm_num_times, diversity_times=diversity_times, replication_times=self.args.eval_rep_times)
+        # if self.eval_wrapper is not None:
+        #     print('Running evaluation loop: [Should take about 90 min]')
+        #     log_file = os.path.join(self.save_dir, f'eval_humanml_{(self.step + self.resume_step):09d}.log')
+        #     diversity_times = 300
+        #     mm_num_times = 0  # mm is super slow hence we won't run it during training
+        #     eval_dict = eval_humanml.evaluation(
+        #         self.eval_wrapper, self.eval_gt_data, self.eval_data, log_file,
+        #         replication_times=self.args.eval_rep_times, diversity_times=diversity_times, mm_num_times=mm_num_times, run_mm=False)
+        #     print(eval_dict)
+        #     for k, v in eval_dict.items():
+        #         if k.startswith('R_precision'):
+        #             for i in range(len(v)):
+        #                 self.train_platform.report_scalar(name=f'top{i + 1}_' + k, value=v[i],
+        #                                                   iteration=self.step + self.resume_step,
+        #                                                   group_name='Eval')
+        #         else:
+        #             self.train_platform.report_scalar(name=k, value=v, iteration=self.step + self.resume_step,
+        #                                               group_name='Eval')
 
         end_eval = time.time()
         print(f'Evaluation time: {round(end_eval-start_eval)/60}min')
@@ -232,37 +251,12 @@ class TrainLoop:
             micro_cond_0['y']['mask'] = lengths_to_mask(micro_cond_0['y']['lengths'], micro_0.device).unsqueeze(1).unsqueeze(2)
             micro_cond_0['y']['music'] = batch['music_0'].to(batch['motion_feats_0'].device)
             
-            # print("COND shape: ", micro_cond_0['y']['music'].shape)
-                
-            # print(micro_cond_0['y']['music'])
-            
-            if self.shuffle_noise:
-                bs, feats, _, nframe = micro_0.shape
-                
-                noise_0 = torch.randn(
-                    [1, feats, 1, nframe], device=micro_0.device
-                ).repeat(bs, 1, 1, 1)
-                for frame_index in range(self.noise_frame, nframe, self.noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - self.noise_frame,
-                            frame_index + self.noise_stride - self.noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_0[
-                        :, :, :, frame_index : frame_index + self.noise_stride
-                    ] = noise_0[:, :, :, list_index]
-            else:
-                noise_0 = None
-            
             compute_losses_0 = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.model,
+                self.ddp_model,
                 micro_0,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_0,
-                noise=noise_0,
                 dataset=self.data.dataset,
             )
             if last_batch or not self.use_ddp:
@@ -288,34 +282,14 @@ class TrainLoop:
             micro_1 = torch.cat((hist_frames, micro_1), axis=-1)
             # micro_cond = cond
             
-            if self.shuffle_noise:
-                bs, feats, _, nframe = micro_1.shape
-                
-                noise_1 = torch.randn(
-                    [1, feats, 1, nframe], device=micro_1.device
-                ).repeat(bs, 1, 1, 1)
-                for frame_index in range(self.noise_frame, nframe, self.noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - self.noise_frame,
-                            frame_index + self.noise_stride - self.noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_1[
-                        :, :, :, frame_index : frame_index + self.noise_stride
-                    ] = noise_1[:, :, :, list_index]
-            else:
-                noise_1 = None
-            
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_1 = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.model,
+                self.ddp_model,
                 micro_1,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_1,
-                noise=noise_1,
+                noise=None,
                 dataset=self.data.dataset
             )
             if last_batch or not self.use_ddp:
@@ -344,34 +318,14 @@ class TrainLoop:
             # micro_2 = torch.cat((micro_2, fut_frames), axis=-1)
             # micro_cond = cond
             
-            if self.shuffle_noise:
-                bs, feats, _, nframe = micro_2.shape
-                
-                noise_2 = torch.randn(
-                    [1, feats, 1, nframe], device=micro_2.device
-                ).repeat(bs, 1, 1, 1)
-                for frame_index in range(self.noise_frame, nframe, self.noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - self.noise_frame,
-                            frame_index + self.noise_stride - self.noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_2[
-                        :, :, :, frame_index : frame_index + self.noise_stride
-                    ] = noise_2[:, :, :, list_index]
-            else:
-                noise_2=None
-            
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
             compute_losses_cycle = functools.partial(
                 self.diffusion.training_losses_inpainting,
-                self.model,
+                self.ddp_model,
                 micro_2,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_2,
-                noise=noise_2,
+                noise=None,
                 dataset=self.data.dataset
             )
             if last_batch or not self.use_ddp:

@@ -75,7 +75,7 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
     # print(gt_freatures_k)
     # print(gt_freatures_m)
 
-    print('Calculating metrics')
+    # print('Calculating metrics')
 
     fid_k = calc_fid(pred_features_k, gt_freatures_k)
     fid_m = calc_fid(pred_features_m, gt_freatures_m)
@@ -92,8 +92,8 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
 
 def calc_fid(kps_gen, kps_gt):
 
-    print(kps_gen.shape)
-    print(kps_gt.shape)
+    # print(kps_gen.shape)
+    # print(kps_gt.shape)
 
     # kps_gen = kps_gen[:20, :]
 
@@ -158,7 +158,7 @@ def calc_and_save_feats(root):
     pred_list = []
 
     for pkl in os.listdir(root):
-        print(pkl)
+        # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
         joint3d = pickle.load(open(os.path.isdir(os.path.join(root, pkl)), "rb"))["full_pose"].reshape(joint3d.shape[0], 24*3)
@@ -180,12 +180,12 @@ if __name__ == '__main__':
 
     gt_root = '/raid/nhdang/Vy/data/edge_aistpp/test/motions'
     pred_root = 'save/results'
-    print('Calculating and saving features')
+    # print('Calculating and saving features')
     calc_and_save_feats(gt_root)
     calc_and_save_feats(pred_root)
 
 
-    print('Calculating metrics')
+    # print('Calculating metrics')
     print(gt_root)
     print(pred_root)
     print(quantized_metrics(pred_root, gt_root))

@@ -90,9 +90,13 @@ class GenerateDataset(Dataset):
 
         data_length = 90
         length_transistion = 60
-
-        print("FEATURE SHAPE: ", feature_slice.shape)
-        return {"length": data_length, "music": feature_slice, "filename": filename_}
+        
+        # print("FEATURE SHAPE: ", feature_slice.shape)
+        return {
+            "length": data_length,
+            "music": feature_slice,
+            "filename": filename_
+        }
 
     def load_data(self):
         # open data path
@@ -249,11 +253,11 @@ if __name__ == "__main__":
         log_file += f"_gscale{args.guidance_param}"
     log_file += f"_inpaint{args.inpainting_frames}"
     if args.refine:
-        log_file += f"_refine{args.refine_scale}"
-    log_file += f"_comp{args.inter_frames}"
-    log_file += ".log"
-    print(f"Will save to log file [{log_file}]")
-
+        log_file += f'_refine{args.refine_scale}'
+    log_file += f'_comp{args.inter_frames}'
+    log_file += '.log'
+    # print(f'Will save to log file [{log_file}]')
+    
     ########################################################################
     # LOAD SMPL
 
@@ -511,40 +515,27 @@ if __name__ == "__main__":
                     sample_1 = sample_1[:, :, :, args.inter_frames // 2 :]
                 if args.refine:
                     model_kwargs_0_refine = {}
-                    model_kwargs_0_refine["y"] = {}
-                    if args.guidance_param != 1.0:
-                        model_kwargs_0_refine["y"]["scale"] = model_kwargs_0["y"][
-                            "scale"
-                        ]
-                    model_kwargs_0_refine["y"]["music"] = model_kwargs_0["y"]["music"]
-                    model_kwargs_0_refine["y"]["next_motion"] = sample_1_tmp[
-                        :, :, :, : args.inpainting_frames
-                    ]
-                    model_kwargs_0_refine["y"]["lengths"] = [
-                        len + args.inpainting_frames
-                        for len in model_kwargs_0["y"]["lengths"]
-                    ]
-                    model_kwargs_0_refine["y"]["mask"] = (
-                        lengths_to_mask(
-                            model_kwargs_0_refine["y"]["lengths"], dist_util.dev()
-                        )
-                        .unsqueeze(1)
-                        .unsqueeze(2)
-                    )
-
-                    sample_0_refine = sample_fn_refine(  # bs 135 1 len+inpainting
-                        model,
-                        (bs, 151, 1, model_kwargs_0_refine["y"]["mask"].shape[-1]),
-                        noise=None,
-                        clip_denoised=False,
-                        model_kwargs=model_kwargs_0_refine,
-                        skip_timesteps=0,
-                        init_image=None,
-                        progress=True,
-                        dump_steps=None,
-                        const_noise=False,
-                    )
-                    print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
+                    model_kwargs_0_refine['y'] = {}
+                    if scale != 1.:
+                        model_kwargs_0_refine['y']['scale'] = model_kwargs_0['y']['scale']
+                    model_kwargs_0_refine['y']['music'] = model_kwargs_0['y']['music']
+                    model_kwargs_0_refine['y']['next_motion'] = sample_1_tmp[:,:,:,:args.inpainting_frames]
+                    model_kwargs_0_refine['y']['lengths'] = [len + args.inpainting_frames
+                                                    for len in model_kwargs_0['y']['lengths']]
+                    model_kwargs_0_refine['y']['mask'] = lengths_to_mask(model_kwargs_0_refine['y']['lengths'], dist_util.dev()).unsqueeze(1).unsqueeze(2)
+                    
+                    sample_0_refine = sample_fn_refine( # bs 135 1 len+inpainting 
+                                                model,
+                                                (bs, 151, 1, model_kwargs_0_refine['y']['mask'].shape[-1]),
+                                                noise=None,
+                                                clip_denoised=False,
+                                                model_kwargs=model_kwargs_0_refine,
+                                                skip_timesteps=0, 
+                                                init_image=None,
+                                                progress=True,
+                                                dump_steps=None,
+                                                const_noise=False)
+                    # print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
                     assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
 
                     sample_0_refine = sample_0_refine[

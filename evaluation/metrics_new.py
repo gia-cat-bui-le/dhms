@@ -1,7 +1,7 @@
 import numpy as np
 import pickle 
-from features.kinetic import extract_kinetic_features
-from features.manual_new import extract_manual_features
+from evaluation.features.kinetic import extract_kinetic_features
+from evaluation.features.manual_new import extract_manual_features
 from scipy import linalg
 
 # kinetic, manual
@@ -75,7 +75,7 @@ def quantized_metrics(predicted_pkl_root, gt_pkl_root):
     # print(gt_freatures_k)
     # print(gt_freatures_m)
 
-    print('Calculating metrics')
+    # print('Calculating metrics')
 
     fid_k = calc_fid(pred_features_k, gt_freatures_k)
     fid_m = calc_fid(pred_features_m, gt_freatures_m)
@@ -179,12 +179,12 @@ def calc_and_save_feats(root):
 if __name__ == '__main__':
 
     #TODO: fix the path
-    gt_root = 'evaluation\gt_noise'
+    gt_root = 'evaluation\gt'
     
     calc_and_save_feats(gt_root)
 
     pred_roots = [
-        'evaluation\inference_noise'
+        'evaluation\inference'
     ]
 
     for pred_root in pred_roots:
