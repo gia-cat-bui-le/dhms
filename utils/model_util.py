@@ -78,12 +78,12 @@ def get_model_args(args, data):
         "music_dim": feature_dim,
         "cond_drop_prob": cond_drop_prob,
         # FlowMDM
-        "diffusion_steps": args.diffusion_steps,
-        "max_seq_att": args.max_seq_att,
-        "bpe_denoising_step": args.bpe_denoising_step,
-        "bpe_training_ratio": args.bpe_training_ratio,
-        "rpe_horizon": args.rpe_horizon,
-        "use_chunked_att": args.use_chunked_att,
+        # "diffusion_steps": args.diffusion_steps,
+        # "max_seq_att": args.max_seq_att,
+        # "bpe_denoising_step": args.bpe_denoising_step,
+        # "bpe_training_ratio": args.bpe_training_ratio,
+        # "rpe_horizon": args.rpe_horizon,
+        # "use_chunked_att": args.use_chunked_att,
     }
 
 
