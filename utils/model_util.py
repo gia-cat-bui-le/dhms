@@ -59,13 +59,15 @@ def get_model_args(args, data):
             'emb_trans_dec': args.emb_trans_dec, 'dataset': args.dataset,
             'hist_frames': args.hist_frames, 'motion_mask': args.motion_mask, 'music_dim': feature_dim,
             'cond_drop_prob': cond_drop_prob,
-            # FlowMDM
-            'diffusion_steps': args.diffusion_steps,
-            'max_seq_att': args.max_seq_att, 
-            'bpe_denoising_step': args.bpe_denoising_step,
-            'bpe_training_ratio': args.bpe_training_ratio,
-            'rpe_horizon': args.rpe_horizon,
-            'use_chunked_att': args.use_chunked_att,}
+            #! here
+            # # FlowMDM
+            # 'diffusion_steps': args.diffusion_steps,
+            # 'max_seq_att': args.max_seq_att, 
+            # 'bpe_denoising_step': args.bpe_denoising_step,
+            # 'bpe_training_ratio': args.bpe_training_ratio,
+            # 'rpe_horizon': args.rpe_horizon,
+            # 'use_chunked_att': args.use_chunked_att,
+            }
 
 def create_gaussian_diffusion(args):
     # default params
