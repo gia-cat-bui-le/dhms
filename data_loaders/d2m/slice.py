@@ -13,6 +13,7 @@ def slice_audio(audio_file, stride, length, out_dir, num_slices, inpainting_fram
     # stride, length in seconds
     FPS = 30
     audio = np.load(audio_file)
+    # print("audio: ", len(audio))
     file_name = os.path.splitext(os.path.basename(audio_file))[0]
     start_idx = 0
     idx = 0
@@ -29,6 +30,44 @@ def slice_audio(audio_file, stride, length, out_dir, num_slices, inpainting_fram
         idx += 1
     return idx
 
+def slice_motion_finedance(motion_file, stride, length, out_dir, inpainting_frames, motion_len):
+    motion = pickle.load(open(motion_file, "rb"))
+    pos, q, full_pose = motion["pos"], motion["q"], motion["full_pose"]
+    scale = motion["scale"][0]
+
+    file_name = os.path.splitext(os.path.basename(motion_file))[0]
+    # normalize root position
+    pos /= scale
+    start_idx = 0
+    window = int(length * 30)
+    stride_step = int(stride * 30)
+    inpainting_frames_ = int(inpainting_frames * 30)
+    motion_len_ = int(motion_len * 30)
+    slice_count = 0
+    # slice until done or until matching audio slices
+    while start_idx <= len(pos) - window:
+        # pos_0, q_0 = (
+        #     pos[start_idx : start_idx + motion_len_],
+        #     q[start_idx : start_idx + motion_len_],
+        # ) # lenght_0
+       
+        # pos_1, q_1 = (
+        #     pos[start_idx + motion_len_ : start_idx + window],
+        #     q[start_idx + motion_len_ : start_idx + window],
+        # ) # lenght_0
+        full_pose_0 = full_pose[start_idx : start_idx + motion_len_]
+        full_pose_1 = full_pose[start_idx + motion_len_ : start_idx + window]
+        out = { "full_pose_0": full_pose_0,
+               "full_pose_1": full_pose_1,
+                "length_0": int(motion_len_),
+                "length_1": int(motion_len_),
+                "length_transition": int(inpainting_frames_),
+                }
+        
+        pickle.dump(out, open(f"{out_dir}/{file_name}_slice{slice_count}.pkl", "wb"))
+        start_idx += stride_step
+        slice_count += 1
+    return slice_count
 
 def slice_motion(motion_file, stride, length, out_dir, inpainting_frames, motion_len):
     motion = pickle.load(open(motion_file, "rb"))
@@ -46,27 +85,11 @@ def slice_motion(motion_file, stride, length, out_dir, inpainting_frames, motion
     slice_count = 0
     # slice until done or until matching audio slices
     while start_idx <= len(pos) - window:
-        # pos_slice, q_slice = (
-        #     pos[start_idx : start_idx + int(window/2)],
-        #     q[start_idx : start_idx + int(window/2)],
-        # )
-        # pos_slice_1, q_slice_1 = (
-        #     pos[start_idx + int(window/2) : start_idx + window],
-        #     q[start_idx + int(window/2) : start_idx + window],
-        # )
         
         pos_0, q_0 = (
             pos[start_idx : start_idx + motion_len_],
             q[start_idx : start_idx + motion_len_],
         ) # lenght_0
-        # pos_0_with_transition, q_0_with_transition = (
-        #     pos[start_idx : start_idx + motion_len_ + inpainting_frames_],
-        #     q[start_idx : start_idx + motion_len_ + inpainting_frames_],
-        # ) # lenght_0
-        # pos_1_with_transition, q_1_with_transition = (
-        #     pos[start_idx + motion_len_ : start_idx + window],
-        #     q[start_idx + motion_len_ : start_idx + window],
-        # ) # lenght_0
         pos_1, q_1 = (
             pos[start_idx + motion_len_ : start_idx + window],
             q[start_idx + motion_len_ : start_idx + window],
@@ -74,10 +97,6 @@ def slice_motion(motion_file, stride, length, out_dir, inpainting_frames, motion
                     
         out = {"pos_0": pos_0, 
                 "q_0":q_0,
-                # "pos_0_with_transition": pos_0_with_transition,
-                # "q_0_with_transition": q_0_with_transition,
-                # "pos_1_with_transition": pos_1_with_transition,
-                # "q_1_with_transition": q_1_with_transition,
                 "pos_1": pos_1,
                 "q_1": q_1,
                 "length_0": int(motion_len_ / 2),
@@ -106,6 +125,40 @@ def slice_aistpp(motion_dir, wav_dir, stride=0.5, length=5, inpainting_frames=2.
         w_name = os.path.splitext(os.path.basename(wav))[0]
         assert m_name == w_name, str((motion, wav))
         motion_slices = slice_motion(motion, stride, length, motion_out, inpainting_frames, motion_len)
+        audio_slices = slice_audio(wav, stride, length, wav_out, motion_slices, inpainting_frames, motion_len)
+        # make sure the slices line up
+        assert audio_slices == motion_slices, str(
+            (wav, motion, audio_slices, motion_slices)
+        )
+        
+def slice_finedance(motion_dir, wav_dir, stride=0.5, length=5, inpainting_frames=2.5, motion_len=2.5):
+    wavs = sorted(glob.glob(f"{wav_dir}/*.npy"))
+    motions = sorted(glob.glob(f"{motion_dir}/*.pkl"))
+    wav_out = wav_dir + "_sliced"
+    motion_out = motion_dir + "_sliced"
+    os.makedirs(wav_out, exist_ok=True)
+    os.makedirs(motion_out, exist_ok=True)
+    assert len(wavs) == len(motions)
+    for wav, motion in tqdm(zip(wavs, motions)):
+        # make sure name is matching
+        music_fea = np.load(wav)
+        motion_fea = pickle.load(open(motion, "rb"))
+        pos, q, scale, full_pose = motion_fea["pos"], motion_fea["q"], motion_fea["scale"], motion_fea["full_pose"]
+        max_length = min(music_fea.shape[0], q.shape[0])
+
+        music_fea = music_fea[:max_length, :]
+        pos = pos[:max_length, :]
+        q = q[:max_length, :]
+        full_pose = full_pose[:max_length, :]
+        out_data = {"pos": pos, "q": q, "scale": scale, "full_pose": full_pose}
+        
+        pickle.dump(out_data, open(motion, "wb"))
+        np.save(wav, music_fea)
+        
+        m_name = os.path.splitext(os.path.basename(motion))[0]
+        w_name = os.path.splitext(os.path.basename(wav))[0]
+        assert m_name == w_name, str((motion, wav))
+        motion_slices = slice_motion_finedance(motion, stride, length, motion_out, inpainting_frames, motion_len)
         audio_slices = slice_audio(wav, stride, length, wav_out, motion_slices, inpainting_frames, motion_len)
         # make sure the slices line up
         assert audio_slices == motion_slices, str(

@@ -45,11 +45,6 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from typing import Any
 
-# NOTE: add imports
-from data_loaders.humanml.motion_loaders.comp_v6_model_dataset import (
-    create_pre_sample,
-    create_post_sample,
-)
 from teach.data.tools import lengths_to_mask
 import random
 from pytorch3d.transforms import axis_angle_to_quaternion, quaternion_to_axis_angle
@@ -187,17 +182,20 @@ def get_dataset_loader(args, batch_size):
     return loader, dataset.normalizer
 
 
-def create_model_kwargs(batch_index):
+def create_model_kwargs(batch_index, batch, scale):
+    bs = len(batch["length_0"])
+
     model_kwargs_0 = {}
     model_kwargs_0["y"] = {}
     if args.inter_frames > 0:
         model_kwargs_0["y"]["lengths"] = [
-            len + args.inter_frames // 2 for len in batch["length"]
+            len + args.inter_frames // 2 for len in batch["length_0"]
         ]
     else:
-        model_kwargs_0["y"]["lengths"] = batch["length"]
-    model_kwargs_0["y"]["music"] = batch["music"][0][batch_index - 1].to(device)
-    # print(batch["music"])
+        model_kwargs_0["y"]["lengths"] = batch["length_0"]
+    model_kwargs_0["y"]["music"] = batch["music_0"][batch_index - 1].to(
+        "cuda:0" if torch.cuda.is_available() else "cpu"
+    )
     model_kwargs_0["y"]["mask"] = (
         lengths_to_mask(model_kwargs_0["y"]["lengths"], dist_util.dev())
         .unsqueeze(1)
@@ -209,18 +207,36 @@ def create_model_kwargs(batch_index):
 
     if args.inter_frames > 0:
         model_kwargs_1["y"]["lengths"] = [
-            len + args.inter_frames // 2 for len in batch["length"]
+            len + args.inter_frames // 2 for len in batch["length_1"]
         ]
     else:
         model_kwargs_1["y"]["lengths"] = [
-            args.inpainting_frames + len for len in batch["length"]
+            args.inpainting_frames + len for len in batch["length_1"]
         ]
-    model_kwargs_1["y"]["music"] = batch["music"][0][batch_index].to(device)
+    model_kwargs_1["y"]["music"] = batch["music_1"][batch_index].to(
+        "cuda:0" if torch.cuda.is_available() else "cpu"
+    )
     model_kwargs_1["y"]["mask"] = (
         lengths_to_mask(model_kwargs_1["y"]["lengths"], dist_util.dev())
         .unsqueeze(1)
         .unsqueeze(2)
     )
+    # add CFG scale to batch
+    if scale != 1.0:
+        model_kwargs_0["y"]["scale"] = (
+            torch.ones(
+                len(model_kwargs_0["y"]["lengths"]),
+                device="cuda:0" if torch.cuda.is_available() else "cpu",
+            )
+            * scale
+        )
+        model_kwargs_1["y"]["scale"] = (
+            torch.ones(
+                len(model_kwargs_1["y"]["lengths"]),
+                device="cuda:0" if torch.cuda.is_available() else "cpu",
+            )
+            * scale
+        )
     with open(f"./output_preview/model_kwargs/org_{i}.txt", "w") as file:
         file.write(f"model 0:\n{model_kwargs_0}\n")
         file.write(f"model 1:\n{model_kwargs_1}\n")
