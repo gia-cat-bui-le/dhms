@@ -2,8 +2,8 @@
 #SBATCH --job-name=job
 #SBATCH --ntasks=1
 #SBATCH --gpus=1             # total number of GPUs
-#SBATCH --output="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training_cont/dhms.out"
-#SBATCH --error="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training_cont/dhms.err"
+#SBATCH --output="/media/nhdang/Vy_Cat/dhms-baseline/scripts/log_out/training_baseline_cont/dhms.out"
+#SBATCH --error="/media/nhdang/Vy_Cat/dhms-baseline/scripts/log_out/training_baseline_cont/dhms.err"
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=40G
@@ -16,4 +16,4 @@ cd /media/nhdang/Vy_Cat/dhms
 
 conda activate dhms
 
-python3 train_diffusion.py --save_dir ./save/pcmdm_cont --dataset aistpp --hist_frames 75 --overwrite --resume_checkpoint save/pcmdm_cont/model000100000.pt --resume_step
+python3 train_diffusion.py --save_dir /raid/nhdang/Vy/dhms/pcmdm_baseline_cont --dataset aistpp --hist_frames 30 --overwrite --resume_checkpoint /raid/nhdang/Vy/dhms/pcmdm_cont/model000110000.pt --resume_step
