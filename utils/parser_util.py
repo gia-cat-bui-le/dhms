@@ -117,29 +117,29 @@ def add_diffusion_options(parser):
 def add_model_options(parser):
     group = parser.add_argument_group("model")
     # =================== FlowMDM specific arguments ===================
-    group.add_argument(
-        "--bpe_training_ratio",
-        default=0.5,
-        type=float,
-        help="Ratio of usage for absolute positional embeddings (APE) during training versus relative ones (RPE).",
-    )
-    group.add_argument(
-        "--bpe_denoising_step",
-        default=100,
-        type=int,
-        help="Denoising step where transitioning from absolute to relative positional embeddings (APE -> RPE) at inference --i.e.--> schedule of Blended Positional Embeddings (BPE). 0 for all RPE, -1 or >= than 'diffusion_steps' for all APE",
-    )
-    group.add_argument(
-        "--rpe_horizon",
-        default=30,
-        type=int,
-        help="Window size, or horizon (H), for the local/relative attention",
-    )
-    group.add_argument(
-        "--use_chunked_att",
-        action="store_true",
-        help="If True, it uses chunked windowed local/relative attention like in LongFormer.",
-    )
+    # group.add_argument(
+    #     "--bpe_training_ratio",
+    #     default=0.5,
+    #     type=float,
+    #     help="Ratio of usage for absolute positional embeddings (APE) during training versus relative ones (RPE).",
+    # )
+    # group.add_argument(
+    #     "--bpe_denoising_step",
+    #     default=100,
+    #     type=int,
+    #     help="Denoising step where transitioning from absolute to relative positional embeddings (APE -> RPE) at inference --i.e.--> schedule of Blended Positional Embeddings (BPE). 0 for all RPE, -1 or >= than 'diffusion_steps' for all APE",
+    # )
+    # group.add_argument(
+    #     "--rpe_horizon",
+    #     default=30,
+    #     type=int,
+    #     help="Window size, or horizon (H), for the local/relative attention",
+    # )
+    # group.add_argument(
+    #     "--use_chunked_att",
+    #     action="store_true",
+    #     help="If True, it uses chunked windowed local/relative attention like in LongFormer.",
+    # )
     # =================== MDM related arguments  ===================
     group.add_argument(
         "--max_seq_att", default=1024, type=int, help="Max window size for attention"
