@@ -104,64 +104,64 @@ class MDM(nn.Module):
         
         #!here
         #########################
-        self.use_chunked_att = kargs.get('use_chunked_att', False)
-        bpe_training_rate = kargs.get('bpe_training_ratio', 0.5) # for training, we dropout with prob 50% --> APE vs RPE
-        bpe_inference_step = kargs.get('bpe_denoising_step', None)
-        diffusion_steps = kargs.get('diffusion_steps', None)
-        self.bpe_schedule = BPE_Schedule(bpe_training_rate, bpe_inference_step, diffusion_steps)
-        ws = kargs.get('rpe_horizon', -1) # Max attention horizon
-        self.local_attn_window_size = 200 if ws == -1 else ws
-        print("[Training] RPE/APE rate:", bpe_training_rate)
-        print(f"[Inference] BPE switch from APE to RPE at denoising step {bpe_inference_step}/{diffusion_steps}.")
-        print("Local attention window size:", self.local_attn_window_size)
+        # self.use_chunked_att = kargs.get('use_chunked_att', False)
+        # bpe_training_rate = kargs.get('bpe_training_ratio', 0.5) # for training, we dropout with prob 50% --> APE vs RPE
+        # bpe_inference_step = kargs.get('bpe_denoising_step', None)
+        # diffusion_steps = kargs.get('diffusion_steps', None)
+        # self.bpe_schedule = BPE_Schedule(bpe_training_rate, bpe_inference_step, diffusion_steps)
+        # ws = kargs.get('rpe_horizon', -1) # Max attention horizon
+        # self.local_attn_window_size = 200 if ws == -1 else ws
+        # print("[Training] RPE/APE rate:", bpe_training_rate)
+        # print(f"[Inference] BPE switch from APE to RPE at denoising step {bpe_inference_step}/{diffusion_steps}.")
+        # print("Local attention window size:", self.local_attn_window_size)
 
-        self.seqTransEncoder = ContinuousTransformerWrapper(
-            dim_in = self.latent_dim, dim_out = self.latent_dim,
-            emb_dropout = self.dropout,
-            max_seq_len = self.max_seq_att,
-            use_abs_pos_emb = True,
-            absolute_bpe_schedule = self.bpe_schedule, # bpe schedule for absolute embeddings (APE)
-            attn_layers = Encoder(
-                dim = self.latent_dim,
-                depth = self.num_layers,
-                heads = self.num_heads,
-                ff_mult = int(np.round(self.ff_size / self.latent_dim)), # 2 for MDM hyper params
-                layer_dropout = self.dropout, cross_attn_tokens_dropout = 0,
+        # self.seqTransEncoder = ContinuousTransformerWrapper(
+        #     dim_in = self.latent_dim, dim_out = self.latent_dim,
+        #     emb_dropout = self.dropout,
+        #     max_seq_len = self.max_seq_att,
+        #     use_abs_pos_emb = True,
+        #     absolute_bpe_schedule = self.bpe_schedule, # bpe schedule for absolute embeddings (APE)
+        #     attn_layers = Encoder(
+        #         dim = self.latent_dim,
+        #         depth = self.num_layers,
+        #         heads = self.num_heads,
+        #         ff_mult = int(np.round(self.ff_size / self.latent_dim)), # 2 for MDM hyper params
+        #         layer_dropout = self.dropout, cross_attn_tokens_dropout = 0,
 
-                # ======== FLOWMDM ========
-                custom_layers=('A', 'f'), # A --> PCCAT
-                custom_query_fn = self.process_cond_input, # function that merges the condition into the query --> PCCAT dense layer (see Fig. 3)
-                attn_max_attend_past = self.local_attn_window_size,
-                attn_max_attend_future = self.local_attn_window_size,
-                # ======== RELATIVE POSITIONAL EMBEDDINGS ========
-                rotary_pos_emb = True, # rotary embeddings
-                rotary_bpe_schedule = self.bpe_schedule, # bpe schedule for rotary embeddings (RPE)
-            )
-        )
+        #         # ======== FLOWMDM ========
+        #         custom_layers=('A', 'f'), # A --> PCCAT
+        #         custom_query_fn = self.process_cond_input, # function that merges the condition into the query --> PCCAT dense layer (see Fig. 3)
+        #         attn_max_attend_past = self.local_attn_window_size,
+        #         attn_max_attend_future = self.local_attn_window_size,
+        #         # ======== RELATIVE POSITIONAL EMBEDDINGS ========
+        #         rotary_pos_emb = True, # rotary embeddings
+        #         rotary_bpe_schedule = self.bpe_schedule, # bpe schedule for rotary embeddings (RPE)
+        #     )
+        # )
         ########################
         
-        # if self.arch == 'inpainting':
-        #     # print("TRANS_ENC init")
-        #     seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
-        #                                                     head=self.num_heads,
-        #                                                     dim_feedforward=self.ff_size,
-        #                                                     dropout=self.dropout,
-        #                                                     activation=self.activation)
+        if self.arch == 'inpainting':
+            # print("TRANS_ENC init")
+            seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
+                                                            head=self.num_heads,
+                                                            dim_feedforward=self.ff_size,
+                                                            dropout=self.dropout,
+                                                            activation=self.activation)
 
-        #     self.seqTransEncoder = nn.TransformerEncoder(seqTransEncoderLayer,
-        #                                                 num_layers=self.num_layers)
-        # elif self.arch == 'trans_dec':
-        #     print("TRANS_DEC init")
-        #     seqTransDecoderLayer = nn.TransformerDecoderLayer(d_model=self.latent_dim,
-        #                                                     nhead=self.num_heads,
-        #                                                     dim_feedforward=self.ff_size,
-        #                                                     dropout=self.dropout,
-        #                                                     activation=activation)
-        #     self.seqTransDecoder = nn.TransformerDecoder(seqTransDecoderLayer,
-        #                                                 num_layers=self.num_layers)
+            self.seqTransEncoder = nn.TransformerEncoder(seqTransEncoderLayer,
+                                                        num_layers=self.num_layers)
+        elif self.arch == 'trans_dec':
+            print("TRANS_DEC init")
+            seqTransDecoderLayer = nn.TransformerDecoderLayer(d_model=self.latent_dim,
+                                                            nhead=self.num_heads,
+                                                            dim_feedforward=self.ff_size,
+                                                            dropout=self.dropout,
+                                                            activation=activation)
+            self.seqTransDecoder = nn.TransformerDecoder(seqTransDecoderLayer,
+                                                        num_layers=self.num_layers)
         
-        # else:
-        #     raise ValueError('Please choose correct architecture [trans_enc, trans_dec, gru]')
+        else:
+            raise ValueError('Please choose correct architecture [trans_enc, trans_dec, gru]')
 
         self.embed_timestep = TimestepEmbedder(self.latent_dim, self.sequence_pos_encoder)
 
