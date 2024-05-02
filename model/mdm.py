@@ -143,7 +143,7 @@ class MDM(nn.Module):
         if self.arch == 'inpainting':
             # print("TRANS_ENC init")
             seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
-                                                            head=self.num_heads,
+                                                            nhead=self.num_heads,
                                                             dim_feedforward=self.ff_size,
                                                             dropout=self.dropout,
                                                             activation=self.activation)
