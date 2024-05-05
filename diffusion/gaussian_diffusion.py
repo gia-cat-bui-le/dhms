@@ -2202,7 +2202,7 @@ class GaussianDiffusion():
             target_loss = target.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
             
             # full reconstruction loss
-            loss = self.loss_fn(model_output_loss, target_loss, reduction="none")
+            loss = self.masked_l2(target, model_output, mask)
             loss = reduce(loss, "b ... -> b (...)", "mean")
             loss = loss * extract(self.p2_loss_weight, t, loss.shape)
             
