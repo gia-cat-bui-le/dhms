@@ -399,6 +399,7 @@ class CompCCDGeneratedDataset(Dataset):
                         sample_0 = sample_0[:,:,:,:-args.inter_frames // 2]
                         sample_1 = sample_1[:,:,:,args.inter_frames // 2:]
                     if args.refine:
+                        print("REFINE")
                         model_kwargs_0_refine = {}
                         model_kwargs_0_refine['y'] = {}
                         if scale != 1.:
@@ -538,8 +539,9 @@ class CompCCDGeneratedDataset(Dataset):
                                 sample.append(full_pose)
                     
                     else:
+                        print("NOT REFINE")
                         sample_1_tmp = sample_1[:, :, :, :60]
-                        sample_1_remain_tmp = sample_0[:, :, :, 60 :]
+                        sample_1_remain_tmp = sample_1[:, :, :, 60 :]
                         sample_0_tmp = sample_0[:, :, :, -60:]
                         sample_0_remain_tmp = sample_0[:, :, :, : -60]
                         assert sample_0_tmp.shape == sample_1_tmp.shape == (bs, nfeats, 1, 60)
@@ -558,11 +560,17 @@ class CompCCDGeneratedDataset(Dataset):
                             
                             # print(motion_result.shape)
                             
-                            assert motion_result.shape == (2, 120, nfeats)
+                            assert motion_result.shape == (2, 60, nfeats)
                             
                             if motion_result.shape[2] == nfeats:
                                 sample_contact, motion_result = torch.split(
                                     motion_result, (4, motion_result.shape[2] - 4), dim=2
+                                )
+                                sample_contact, sample_0_remain = torch.split(
+                                    sample_0_remain, (4, sample_0_remain.shape[2] - 4), dim=2
+                                )
+                                sample_contact, sample_1_remain = torch.split(
+                                    sample_1_remain, (4, sample_1_remain.shape[2] - 4), dim=2
                                 )
                             else:
                                 sample_contact = None
@@ -619,22 +627,22 @@ class CompCCDGeneratedDataset(Dataset):
                                 full_q[id_ : id_ + half] += q[-1, half:]
 
                                 # unsqueeze for fk
-                                pos_0 = sample_0_remain[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                                pos_0 = sample_0_remain[:, :, :3].squeeze().to(device)  # np.zeros((sample.shape[0], 3))
                                 q_0 = sample_0_remain[:, :, 3:].reshape(1, 30, njoints, 6)
-                                q_0 = ax_from_6v(q_0).to(device)
+                                q_0 = ax_from_6v(q_0).squeeze().to(device)
                                 
-                                pos_1 = sample_1_remain[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                                pos_1 = sample_1_remain[:, :, :3].squeeze().to(device)  # np.zeros((sample.shape[0], 3))
                                 q_1 = sample_1_remain[:, :, 3:].reshape(1, 60, njoints, 6)
-                                q_1 = ax_from_6v(q_1).to(device)
+                                q_1 = ax_from_6v(q_1).squeeze().to(device)
                                 
-                                full_pos = torch.cat((pos_0, full_pos, pos_1), dim=1)
-                                full_q = torch.cat((q_0, full_q, q_1), dim=1)
+                                full_pos = torch.cat((pos_0, full_pos, pos_1), dim=0)
+                                full_q = torch.cat((q_0, full_q, q_1), dim=0)
                                 
                                 full_pos = full_pos.unsqueeze(0)
                                 full_q = full_q.unsqueeze(0)
                                 
                                 assert full_pos.shape == (1, 180, 3)
-                                assert full_q.shape == (1, 180, njoints, 6)
+                                assert full_q.shape == (1, 180, njoints, 3)
                                 
                                 full_pose = (
                                     self.smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
