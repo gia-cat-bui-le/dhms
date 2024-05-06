@@ -537,6 +537,132 @@ class CompCCDGeneratedDataset(Dataset):
                                     
                                 sample.append(full_pose)
                     
+                    else:
+                        sample_1_tmp = sample_1[:, :, :, :60]
+                        sample_1_remain_tmp = sample_0[:, :, :, 60 :]
+                        sample_0_tmp = sample_0[:, :, :, -60:]
+                        sample_0_remain_tmp = sample_0[:, :, :, : -60]
+                        assert sample_0_tmp.shape == sample_1_tmp.shape == (bs, nfeats, 1, 60)
+                        
+                        sample = []
+                        
+                        for idx in range(bs):
+                            motion_0_result = sample_0_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            motion_1_result = sample_1_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            sample_0_remain = sample_0_remain_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            sample_1_remain = sample_1_remain_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            
+                            assert motion_0_result.shape == motion_1_result.shape == (1, 60, nfeats)
+                            
+                            motion_result = torch.cat((motion_0_result, motion_1_result), dim=0)
+                            
+                            # print(motion_result.shape)
+                            
+                            assert motion_result.shape == (2, 120, nfeats)
+                            
+                            if motion_result.shape[2] == nfeats:
+                                sample_contact, motion_result = torch.split(
+                                    motion_result, (4, motion_result.shape[2] - 4), dim=2
+                                )
+                            else:
+                                sample_contact = None
+                            # do the FK all at once
+                            b, s, c = motion_result.shape
+                            pos = motion_result[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                            q = motion_result[:, :, 3:].reshape(b, s, njoints, 6)
+                            # go 6d to ax
+                            q = ax_from_6v(q).to(device)
+
+                            b, s, c1, c2 = q.shape
+                            assert s % 2 == 0
+                            half = s // 2
+                            if b > 1:
+                                # if long mode, stitch position using linear interp
+
+                                fade_out = torch.ones((1, s, 1)).to(pos.device)
+                                fade_in = torch.ones((1, s, 1)).to(pos.device)
+                                fade_out[:, half:, :] = torch.linspace(1, 0, half)[None, :, None].to(
+                                    pos.device
+                                )
+                                fade_in[:, :half, :] = torch.linspace(0, 1, half)[None, :, None].to(
+                                    pos.device
+                                )
+
+                                pos[:-1] *= fade_out
+                                pos[1:] *= fade_in
+
+                                full_pos = torch.zeros((s + half * (b - 1), 3)).to(pos.device)
+                                id_ = 0
+                                for pos_slice in pos:
+                                    full_pos[id_ : id_ + s] += pos_slice
+                                    id_ += half
+
+                                # stitch joint angles with slerp
+                                slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(pos.device)
+
+                                left, right = q[:-1, half:], q[1:, :half]
+                                # convert to quat
+                                left, right = (
+                                    axis_angle_to_quaternion(left),
+                                    axis_angle_to_quaternion(right),
+                                )
+                                merged = quat_slerp(left, right, slerp_weight)  # (b-1) x half x ...
+                                # convert back
+                                merged = quaternion_to_axis_angle(merged)
+
+                                full_q = torch.zeros((s + half * (b - 1), c1, c2)).to(pos.device)
+                                full_q[:half] += q[0, :half]
+                                id_ = half
+                                for q_slice in merged:
+                                    full_q[id_ : id_ + half] += q_slice
+                                    id_ += half
+                                full_q[id_ : id_ + half] += q[-1, half:]
+
+                                # unsqueeze for fk
+                                pos_0 = sample_0_remain[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                                q_0 = sample_0_remain[:, :, 3:].reshape(1, 30, njoints, 6)
+                                q_0 = ax_from_6v(q_0).to(device)
+                                
+                                pos_1 = sample_1_remain[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                                q_1 = sample_1_remain[:, :, 3:].reshape(1, 60, njoints, 6)
+                                q_1 = ax_from_6v(q_1).to(device)
+                                
+                                full_pos = torch.cat((pos_0, full_pos, pos_1), dim=1)
+                                full_q = torch.cat((q_0, full_q, q_1), dim=1)
+                                
+                                full_pos = full_pos.unsqueeze(0)
+                                full_q = full_q.unsqueeze(0)
+                                
+                                assert full_pos.shape == (1, 180, 3)
+                                assert full_q.shape == (1, 180, njoints, 6)
+                                
+                                full_pose = (
+                                    self.smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
+                                )  # b, s, 24, 3
+                                
+                                if njoints == 24:
+                                    assert full_pose.shape == (180, njoints, 3)
+                                else:
+                                    assert full_pose.shape == (180, 55, 3)
+                                
+                                filename = batch['filename'][idx]
+                                outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                                out_path = os.path.join("./", outname)
+                                # Create the directory if it doesn't exist
+                                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                                # print(out_path)
+                                with open(out_path, "wb") as file_pickle:
+                                    pickle.dump(
+                                        {
+                                            "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                                            "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+                                            "full_pose": full_pose.squeeze(),
+                                        },
+                                        file_pickle,
+                                    )
+                                    
+                                sample.append(full_pose)
+                    
                     if t == 0:
                         sub_dicts = [{'motion': sample[bs_i],
                                     'length': 180,
