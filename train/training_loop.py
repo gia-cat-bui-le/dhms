@@ -303,40 +303,41 @@ class TrainLoop:
             # print(f'loss_0: {print_0}, loss_1:{print_1}')
 
             # print("micro 2")
-            micro_2 = batch['motion_feats_0']
-            micro_2 = micro_2.unsqueeze(2).permute(0, 3, 2, 1)
-            micro_cond_2 = {}
-            micro_cond_2['y'] = {}
-            micro_cond_2['y']['lengths'] = [len + self.inpainting_frames for len in batch['length_0']]
-            micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_2 ['y']['music'] = batch['music_0'].to(batch['motion_feats_0'].device)
-            fut_lst = [feats[:,:,:len] for feats, len in zip(batch['motion_feats_1'].unsqueeze(2).permute(0, 3, 2, 1), batch['length_1'])]
-            fut_frames = torch.stack([x[:,:,:self.inpainting_frames] for x in fut_lst])
-            micro_2 = torch.cat((micro_2, torch.zeros(micro_2.shape[0], micro_2.shape[1], micro_2.shape[2], self.inpainting_frames).to(micro_2.device)), axis=-1)
-            for idx in range(micro_2.shape[0]):
-                micro_2[idx, :, :, batch['length_0'][idx]:batch['length_0'][idx]+self.inpainting_frames] = fut_frames[idx, :, :, :] 
-            # micro_2 = torch.cat((micro_2, fut_frames), axis=-1)
-            # micro_cond = cond
+            # micro_2 = batch['motion_feats_0']
+            # micro_2 = micro_2.unsqueeze(2).permute(0, 3, 2, 1)
+            # micro_cond_2 = {}
+            # micro_cond_2['y'] = {}
+            # micro_cond_2['y']['lengths'] = [len + self.inpainting_frames for len in batch['length_0']]
+            # micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
+            # micro_cond_2 ['y']['music'] = batch['music_0'].to(batch['motion_feats_0'].device)
+            # fut_lst = [feats[:,:,:len] for feats, len in zip(batch['motion_feats_1'].unsqueeze(2).permute(0, 3, 2, 1), batch['length_1'])]
+            # fut_frames = torch.stack([x[:,:,:self.inpainting_frames] for x in fut_lst])
+            # micro_2 = torch.cat((micro_2, torch.zeros(micro_2.shape[0], micro_2.shape[1], micro_2.shape[2], self.inpainting_frames).to(micro_2.device)), axis=-1)
+            # for idx in range(micro_2.shape[0]):
+            #     micro_2[idx, :, :, batch['length_0'][idx]:batch['length_0'][idx]+self.inpainting_frames] = fut_frames[idx, :, :, :] 
+            # # micro_2 = torch.cat((micro_2, fut_frames), axis=-1)
+            # # micro_cond = cond
             
-            #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
-            compute_losses_cycle = functools.partial(
-                self.diffusion.training_losses_inpainting,
-                self.ddp_model,
-                micro_2,  # [bs, ch, image_size, image_size]
-                t,  # [bs](int) sampled timesteps
-                model_kwargs=micro_cond_2,
-                noise=None,
-                dataset=self.data.dataset
-            )
-            if last_batch or not self.use_ddp:
-                # hist_frames [b 5 dim]
-                loss_cycle = compute_losses_cycle() 
-            else:
-                with self.ddp_model.no_sync():
-                    loss_cycle = compute_losses_cycle() 
+            # #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
+            # compute_losses_cycle = functools.partial(
+            #     self.diffusion.training_losses_inpainting,
+            #     self.ddp_model,
+            #     micro_2,  # [bs, ch, image_size, image_size]
+            #     t,  # [bs](int) sampled timesteps
+            #     model_kwargs=micro_cond_2,
+            #     noise=None,
+            #     dataset=self.data.dataset
+            # )
+            # if last_batch or not self.use_ddp:
+            #     # hist_frames [b 5 dim]
+            #     loss_cycle = compute_losses_cycle() 
+            # else:
+            #     with self.ddp_model.no_sync():
+            #         loss_cycle = compute_losses_cycle() 
 
             losses = {}
-            losses['loss'] = loss_0['loss'] + loss_1['loss'] + self.args.lambda_cycle * loss_cycle['loss']
+            # losses['loss'] = loss_0['loss'] + loss_1['loss'] + self.args.lambda_cycle * loss_cycle['loss']
+            losses['loss'] = loss_0['loss'] + loss_1['loss']
             if isinstance(self.schedule_sampler, LossAwareSampler):
                 self.schedule_sampler.update_with_local_losses(
                     t, losses["loss"].detach()
