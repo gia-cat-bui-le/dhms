@@ -261,12 +261,17 @@ class TrainLoop:
             )
             if last_batch or not self.use_ddp:
                 # hist_frames [b 5 dim]
-                loss_0 = compute_losses_0() 
+                loss_0, hist = compute_losses_0() 
             else:
                 with self.ddp_model.no_sync():
-                    loss_0 = compute_losses_0() 
+                    loss_0, hist = compute_losses_0() 
 
             # bs 135 1 frames
+            
+            if self.hist_frames > 0:
+                hist_lst = [feats[:,:,:len] for feats, len in zip(hist, batch['length_0'])]
+                hframes = torch.stack([x[:,:,-self.hist_frames:] for x in hist_lst])
+                # micro_cond_1['y']['hframes'] = hframes
 
             # print("micro 1")
             micro_1 = batch['motion_feats_1']
@@ -277,9 +282,8 @@ class TrainLoop:
             micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1']]
             micro_cond_1['y']['mask'] = lengths_to_mask(micro_cond_1['y']['lengths'], micro_1.device).unsqueeze(1).unsqueeze(2)
             micro_cond_1['y']['music'] = batch['music_1'].to(batch['motion_feats_0'].device)
-            hist_lst = [feats[:,:,:len] for feats, len in zip(micro_0, micro_cond_0['y']['lengths'])]
-            hist_frames = torch.stack([x[:,:,-self.inpainting_frames:] for x in hist_lst])
-            micro_1 = torch.cat((hist_frames, micro_1), axis=-1)
+            if self.hist_frames > 0:
+                micro_cond_1['y']['hframes'] = hframes
             # micro_cond = cond
             
             #t, weights = self.schedule_sampler.sample(micro_0.shape[0], dist_util.dev())
@@ -294,10 +298,10 @@ class TrainLoop:
             )
             if last_batch or not self.use_ddp:
                 # hist_frames [b 5 dim]
-                loss_1 = compute_losses_1() 
+                loss_1, _= compute_losses_1() 
             else:
                 with self.ddp_model.no_sync():
-                    loss_1 = compute_losses_1() 
+                    loss_1, _ = compute_losses_1() 
             # print_0 = (loss0['loss']).mean()
             # print_1 = (loss1['loss']).mean()
             # print(f'loss_0: {print_0}, loss_1:{print_1}')

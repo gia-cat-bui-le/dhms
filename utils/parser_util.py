@@ -125,7 +125,7 @@ def add_model_options(parser):
     # group.add_argument("--unconstrained", action='store_true',
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "
     #                         "Currently tested on HumanAct12 only.")
-    group.add_argument("--hist_frames", default=75, type=int, help="hist_frames")
+    group.add_argument("--hist_frames", default=30, type=int, help="hist_frames")
     group.add_argument("--motion_mask", default=True, type=bool, help="if mask")
     
     

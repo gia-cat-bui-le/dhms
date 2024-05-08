@@ -140,6 +140,11 @@ class MDM(nn.Module):
         # )
         # ########################
         
+        if self.hist_frames > 0:
+            # self.hist_frames = 5
+            self.seperation_token = nn.Parameter(torch.randn(latent_dim))
+            self.skel_embedding = nn.Linear(self.njoints, self.latent_dim)
+        
         if self.arch == 'inpainting':
             # print("TRANS_ENC init")
             seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
@@ -257,20 +262,30 @@ class MDM(nn.Module):
         # output = self.seqTransEncoder(x, mask=mask, cond_tokens=emb, attn_bias=pe_bias, rotary_kwargs=rotary_kwargs, chunked_attn=chunked_attn)  # [bs, seqlen, d]
         # output = output.permute(1, 0, 2)  # [seqlen, bs, d]
 
-        mask = lengths_to_mask(y['lengths'], x.device)
-        if self.arch == 'inpainting' or self.hist_frames == 0 or y.get('hframes', None) == None:
-            token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
-            
-            aug_mask = torch.cat((token_mask, mask), 1)
-            xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
-            xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-            
-            if self.motion_mask:
-                # print(aug_mask)
-                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
-            else:
-                output = self.seqTransEncoder(xseq)[1:]
+        # mask = lengths_to_mask(y['lengths'], x.device)
         
+        if self.arch == 'inpainting':
+            mask = lengths_to_mask(y['length'], x.device)
+            if self.arch == 'inpainting' or self.hist_frames == 0 or y.get('hframes', None) == None:
+                token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
+                aug_mask = torch.cat((token_mask, mask), 1)
+                xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
+                xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+                if self.motion_mask:
+                    output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+                else:
+                    output = self.seqTransEncoder(xseq)[1:]
+            else:
+                token_mask = torch.ones((bs, 2 + self.hist_frames), dtype=bool, device=x.device)
+                aug_mask = torch.cat((token_mask, mask), 1)
+                sep_token = torch.tile(self.seperation_token, (bs,)).reshape(bs, -1).unsqueeze(0)
+                hframes = y['hframes'].squeeze(2).permute(2, 0, 1) #TODO find out the diff 
+                hframes_emb = self.skel_embedding(hframes)
+                # hframes_emb = hframes_emb.permute(1, 0, 2) # [5 b dim]
+                xseq = torch.cat((emb, hframes_emb, sep_token, x), axis=0)
+                # TODO add attention mask
+                xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + self.hist_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]     
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         return output

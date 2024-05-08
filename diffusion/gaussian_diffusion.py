@@ -2288,7 +2288,7 @@ class GaussianDiffusion():
         else:
             raise NotImplementedError(self.loss_type)
 
-        return terms
+        return terms, model_output
 
     def fc_loss_rot_repr(self, gt_xyz, pred_xyz, mask):
         def to_np_cpu(x):
