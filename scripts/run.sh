@@ -14,4 +14,4 @@ conda activate dhms
 
 cd /media/nhdang/Vy_Cat/dhms-baseline
 
-python3 train_diffusion.py --save_dir /raid/nhdang/Vy/dhms/pcmdm_baseline_1.0 --dataset aistpp --eval_during_training --refine --inference_dir /raid/nhdang/Vy/data/evaluation_baseline_1.0
+python3 train_diffusion.py --save_dir /raid/nhdang/Vy/dhms/pcmdm_baseline_1.0 --dataset aistpp --eval_during_training --inference_dir /raid/nhdang/Vy/data/evaluation_baseline_1.0
