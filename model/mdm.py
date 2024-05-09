@@ -265,7 +265,7 @@ class MDM(nn.Module):
         # mask = lengths_to_mask(y['lengths'], x.device)
         
         if self.arch == 'inpainting':
-            mask = lengths_to_mask(y['length'], x.device)
+            mask = lengths_to_mask(y['lengths'], x.device)
             if self.arch == 'inpainting' or self.hist_frames == 0 or y.get('hframes', None) == None:
                 token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
                 aug_mask = torch.cat((token_mask, mask), 1)

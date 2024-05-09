@@ -279,7 +279,7 @@ class TrainLoop:
             micro_cond_1 = {}
             micro_cond_1['y'] = {}
             # micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1_with_transition']]
-            micro_cond_1['y']['lengths'] = [self.inpainting_frames + len for len in batch['length_1']]
+            micro_cond_1['y']['lengths'] = batch['length_1']
             micro_cond_1['y']['mask'] = lengths_to_mask(micro_cond_1['y']['lengths'], micro_1.device).unsqueeze(1).unsqueeze(2)
             micro_cond_1['y']['music'] = batch['music_1'].to(batch['motion_feats_0'].device)
             if self.hist_frames > 0:

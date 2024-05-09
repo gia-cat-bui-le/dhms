@@ -541,38 +541,44 @@ class CompCCDGeneratedDataset(Dataset):
                     
                     else:
                         print("NOT REFINE")
-                        sample_1_tmp = sample_1[:, :, :, :60]
-                        sample_1_remain_tmp = sample_1[:, :, :, 60 :]
-                        sample_0_tmp = sample_0[:, :, :, -60:]
-                        sample_0_remain_tmp = sample_0[:, :, :, : -60]
-                        assert sample_0_tmp.shape == sample_1_tmp.shape == (bs, nfeats, 1, 60)
+                        # sample_1_tmp = sample_1[:, :, :, :60]
+                        # sample_1_remain_tmp = sample_1[:, :, :, 60 :]
+                        # sample_0_tmp = sample_0[:, :, :, -60:]
+                        # sample_0_remain_tmp = sample_0[:, :, :, : -60]
+                        # assert sample_0_tmp.shape == sample_1_tmp.shape == (bs, nfeats, 1, 60)
                         
                         sample = []
                         
                         for idx in range(bs):
-                            motion_0_result = sample_0_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
-                            motion_1_result = sample_1_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
-                            sample_0_remain = sample_0_remain_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
-                            sample_1_remain = sample_1_remain_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            # motion_0_result = sample_0_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            # motion_1_result = sample_1_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            # sample_0_remain = sample_0_remain_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            # sample_1_remain = sample_1_remain_tmp[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                             
-                            assert motion_0_result.shape == motion_1_result.shape == (1, 60, nfeats)
+                            motion_0_result = sample_0[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+                            motion_1_result = sample_1[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                             
-                            motion_result = torch.cat((motion_0_result, motion_1_result), dim=0)
+                            # assert motion_0_result.shape == motion_1_result.shape == (1, 60, nfeats)
+                            assert motion_0_result.shape == motion_1_result.shape == (1, 90, nfeats)
+                            
+                            # motion_result = torch.cat((motion_0_result, motion_1_result), dim=0)
+                            motion_result = torch.cat((motion_0_result, motion_1_result), dim=1)
                             
                             # print(motion_result.shape)
                             
-                            assert motion_result.shape == (2, 60, nfeats)
+                            # assert motion_result.shape == (2, 60, nfeats)
+                            assert motion_result.shape == (1, 180, nfeats)
                             
                             if motion_result.shape[2] == nfeats:
                                 sample_contact, motion_result = torch.split(
                                     motion_result, (4, motion_result.shape[2] - 4), dim=2
                                 )
-                                sample_contact, sample_0_remain = torch.split(
-                                    sample_0_remain, (4, sample_0_remain.shape[2] - 4), dim=2
-                                )
-                                sample_contact, sample_1_remain = torch.split(
-                                    sample_1_remain, (4, sample_1_remain.shape[2] - 4), dim=2
-                                )
+                                # sample_contact, sample_0_remain = torch.split(
+                                #     sample_0_remain, (4, sample_0_remain.shape[2] - 4), dim=2
+                                # )
+                                # sample_contact, sample_1_remain = torch.split(
+                                #     sample_1_remain, (4, sample_1_remain.shape[2] - 4), dim=2
+                                # )
                             else:
                                 sample_contact = None
                             # do the FK all at once
@@ -641,6 +647,39 @@ class CompCCDGeneratedDataset(Dataset):
                                 
                                 full_pos = full_pos.unsqueeze(0)
                                 full_q = full_q.unsqueeze(0)
+                                
+                                assert full_pos.shape == (1, 180, 3)
+                                assert full_q.shape == (1, 180, njoints, 3)
+                                
+                                full_pose = (
+                                    self.smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
+                                )  # b, s, 24, 3
+                                
+                                if njoints == 24:
+                                    assert full_pose.shape == (180, njoints, 3)
+                                else:
+                                    assert full_pose.shape == (180, 55, 3)
+                                
+                                filename = batch['filename'][idx]
+                                outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                                out_path = os.path.join("./", outname)
+                                # Create the directory if it doesn't exist
+                                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                                # print(out_path)
+                                with open(out_path, "wb") as file_pickle:
+                                    pickle.dump(
+                                        {
+                                            "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                                            "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+                                            "full_pose": full_pose.squeeze(),
+                                        },
+                                        file_pickle,
+                                    )
+                                    
+                                sample.append(full_pose)
+                            else:
+                                full_pos = pos
+                                full_q = q
                                 
                                 assert full_pos.shape == (1, 180, 3)
                                 assert full_q.shape == (1, 180, njoints, 3)
