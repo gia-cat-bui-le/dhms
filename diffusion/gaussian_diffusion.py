@@ -17,6 +17,8 @@ from diffusion.nn import mean_flat, sum_flat
 from diffusion.losses import normal_kl, discretized_gaussian_log_likelihood
 from data_loaders.humanml.scripts import motion_process
 
+from collections import defaultdict
+
 from utils.seq_process import sync_fn, extract_fn, get_canavas
 
 import torch.nn.functional as F
@@ -36,6 +38,7 @@ from vis import SMPLSkeleton
 from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
 
 from model.utils import extract, make_beta_schedule
+from diffusion.scheduler import get_schedule_jump
 
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps, scale_betas=1.):
     """
@@ -349,69 +352,25 @@ class GaussianDiffusion():
         B, C = x.shape[:2]
         assert t.shape == (B,)
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+        assert model_output.shape == (B, C * 2, *x.shape[2:])
+        model_output, model_var_values = th.split(model_output, C, dim=1)
 
-        if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
-            inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
-            assert self.model_mean_type == ModelMeanType.START_X, 'This feature supports only X_start pred for mow!'
-            assert model_output.shape == inpainting_mask.shape == inpainted_motion.shape
-            model_output = (model_output * ~inpainting_mask) + (inpainted_motion * inpainting_mask)
-            # print('model_output', model_output.shape, model_output)
-            # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
-            # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
-        if 'hist_motion' in model_kwargs['y'].keys():
-            hist_len =  model_kwargs['y']['hist_motion'].shape[-1]
-            hist_motion = model_kwargs['y']['hist_motion']
-            model_output[:,:,:,:hist_len] = hist_motion
-        elif 'next_motion' in model_kwargs['y'].keys():
-            next_len = model_kwargs['y']['next_motion'].shape[-1]
-            for idx in range(B):
-                len  = model_kwargs['y']['lengths'][idx]
-                model_output[idx,:,:,len-next_len:len] = model_kwargs['y']['next_motion'][idx,:,:,:]
-            model_output[:,:,:,-next_len:] = model_kwargs['y']['next_motion']
-
-        if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
-            assert model_output.shape == (B, C * 2, *x.shape[2:])
-            model_output, model_var_values = th.split(model_output, C, dim=1)
-            if self.model_var_type == ModelVarType.LEARNED:
-                model_log_variance = model_var_values
-                model_variance = th.exp(model_log_variance)
-            else:
-                min_log = _extract_into_tensor(
-                    self.posterior_log_variance_clipped, t, x.shape
-                )
-                max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
-                # The model_var_values is [-1, 1] for [min_var, max_var].
-                frac = (model_var_values + 1) / 2
-                model_log_variance = frac * max_log + (1 - frac) * min_log
-                model_variance = th.exp(model_log_variance)
+        if self.model_var_type == ModelVarType.LEARNED:
+            model_log_variance = model_var_values
+            model_variance = th.exp(model_log_variance)
         else:
-            model_variance, model_log_variance = {
-                # for fixedlarge, we set the initial (log-)variance like so
-                # to get a better decoder log likelihood.
-                ModelVarType.FIXED_LARGE: (
-                    np.append(self.posterior_variance[1], self.betas[1:]),
-                    np.log(np.append(self.posterior_variance[1], self.betas[1:])),
-                ),
-                ModelVarType.FIXED_SMALL: (
-                    self.posterior_variance,
-                    self.posterior_log_variance_clipped,
-                ),
-            }[self.model_var_type]
-            # print('model_variance', model_variance)
-            # print('model_log_variance',model_log_variance)
-            # print('self.posterior_variance', self.posterior_variance)
-            # print('self.posterior_log_variance_clipped', self.posterior_log_variance_clipped)
-            # print('self.model_var_type', self.model_var_type)
-
-
-            model_variance = _extract_into_tensor(model_variance, t, x.shape)
-            model_log_variance = _extract_into_tensor(model_log_variance, t, x.shape)
+            min_log = _extract_into_tensor(
+                self.posterior_log_variance_clipped, t, x.shape
+            )
+            max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
+            frac = (model_var_values + 1) / 2
+            model_log_variance = frac * max_log + (1 - frac) * min_log
+            model_variance = th.exp(model_log_variance)
 
         def process_xstart(x):
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                # print('clip_denoised', clip_denoised)
                 return x.clamp(-1, 1)
             return x
 
@@ -420,7 +379,7 @@ class GaussianDiffusion():
                 self._predict_xstart_from_xprev(x_t=x, t=t, xprev=model_output)
             )
             model_mean = model_output
-        elif self.model_mean_type in [ModelMeanType.START_X, ModelMeanType.EPSILON]:  # THIS IS US!
+        elif self.model_mean_type in [ModelMeanType.START_X, ModelMeanType.EPSILON]:
             if self.model_mean_type == ModelMeanType.START_X:
                 pred_xstart = process_xstart(model_output)
             else:
@@ -436,6 +395,7 @@ class GaussianDiffusion():
         assert (
             model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape
         )
+
         return {
             "mean": model_mean,
             "variance": model_variance,
@@ -618,7 +578,7 @@ class GaussianDiffusion():
             x_start=out["pred_xstart"], x_t=x, t=t
         )
         return out
-
+    
     def p_sample(
         self,
         model,
@@ -673,48 +633,109 @@ class GaussianDiffusion():
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
-    def p_sample_comp(
+    def p_sample_inpainting(
         self,
-        hist_frames,
         model,
         x,
         t,
         clip_denoised=True,
         denoised_fn=None,
         cond_fn=None,
-        model_kwargs_0=None,
-        model_kwargs_1=None,
-        inter_frames=None,
+        model_kwargs=None,
         const_noise=False,
+        conf=None,
+        meas_fn=None,
+        pred_xstart=None,
+        idx_wall=-1,
     ):
-        out = self.p_mean_variance_comp(
+        """
+        Sample x_{t-1} from the model at the given timestep.
+
+        :param model: the model to sample from.
+        :param x: the current tensor at x_{t-1}.
+        :param t: the value of t, starting at 0 for the first diffusion step.
+        :param clip_denoised: if True, clip the x_start prediction to [-1, 1].
+        :param denoised_fn: if not None, a function which applies to the
+            x_start prediction before it is used to sample.
+        :param cond_fn: if not None, this is a gradient function that acts
+                        similarly to the model.
+        :param model_kwargs: if not None, a dict of extra keyword arguments to
+            pass to the model. This can be used for conditioning.
+        :return: a dict containing the following keys:
+                 - 'sample': a random sample from the model.
+                 - 'pred_xstart': a prediction of x_0.
+        """
+        noise = th.randn_like(x)
+        if conf.repaint["inpa_inj_sched_prev"]:
+
+            if pred_xstart is not None:
+                gt_keep_mask = model_kwargs.get("gt_keep_mask")
+                gt = model_kwargs["gt"]
+                alpha_cumprod = _extract_into_tensor(self.alphas_cumprod, t, x.shape)
+
+                if conf.repaint["inpa_inj_sched_prev_cumnoise"]:
+                    weighed_gt = self.get_gt_noised(gt, int(t[0].item()))
+                else:
+                    gt_weight = th.sqrt(alpha_cumprod)
+                    gt_part = gt_weight * gt
+
+                    noise_weight = th.sqrt((1 - alpha_cumprod))
+                    noise_part = noise_weight * th.randn_like(x)
+
+                    weighed_gt = gt_part + noise_part
+
+                x = gt_keep_mask * weighed_gt + (1 - gt_keep_mask) * x
+
+        out = self.p_mean_variance(
             model,
-            hist_frames,
             x,
             t,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
-            model_kwargs_0=model_kwargs_0,
-            model_kwargs_1=model_kwargs_1,
-            inter_frames=inter_frames
+            model_kwargs=model_kwargs,
         )
-        noise = th.randn_like(x)
-        # print('const_noise', const_noise)
-        if const_noise:
-            noise = noise[[0]].repeat(x.shape[0], 1, 1, 1)
 
-        nonzero_mask = (
-            (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
-        )  # no noise when t == 0
+        nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
+
         if cond_fn is not None:
             out["mean"] = self.condition_mean(
                 cond_fn, out, x, t, model_kwargs=model_kwargs
             )
-        # print('mean', out["mean"].shape, out["mean"])
-        # print('log_variance', out["log_variance"].shape, out["log_variance"])
-        # print('nonzero_mask', nonzero_mask.shape, nonzero_mask)
+
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
+        result = {
+            "sample": sample,
+            "pred_xstart": out["pred_xstart"],
+            "gt": model_kwargs.get("gt"),
+        }
+
+        return result
+        
+        # out = self.p_mean_variance(
+        #     model,
+        #     x,
+        #     t,
+        #     clip_denoised=clip_denoised,
+        #     denoised_fn=denoised_fn,
+        #     model_kwargs=model_kwargs,
+        # )
+        # noise = th.randn_like(x)
+        # # print('const_noise', const_noise)
+        # if const_noise:
+        #     noise = noise[[0]].repeat(x.shape[0], 1, 1, 1)
+
+        # nonzero_mask = (
+        #     (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
+        # )  # no noise when t == 0
+        # if cond_fn is not None:
+        #     out["mean"] = self.condition_mean(
+        #         cond_fn, out, x, t, model_kwargs=model_kwargs
+        #     )
+        # # print('mean', out["mean"].shape, out["mean"])
+        # # print('log_variance', out["log_variance"].shape, out["log_variance"])
+        # # print('nonzero_mask', nonzero_mask.shape, nonzero_mask)
+        # sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
+        # return {"sample": sample, "pred_xstart": out["pred_xstart"]}
     
     def p_sample_with_grad(
         self,
@@ -828,19 +849,16 @@ class GaussianDiffusion():
         if dump_steps is not None:
             return dump
         return final["sample"]
-        
-    def p_sample_loop_multi(
+    
+    def p_sample_loop_inpainting(
         self,
         model,
-        hist_frames,
-        shape_0,
-        shape_1,
+        shape,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
         cond_fn=None,
-        model_kwargs_0=None,
-        model_kwargs_1=None,
+        model_kwargs=None,
         device=None,
         progress=False,
         skip_timesteps=0,
@@ -849,22 +867,40 @@ class GaussianDiffusion():
         cond_fn_with_grad=False,
         dump_steps=None,
         const_noise=False,
+        conf=None,
     ):
+        """
+        Generate samples from the model.
+
+        :param model: the model module.
+        :param shape: the shape of the samples, (N, C, H, W).
+        :param noise: if specified, the noise from the encoder to sample.
+                        Should be of the same shape as `shape`.
+        :param clip_denoised: if True, clip x_start predictions to [-1, 1].
+        :param denoised_fn: if not None, a function which applies to the
+            x_start prediction before it is used to sample.
+        :param cond_fn: if not None, this is a gradient function that acts
+                        similarly to the model.
+        :param model_kwargs: if not None, a dict of extra keyword arguments to
+            pass to the model. This can be used for conditioning.
+        :param device: if specified, the device to create the samples on.
+                        If not specified, use a model parameter's device.
+        :param progress: if True, show a tqdm progress bar.
+        :param const_noise: If True, will noise all samples with the same noise throughout sampling
+        :return: a non-differentiable batch of samples.
+        """
         final = None
         if dump_steps is not None:
             dump = []
 
-        for i, sample in enumerate(self.p_sample_loop_progressive_multi(
-            hist_frames,
+        for i, sample in enumerate(self.p_sample_loop_progressive_inpainting(
             model,
-            shape_0=shape_0,
-            shape_1=shape_1,
+            shape,
             noise=noise,
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
             cond_fn=cond_fn,
-            model_kwargs_0=model_kwargs_0,
-            model_kwargs_1=model_kwargs_1,
+            model_kwargs=model_kwargs,
             device=device,
             progress=progress,
             skip_timesteps=skip_timesteps,
@@ -872,161 +908,14 @@ class GaussianDiffusion():
             randomize_class=randomize_class,
             cond_fn_with_grad=cond_fn_with_grad,
             const_noise=const_noise,
+            conf=conf,
         )):
             if dump_steps is not None and i in dump_steps:
                 dump.append(deepcopy(sample["sample"]))
             final = sample
         if dump_steps is not None:
             return dump
-        return final[0]["sample"], final[1]["sample"]
-
-    def p_sample_loop_inpainting(
-        self,
-        model,
-        hist_frames,
-        inpainting_frames,
-        shape_0,
-        shape_1,
-        noise_0=None,
-        noise_1=None,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs_0=None,
-        model_kwargs_1=None,
-        device=None,
-        progress=False,
-        skip_timesteps=0,
-        init_image=None,
-        randomize_class=False,
-        cond_fn_with_grad=False,
-        dump_steps=None,
-        const_noise=False,
-    ):
-        final = None
-        if dump_steps is not None:
-            dump = []
-
-        for i, sample in enumerate(self.p_sample_loop_progressive(
-            model,
-            shape_0,
-            noise=noise_0,
-            clip_denoised=clip_denoised,
-            denoised_fn=denoised_fn,
-            cond_fn=cond_fn,
-            model_kwargs=model_kwargs_0,
-            device=device,
-            progress=progress,
-            skip_timesteps=skip_timesteps,
-            init_image=init_image,
-            randomize_class=randomize_class,
-            cond_fn_with_grad=cond_fn_with_grad,
-            const_noise=const_noise,
-        )):
-            if dump_steps is not None and i in dump_steps:
-                dump.append(deepcopy(sample["sample"]))
-            final_0 = sample
-
-        # if hist_frames > 0:
-        #     hist_lst = [feats[:,:,:len] for feats, len in zip(final_0['pred_xstart'], batch['length_0'])]
-        #     hframes = torch.stack([x[:,:,-self.hist_frames:] for x in hist_lst])
-
-        # model_kwargs_1['y']['hframes'] = final_0['pred_xstart'][:,:,:,-hist_frames:]
-
-        B = shape_0[0]
-        nfeats = shape_0[1]
-
-        if hist_frames > 0:
-            # FIXME
-            hist_motion = torch.ones(B, nfeats, 1, hist_frames).to(final_0['sample'].device)
-            for idx in range(B):
-                len  = model_kwargs_0['y']['lengths'][idx]
-                hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-hist_frames:len]
-            model_kwargs_1['y']['hframes'] = hist_motion
-
-        if inpainting_frames > 0:
-            # FIXME
-            hist_motion = torch.ones(B, nfeats, 1, inpainting_frames).to(final_0['sample'].device)
-            for idx in range(B):
-                len  = model_kwargs_0['y']['lengths'][idx]
-                hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-inpainting_frames:len]
-            model_kwargs_1['y']['hist_motion'] = hist_motion
-        # model_kwargs_1['y']['hist_motion'] = [len + ]
-        # shape_1 = (shape_1[0], shape_1[1], shape_1[2], shape_1[3] +  hist_frames)
-        
-        for i, sample in enumerate(self.p_sample_loop_progressive(
-            model,
-            shape_1,
-            noise=noise_1,
-            clip_denoised=clip_denoised,
-            denoised_fn=denoised_fn,
-            cond_fn=cond_fn,
-            model_kwargs=model_kwargs_1,
-            device=device,
-            progress=progress,
-            skip_timesteps=skip_timesteps,
-            init_image=init_image,
-            randomize_class=randomize_class,
-            cond_fn_with_grad=cond_fn_with_grad,
-            const_noise=const_noise,
-        )):
-            if dump_steps is not None and i in dump_steps:
-                dump.append(deepcopy(sample["sample"]))
-            final_1 = sample
-
-        if dump_steps is not None:
-            return dump
-        return final_0["sample"], final_1["sample"]
-
-    def p_sample_loop_comp(
-        self,
-        model,
-        hist_frames,
-        inter_frames,
-        shape_0,
-        shape_1,
-        noise=None,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs_0=None,
-        model_kwargs_1=None,
-        device=None,
-        progress=False,
-        skip_timesteps=0,
-        init_image=None,
-        randomize_class=False,
-        cond_fn_with_grad=False,
-        dump_steps=None,
-        const_noise=False,
-    ):
-        # print("GOTO: p_sample_loop_comp")
-        final_0 = None
-        final_1 = None
-        from tqdm import tqdm
-        for i, sample in tqdm(enumerate(self.p_sample_loop_progressive_comp(
-            model,
-            hist_frames,
-            inter_frames,
-            shape_0,
-            shape_1,
-            noise=noise,
-            clip_denoised=clip_denoised,
-            denoised_fn=denoised_fn,
-            cond_fn=cond_fn,
-            model_kwargs_0=model_kwargs_0,
-            model_kwargs_1=model_kwargs_1,
-            device=device,
-            progress=progress,
-            skip_timesteps=skip_timesteps,
-            init_image=init_image,
-            randomize_class=randomize_class,
-            cond_fn_with_grad=cond_fn_with_grad,
-            const_noise=const_noise,
-        ))):
-            final_0, final_1 = sample
-        
-        return final_0, final_1
+        return final["sample"]
     
     def p_sample_loop_progressive(
         self,
@@ -1096,21 +985,16 @@ class GaussianDiffusion():
                 )
                 yield out
                 img = out["sample"]
-
-
-    def p_sample_loop_progressive_comp(
+    
+    def p_sample_loop_progressive_inpainting(
         self,
         model,
-        hist_frames,
-        inter_frames,
-        shape_0,
-        shape_1,
+        shape,
         noise=None,
         clip_denoised=True,
         denoised_fn=None,
         cond_fn=None,
-        model_kwargs_0=None,
-        model_kwargs_1=None,
+        model_kwargs=None,
         device=None,
         progress=False,
         skip_timesteps=0,
@@ -1118,94 +1002,7 @@ class GaussianDiffusion():
         randomize_class=False,
         cond_fn_with_grad=False,
         const_noise=False,
-    ):
-        # print("GOTO: p_sample_loop_progressive_comp")
-        if device is None:
-            device = next(model.parameters()).device
-
-        bs, njoints, nfeats, _ = shape_0
-
-        max_len_0 = shape_0[-1]
-        max_len_1 = shape_1[-1]
-        max_len = max_len_0 + max_len_1 - inter_frames
-
-        img_comp = torch.randn(bs, njoints, nfeats, max_len, device=device)
-
-        img_0, img_1 = extract_fn(img_comp, model_kwargs_0['y'], model_kwargs_1['y'], inter_frames)
-
-        indices = list(range(self.num_timesteps - skip_timesteps))[::-1]
-
-        if progress:
-            # Lazy import so that we don't depend on tqdm.
-            from tqdm.auto import tqdm
-
-            indices = tqdm(indices)
-
-        for i in indices:
-            t = th.tensor([i] * shape_0[0], device=device)
-            with th.no_grad():
-                sample_fn = self.p_sample_with_grad if cond_fn_with_grad else self.p_sample_comp
-                # img_0, img_1 = extract_fn(img_comp, model_kwargs_0['y'], model_kwargs_1['y'], inter_frames)
-                # out_0 = sample_fn(
-                #     model,
-                #     img_0,
-                #     t,
-                #     clip_denoised=clip_denoised,
-                #     denoised_fn=denoised_fn,
-                #     cond_fn=cond_fn,
-                #     model_kwargs=model_kwargs_0,
-                #     const_noise=const_noise,
-                # )
-                # out_1 = sample_fn(
-                #     model,
-                #     img_1,
-                #     t,
-                #     clip_denoised=clip_denoised,
-                #     denoised_fn=denoised_fn,
-                #     cond_fn=cond_fn,
-                #     model_kwargs=model_kwargs_1,
-                #     const_noise=const_noise,
-                # )
-                out = sample_fn(
-                    model,
-                    hist_frames,
-                    img_comp,
-                    t,
-                    clip_denoised=clip_denoised,
-                    denoised_fn=denoised_fn,
-                    cond_fn=cond_fn,
-                    model_kwargs_0=model_kwargs_0,
-                    model_kwargs_1=model_kwargs_1,
-                    inter_frames = inter_frames,
-                    const_noise=const_noise,
-                )
-                # img_0, img_1 = out_0['sample'], out_1['sample']
-                # img_0, img_1 = \
-                #     sync_fn(img_0, model_kwargs_0['y'], img_1, model_kwargs_1['y'], inter_frames)
-                img_comp = out['sample']
-                img_0, img_1 = extract_fn(img_comp, model_kwargs_0['y'], model_kwargs_1['y'], inter_frames)
-                yield (img_0, img_1)
-                
-
-    def p_sample_loop_progressive_multi(
-        self,
-        hist_frames,
-        model,
-        shape_0,
-        shape_1,
-        noise=None,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs_0=None,
-        model_kwargs_1=None,
-        device=None,
-        progress=False,
-        skip_timesteps=0,
-        init_image=None,
-        randomize_class=False,
-        cond_fn_with_grad=False,
-        const_noise=False,
+        conf=None,
     ):
         """
         Generate samples from the model and yield intermediate samples from
@@ -1215,63 +1012,127 @@ class GaussianDiffusion():
         Returns a generator over dicts, where each dict is the return value of
         p_sample().
         """
-        # hist_frames = 0 # 0
-
         if device is None:
             device = next(model.parameters()).device
-        assert isinstance(shape_0, (tuple, list))
+        assert isinstance(shape, (tuple, list))
         if noise is not None:
-            img_0 = noise
+            image_after_step = noise
         else:
-            img_0 = th.randn(*shape_0, device=device)
-            img_1 = th.randn(*shape_1, device=device)
+            image_after_step = th.randn(*shape, device=device)
+            
+        self.gt_noises = None  # reset for next image
+        pred_xstart = None
 
-        indices = list(range(self.num_timesteps - skip_timesteps))[::-1]
+        idx_wall = -1
+        sample_idxs = defaultdict(lambda: 0)
+        
+        if conf["schedule_jump_params"]:
+            times = get_schedule_jump(**conf["schedule_jump_params"])
 
-        if progress:
-            # Lazy import so that we don't depend on tqdm.
-            from tqdm.auto import tqdm
+            time_pairs = list(zip(times[:-1], times[1:]))
+            if progress:
+                from tqdm.auto import tqdm
 
-            indices = tqdm(indices)
+                time_pairs = tqdm(time_pairs)
 
-        for i in indices:
-            t = th.tensor([i] * shape_0[0], device=device)
-
-            with th.no_grad():
-                sample_fn = self.p_sample_with_grad if cond_fn_with_grad else self.p_sample
-                out_0 = sample_fn(
-                    model,
-                    img_0,
-                    t,
-                    clip_denoised=clip_denoised,
-                    denoised_fn=denoised_fn,
-                    cond_fn=cond_fn,
-                    model_kwargs=model_kwargs_0,
-                    const_noise=const_noise,
+            for t_last, t_cur in time_pairs:
+                idx_wall += 1
+                t_last_t = th.tensor(
+                    [t_last] * shape[0], device=device  # pylint: disable=not-callable
                 )
-                out_0_hat = out_0['pred_xstart']
-                B = out_0_hat.shape(0)
-                # model_kwargs_1['y']['hframes'] = out_0['pred_xstart'][:,:,:,-hist_frames:]
-                if hist_frames > 0:
-                    hist_motion = torch.ones(B, 151, 1, hist_frames).to(out_0_hat.device)
-                    for idx in range(B):
-                        len  = model_kwargs_0['y']['lengths'][idx]
-                        hist_motion[idx,:,:,:] = out_0_hat[idx,:,:,len-hist_frames:len]
-                    model_kwargs_1['y']['hframes'] = hist_motion
 
-                out_1 = sample_fn(
-                    model,
-                    img_1,
-                    t,
-                    clip_denoised=clip_denoised,
-                    denoised_fn=denoised_fn,
-                    cond_fn=cond_fn,
-                    model_kwargs=model_kwargs_1,
-                    const_noise=const_noise,
-                )
-                yield (out_0, out_1)
-                img_0 = out_0["sample"]
-                img_1 = out_1["sample"]
+                if t_cur < t_last:  # reverse
+                    with th.no_grad():
+                        image_before_step = image_after_step.clone()
+                        import os
+                        from utils import save_grid, normalize_image
+                        
+                        xt = image_before_step
+
+                        def _get_et(self, model_fn, x, t, model_kwargs):
+                            model_fn = self._wrap_model(model_fn)
+                            B, C = x.shape[:2]
+                            assert t.shape == (B,)
+                            model_output = model_fn(
+                                x, self._scale_timesteps(t), **model_kwargs
+                            )
+                            assert model_output.shape == (B, C * 2, *x.shape[2:])
+                            model_output, _ = th.split(model_output, C, dim=1)
+                            return model_output
+
+                        e_t = _get_et(self, model, xt, t_last_t, model_kwargs)
+                        alpha_t = _extract_into_tensor(
+                            self.alphas_cumprod, t_last_t, xt.shape
+                        )
+                        pred_x0 = (
+                            (xt - e_t * (1 - alpha_t).sqrt()) / alpha_t.sqrt()
+                        ).clamp(-1, 1)
+                            
+                        out = self.p_sample_inpainting(
+                            model,
+                            image_after_step,
+                            t_last_t,
+                            clip_denoised=clip_denoised,
+                            denoised_fn=denoised_fn,
+                            cond_fn=cond_fn,
+                            model_kwargs=model_kwargs,
+                            const_noise=const_noise,
+                            conf=conf,
+                            pred_xstart=pred_xstart,
+                        )
+                        image_after_step = out["sample"]
+                        pred_xstart = out["pred_xstart"]
+                        sample_idxs[t_cur] += 1
+                        yield out
+
+                else:
+                    t_shift = conf.repaint.get("inpa_inj_time_shift", 1)
+
+                    image_before_step = image_after_step.clone()
+                    image_after_step = self.undo(
+                        image_before_step,
+                        image_after_step,
+                        est_x_0=out["pred_xstart"],
+                        t=t_last_t + t_shift,
+                        debug=False,
+                    )
+                    pred_xstart = out["pred_xstart"]
+
+        # if skip_timesteps and init_image is None:
+        #     init_image = th.zeros_like(img)
+
+        # indices = list(range(self.num_timesteps - skip_timesteps))[::-1]
+
+        # if init_image is not None:
+        #     my_t = th.ones([shape[0]], device=device, dtype=th.long) * indices[0]
+        #     img = self.q_sample(init_image, my_t, img)
+
+        # if progress:
+        #     # Lazy import so that we don't depend on tqdm.
+        #     from tqdm.auto import tqdm
+
+        #     indices = tqdm(indices)
+
+        # for i in indices:
+        #     t = th.tensor([i] * shape[0], device=device)
+        #     if randomize_class and 'y' in model_kwargs:
+        #         model_kwargs['y'] = th.randint(low=0, high=model.num_classes,
+        #                                        size=model_kwargs['y'].shape,
+        #                                        device=model_kwargs['y'].device)
+        #     with th.no_grad():
+        #         sample_fn = self.p_sample_with_grad if cond_fn_with_grad else self.p_sample
+        #         out = sample_fn(
+        #             model,
+        #             img,
+        #             t,
+        #             clip_denoised=clip_denoised,
+        #             denoised_fn=denoised_fn,
+        #             cond_fn=cond_fn,
+        #             model_kwargs=model_kwargs,
+        #             const_noise=const_noise,
+        #         )
+        #         yield out
+        #         img = out["sample"]
 
     def ddim_sample(
         self,

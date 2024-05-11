@@ -409,18 +409,44 @@ class CompCCDGeneratedDataset(Dataset):
                         model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
                                                                 device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                     
-                    if self.inpainting_frames > 0:
-                        total_hist_frame = self.inpainting_frames + 15
-                        hist_lst = [feats[:,:,:len] for feats, len in zip(sample_0, batch['length_0'])]
-                        hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
-                        
-                        fut_lst = [feats[:,:,:len] for feats, len in zip(sample_1, batch['length_1'])]
-                        fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
-
-                        model_kwargs_2['y']['hframes'] = hframes
-                        model_kwargs_2['y']['fut_frames'] = fut_frames
+                    shape = (bs, nfeats, 1, 90)
+                    model_kwargs_2["gt"] = torch.cat((sample_0[:, -45:, :], sample_1['music'][:, :45, :]), dim=1).repeat(bs, 1, 1, 1),
                     
-                    sample_2 = diffusion.p_sample_loop (
+                    ret = [[(0 if (c >= 30 and c < 60) else 1) for c in range(shape[-1])] for r in range(shape[0])]
+                    ret = torch.tensor(ret, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                    
+                    model_kwargs_2["gt_keep_mask"] = ret.repeat(bs, 1, 1, 1)
+                    
+                    # if self.inpainting_frames > 0:
+                    #     total_hist_frame = self.inpainting_frames + 15
+                    #     hist_lst = [feats[:,:,:len] for feats, len in zip(sample_0, batch['length_0'])]
+                    #     hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
+                        
+                    #     fut_lst = [feats[:,:,:len] for feats, len in zip(sample_1, batch['length_1'])]
+                    #     fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
+
+                    #     model_kwargs_2['y']['hframes'] = hframes
+                    #     model_kwargs_2['y']['fut_frames'] = fut_frames
+                    
+                    schedule_jump_params = {
+                        't_T': 250,
+                        'n_sample': 1,
+                        'jump_length': 10,
+                        'jump_n_sample': 10
+                    }
+
+                    other_params = {
+                        'inpa_inj_sched_prev': True,
+                        'inpa_inj_sched_prev_cumnoise': False
+                    }
+
+                    # Combine into one dictionary
+                    conf = {
+                        'schedule_jump_params': schedule_jump_params,
+                        **other_params
+                    }
+                    
+                    sample_2 = diffusion.p_sample_loop_inpainting (
                         model,
                         (bs, nfeats, 1, model_kwargs_2['y']['mask'].shape[-1]),
                         noise=None,
@@ -431,6 +457,7 @@ class CompCCDGeneratedDataset(Dataset):
                         progress=False,
                         dump_steps=None,
                         const_noise=False,
+                        conf=conf,
                         # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                     )
                     
