@@ -540,7 +540,7 @@ class CompCCDGeneratedDataset(Dataset):
                                 sample.append(full_pose)
                     
                     else:
-                        print("NOT REFINE")
+                        # print("NOT REFINE")
                         # sample_1_tmp = sample_1[:, :, :, :60]
                         # sample_1_remain_tmp = sample_1[:, :, :, 60 :]
                         # sample_0_tmp = sample_0[:, :, :, -60:]
