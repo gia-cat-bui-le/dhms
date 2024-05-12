@@ -400,17 +400,17 @@ class CompCCDGeneratedDataset(Dataset):
                     model_kwargs_2 = {}
                     model_kwargs_2['y'] = {}
 
-                    model_kwargs_2['y']['lengths'] = batch['length_1']
-                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['music'][:, -15:, :], model_kwargs_1['music'][:, 15:, :]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
-                    model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
+                    model_kwargs_2['y']['lengths'] = [30 for len in batch['length_0']]
+                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['y']['music'][:, -45 * 35:], model_kwargs_1['y']['music'][:, :45 * 35]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_2['y']['lengths'], 
                                         dist_util.dev()).unsqueeze(1).unsqueeze(2)
                     # add CFG scale to batch
                     if scale != 1.:
                         model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
                                                                 device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                     
-                    if self.inpainting_frames > 0:
-                        total_hist_frame = self.inpainting_frames + 15
+                    if args.inpainting_frames > 0:
+                        total_hist_frame = args.inpainting_frames + 15
                         hist_lst = [feats[:,:,:len] for feats, len in zip(sample_0, batch['length_0'])]
                         hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
                         
@@ -438,7 +438,7 @@ class CompCCDGeneratedDataset(Dataset):
                     sample_1 = sample_1[:, :, :, 15:]
                     sample_0 = sample_0[:, :, :, :75]
                     assert sample_0.shape == sample_1.shape == (bs, nfeats, 1, 75)
-                    assert sample_2 == (bs, nfeats, 1, 30)
+                    assert sample_2.shape == (bs, nfeats, 1, 30)
                         
                     sample = []
                     
