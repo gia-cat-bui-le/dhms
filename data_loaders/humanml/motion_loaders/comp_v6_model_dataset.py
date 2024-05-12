@@ -401,8 +401,8 @@ class CompCCDGeneratedDataset(Dataset):
                     model_kwargs_2['y'] = {}
 
                     model_kwargs_2['y']['lengths'] = batch['length_1']
-                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['music'][:, -15:, :], model_kwargs_1['music'][:, 15:, :]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
-                    model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
+                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['y']['music'][:, -45 * 35:], model_kwargs_1['y']['music'][:, :45 * 35]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
                                         dist_util.dev()).unsqueeze(1).unsqueeze(2)
                     # add CFG scale to batch
                     if scale != 1.:
@@ -410,12 +410,12 @@ class CompCCDGeneratedDataset(Dataset):
                                                                 device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                     
                     shape = (bs, nfeats, 1, 90)
-                    model_kwargs_2["gt"] = torch.cat((sample_0[:, -45:, :], sample_1['music'][:, :45, :]), dim=1).repeat(bs, 1, 1, 1),
+                    model_kwargs_2["gt"] = torch.cat((sample_0[:, :, :, -45:], sample_1[:, :, :, :45]), dim=-1)
                     
                     ret = [[(0 if (c >= 30 and c < 60) else 1) for c in range(shape[-1])] for r in range(shape[0])]
-                    ret = torch.tensor(ret, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                    ret = torch.tensor(ret, dtype=torch.float32).unsqueeze(1).unsqueeze(1)
                     
-                    model_kwargs_2["gt_keep_mask"] = ret.repeat(bs, 1, 1, 1)
+                    model_kwargs_2["gt_keep_mask"] = ret.to("cuda:0" if torch.cuda.is_available() else "cpu")
                     
                     # if self.inpainting_frames > 0:
                     #     total_hist_frame = self.inpainting_frames + 15
@@ -464,8 +464,9 @@ class CompCCDGeneratedDataset(Dataset):
                     print("CONCATENATE")
                     sample_1 = sample_1[:, :, :, 15:]
                     sample_0 = sample_0[:, :, :, :75]
+                    sample_2 = sample_2[:, :, :, 30:60]
                     assert sample_0.shape == sample_1.shape == (bs, nfeats, 1, 75)
-                    assert sample_2 == (bs, nfeats, 1, 30)
+                    assert sample_2.shape == (bs, nfeats, 1, 30)
                         
                     sample = []
                     

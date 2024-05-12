@@ -261,6 +261,17 @@ class GaussianDiffusion():
         # print('mse_loss_val', mse_loss_val)
         return mse_loss_val
 
+    def undo(self, image_before_step, img_after_model, est_x_0, t, debug=False):
+        return self._undo(img_after_model, t)
+
+    def _undo(self, img_out, t):
+        beta = _extract_into_tensor(self.betas, t, img_out.shape)
+
+        img_in_est = th.sqrt(1 - beta) * img_out + th.sqrt(beta) * th.randn_like(
+            img_out
+        )
+
+        return img_in_est
 
     def q_mean_variance(self, x_start, t):
         """
@@ -352,20 +363,44 @@ class GaussianDiffusion():
         B, C = x.shape[:2]
         assert t.shape == (B,)
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
-        assert model_output.shape == (B, C * 2, *x.shape[2:])
-        model_output, model_var_values = th.split(model_output, C, dim=1)
 
-        if self.model_var_type == ModelVarType.LEARNED:
-            model_log_variance = model_var_values
-            model_variance = th.exp(model_log_variance)
+        if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
+            assert model_output.shape == (B, C * 2, *x.shape[2:])
+            model_output, model_var_values = th.split(model_output, C, dim=1)
+            if self.model_var_type == ModelVarType.LEARNED:
+                model_log_variance = model_var_values
+                model_variance = th.exp(model_log_variance)
+            else:
+                min_log = _extract_into_tensor(
+                    self.posterior_log_variance_clipped, t, x.shape
+                )
+                max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
+                # The model_var_values is [-1, 1] for [min_var, max_var].
+                frac = (model_var_values + 1) / 2
+                model_log_variance = frac * max_log + (1 - frac) * min_log
+                model_variance = th.exp(model_log_variance)
         else:
-            min_log = _extract_into_tensor(
-                self.posterior_log_variance_clipped, t, x.shape
-            )
-            max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
-            frac = (model_var_values + 1) / 2
-            model_log_variance = frac * max_log + (1 - frac) * min_log
-            model_variance = th.exp(model_log_variance)
+            model_variance, model_log_variance = {
+                # for fixedlarge, we set the initial (log-)variance like so
+                # to get a better decoder log likelihood.
+                ModelVarType.FIXED_LARGE: (
+                    np.append(self.posterior_variance[1], self.betas[1:]),
+                    np.log(np.append(self.posterior_variance[1], self.betas[1:])),
+                ),
+                ModelVarType.FIXED_SMALL: (
+                    self.posterior_variance,
+                    self.posterior_log_variance_clipped,
+                ),
+            }[self.model_var_type]
+            # print('model_variance', model_variance)
+            # print('model_log_variance',model_log_variance)
+            # print('self.posterior_variance', self.posterior_variance)
+            # print('self.posterior_log_variance_clipped', self.posterior_log_variance_clipped)
+            # print('self.model_var_type', self.model_var_type)
+
+
+            model_variance = _extract_into_tensor(model_variance, t, x.shape)
+            model_log_variance = _extract_into_tensor(model_log_variance, t, x.shape)
 
         def process_xstart(x):
             if denoised_fn is not None:
@@ -666,14 +701,14 @@ class GaussianDiffusion():
                  - 'pred_xstart': a prediction of x_0.
         """
         noise = th.randn_like(x)
-        if conf.repaint["inpa_inj_sched_prev"]:
+        if conf["inpa_inj_sched_prev"]:
 
             if pred_xstart is not None:
                 gt_keep_mask = model_kwargs.get("gt_keep_mask")
                 gt = model_kwargs["gt"]
                 alpha_cumprod = _extract_into_tensor(self.alphas_cumprod, t, x.shape)
 
-                if conf.repaint["inpa_inj_sched_prev_cumnoise"]:
+                if conf["inpa_inj_sched_prev_cumnoise"]:
                     weighed_gt = self.get_gt_noised(gt, int(t[0].item()))
                 else:
                     gt_weight = th.sqrt(alpha_cumprod)
@@ -683,9 +718,13 @@ class GaussianDiffusion():
                     noise_part = noise_weight * th.randn_like(x)
 
                     weighed_gt = gt_part + noise_part
-
+                
+                # print(f"SHAPE: \n\tgt_keep_mask: {gt_keep_mask.shape}\n\tweighed_gt: {weighed_gt.shape}\n\tx: {x.shape}")
+                
                 x = gt_keep_mask * weighed_gt + (1 - gt_keep_mask) * x
 
+        # print(x.shape)
+        
         out = self.p_mean_variance(
             model,
             x,
@@ -1045,7 +1084,6 @@ class GaussianDiffusion():
                     with th.no_grad():
                         image_before_step = image_after_step.clone()
                         import os
-                        from utils import save_grid, normalize_image
                         
                         xt = image_before_step
 
@@ -1056,8 +1094,8 @@ class GaussianDiffusion():
                             model_output = model_fn(
                                 x, self._scale_timesteps(t), **model_kwargs
                             )
-                            assert model_output.shape == (B, C * 2, *x.shape[2:])
-                            model_output, _ = th.split(model_output, C, dim=1)
+                            # assert model_output.shape == (B, C * 2, *x.shape[2:])
+                            # model_output, _ = th.split(model_output, C, dim=1)
                             return model_output
 
                         e_t = _get_et(self, model, xt, t_last_t, model_kwargs)
@@ -1086,7 +1124,7 @@ class GaussianDiffusion():
                         yield out
 
                 else:
-                    t_shift = conf.repaint.get("inpa_inj_time_shift", 1)
+                    t_shift = conf.get("inpa_inj_time_shift", 1)
 
                     image_before_step = image_after_step.clone()
                     image_after_step = self.undo(

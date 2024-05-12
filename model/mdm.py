@@ -211,7 +211,7 @@ class MDM(nn.Module):
         else:
             return cond
 
-    def forward(self, x, timesteps, y=None):
+    def forward(self, x, timesteps, gt=None, gt_keep_mask=None, y=None):
         """
         x: [batch_size, njoints, nfeats, max_frames], denoted x_t in the paper
         timesteps: [batch_size] (int)
@@ -343,6 +343,8 @@ class InputProcess(nn.Module):
         bs, njoints, nfeats, nframes = x.shape
         # print("INPUT PROCESS: ", bs, njoints, nfeats, nframes)
         x = x.permute((3, 0, 1, 2)).reshape(nframes, bs, njoints*nfeats)
+        
+        # print(x.shape)
 
         if self.data_rep in ['rot6d', 'xyz', 'hml_vec']:
             x = self.poseEmbedding(x)  # [seqlen, bs, d]
