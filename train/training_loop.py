@@ -319,7 +319,7 @@ class TrainLoop:
 
             # print("micro 2")
             micro_2 = torch.cat((batch['motion_feats_0'][:, -15:, :], batch['motion_feats_1'][:, :15, :]), dim=1)
-            print(micro_2.shape)
+            # print(micro_2.shape)
             assert micro_2.shape == (128, 30, 151)
             micro_2 = micro_2.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_2 = {}

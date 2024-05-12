@@ -434,7 +434,7 @@ class CompCCDGeneratedDataset(Dataset):
                         # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                     )
                     
-                    print("CONCATENATE")
+                    # print("CONCATENATE")
                     sample_1 = sample_1[:, :, :, 15:]
                     sample_0 = sample_0[:, :, :, :75]
                     assert sample_0.shape == sample_1.shape == (bs, nfeats, 1, 75)
