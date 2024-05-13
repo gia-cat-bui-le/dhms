@@ -133,7 +133,7 @@ class TrainLoop:
         # self.model.train()
         for epoch in range(self.num_epochs):
             print(f'Starting epoch {epoch}')                
-            for batch in tqdm(self.data):
+            for batch in self.data:
                 if not (not self.lr_anneal_steps or self.step + self.resume_step < self.lr_anneal_steps):
                     break
 

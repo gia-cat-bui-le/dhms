@@ -330,7 +330,7 @@ class CompCCDGeneratedDataset(Dataset):
 
         with torch.no_grad():
             args.inpainting_frames = 0
-            for i, batch in tqdm(enumerate(dataloader)):
+            for i, batch in enumerate(dataloader):
                 if num_samples_limit is not None and len(generated_motion) >= num_samples_limit:
                     break
 
