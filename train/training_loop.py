@@ -318,13 +318,13 @@ class TrainLoop:
                 fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
 
             # print("micro 2")
-            micro_2 = torch.cat((batch['motion_feats_0'][:, -15:, :], batch['motion_feats_1'][:, :15, :]), dim=1)
+            micro_2 = torch.cat((batch['motion_feats_0'][:, -45:, :], batch['motion_feats_1'][:, :45, :]), dim=1)
             # print(micro_2.shape)
-            assert micro_2.shape == (128, 30, 151)
+            assert micro_2.shape == (128, 90, 151)
             micro_2 = micro_2.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_2 = {}
             micro_cond_2['y'] = {}
-            micro_cond_2['y']['lengths'] = [30 for len in batch['length_0']]
+            micro_cond_2['y']['lengths'] = [90 for len in batch['length_0']]
             micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
             micro_cond_2['y']['music'] = torch.cat((batch['music_0'][:, -45 * 35:], batch['music_1'][:, :45 * 35]), dim=1).to(batch['motion_feats_0'].device)
             
