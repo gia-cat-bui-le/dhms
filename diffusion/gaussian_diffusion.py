@@ -354,20 +354,10 @@ class GaussianDiffusion():
             inpainting_mask, inpainted_motion = model_kwargs['y']['inpainting_mask'], model_kwargs['y']['inpainted_motion']
             assert self.model_mean_type == ModelMeanType.START_X, 'This feature supports only X_start pred for mow!'
             assert model_output.shape == inpainting_mask.shape == inpainted_motion.shape
-            model_output = (model_output * ~inpainting_mask) + (inpainted_motion * inpainting_mask)
+            model_output = (model_output * (1-inpainting_mask)) + (inpainted_motion * inpainting_mask)
             # print('model_output', model_output.shape, model_output)
             # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
             # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
-        if 'hist_motion' in model_kwargs['y'].keys():
-            hist_len =  model_kwargs['y']['hist_motion'].shape[-1]
-            hist_motion = model_kwargs['y']['hist_motion']
-            model_output[:,:,:,:hist_len] = hist_motion
-        elif 'next_motion' in model_kwargs['y'].keys():
-            next_len = model_kwargs['y']['next_motion'].shape[-1]
-            for idx in range(B):
-                len  = model_kwargs['y']['lengths'][idx]
-                model_output[idx,:,:,len-next_len:len] = model_kwargs['y']['next_motion'][idx,:,:,:]
-            model_output[:,:,:,-next_len:] = model_kwargs['y']['next_motion']
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
             assert model_output.shape == (B, C * 2, *x.shape[2:])
