@@ -398,7 +398,7 @@ class CompCCDGeneratedDataset(Dataset):
                     )
                     
                     num_rows = 1
-                    motion = torch.cat(( sample_0[:, :, :, -40 :5], sample_1[:, :, :, : 45]), -1)
+                    motion = torch.cat(( sample_0[:, :, :, -45 :], sample_1[:, :, :, : 45]), -1)
                     assert motion.shape == (bs, nfeats, 1, 90)
                     input_motions = motion.repeat((num_rows, 1, 1, 1))
                     
@@ -431,7 +431,7 @@ class CompCCDGeneratedDataset(Dataset):
                         
                     model_kwargs_2['y']['inpainting_mask'] = torch.ones_like(input_motions, dtype=torch.float,
                                                                 device=input_motions.device)  # True means use gt motion
-                    for i, length in enumerate(model_kwargs_2['y']['lengths'].cpu().numpy()):
+                    for i, length in enumerate(model_kwargs_2['y']['lengths']):
                         start_idx, end_idx = 30, 60
                         gt_frames_per_sample[i] = list(range(0, start_idx)) + list(range(end_idx, max_frames))
                         model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx: end_idx] = False  # do inpainting in those frames
