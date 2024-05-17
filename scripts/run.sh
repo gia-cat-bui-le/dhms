@@ -14,4 +14,4 @@ conda activate dhms
 
 cd /media/nhdang/Vy_Cat/baseline-sinmdm
 
-python3 train_diffusion.py --save_dir /raid/nhdang/Vy/dhms/baseline-sinmdm --dataset aistpp --eval_during_training --inference_dir /raid/nhdang/Vy/databaseline-sinmdm
+python3 train_diffusion.py --save_dir /raid/nhdang/Vy/dhms/baseline-sinmdm --dataset aistpp --eval_during_training --inference_dir /raid/nhdang/Vy/data/baseline-sinmdm
