@@ -161,7 +161,7 @@ def plot_single_pose(num, poses, lines, ax, axrange, scat, contact):
         ax.set_zlim(z_min, z_max)
 
 
-def skeleton_render(
+def skeleton_render_3D(
     poses,
     epoch=0,
     out="renders",
@@ -264,69 +264,69 @@ def skeleton_render(
             anim.save(gifname, savefig_kwargs={"transparent": True, "facecolor": "none"},)
     plt.close()
 
-# def skeleton_render(
-#     poses,
-#     epoch=0,
-#     out="renders",
-#     name="",
-#     sound=False,
-#     stitch=False,
-#     sound_folder="ood_sliced",
-#     contact=None,
-#     render=True
-# ):
-#     if render:
-#         # generate the pose with FK
-#         Path(out).mkdir(parents=True, exist_ok=True)
-#         num_steps = poses.shape[0]
+def skeleton_render(
+    poses,
+    epoch=0,
+    out="renders",
+    name="",
+    sound=False,
+    stitch=False,
+    sound_folder="ood_sliced",
+    contact=None,
+    render=True
+):
+    if render:
+        # generate the pose with FK
+        Path(out).mkdir(parents=True, exist_ok=True)
+        num_steps = poses.shape[0]
         
-#         fig = plt.figure(figsize=(20, 16))
-#         ax = fig.add_subplot(projection="3d")
+        fig = plt.figure(figsize=(20, 16))
+        ax = fig.add_subplot(projection="3d")
         
-#         # # Set the viewing angle to show only the front face
-#         ax.view_init(elev=0, azim=90)
+        # # Set the viewing angle to show only the front face
+        ax.view_init(elev=0, azim=90)
 
-#         # Create lines initially without data
-#         lines = [
-#             ax.plot([], [], [], zorder=10, linewidth=1.5)[0]
-#             for _ in smpl_parents
-#         ]
-#         scat = [
-#             ax.scatter([], [], [], zorder=10, s=0, cmap=ListedColormap(["r", "g", "b"]))
-#             for _ in range(4)
-#         ]
-#         axrange = get_axrange(poses=poses)
+        # Create lines initially without data
+        lines = [
+            ax.plot([], [], [], zorder=10, linewidth=1.5)[0]
+            for _ in smpl_parents
+        ]
+        scat = [
+            ax.scatter([], [], [], zorder=10, s=0, cmap=ListedColormap(["r", "g", "b"]))
+            for _ in range(4)
+        ]
+        axrange = get_axrange(poses=poses)
 
-#         # create contact labels
-#         feet = poses[:, (7, 8, 10, 11)]
-#         feetv = np.zeros(feet.shape[:2])
-#         feetv[:-1] = np.linalg.norm(feet[1:] - feet[:-1], axis=-1)
-#         if contact is None:
-#             contact = feetv < 0.01
-#         else:
-#             contact = contact > 0.95
+        # create contact labels
+        feet = poses[:, (7, 8, 10, 11)]
+        feetv = np.zeros(feet.shape[:2])
+        feetv[:-1] = np.linalg.norm(feet[1:] - feet[:-1], axis=-1)
+        if contact is None:
+            contact = feetv < 0.01
+        else:
+            contact = contact > 0.95
             
-#         ax.set_axis_off()
-#         # ax.tick_params(axis='x', labelsize=0)
-#         # ax.tick_params(axis='y', labelsize=0)
-#         # ax.tick_params(axis='z', labelsize=0)
+        ax.set_axis_off()
+        # ax.tick_params(axis='x', labelsize=0)
+        # ax.tick_params(axis='y', labelsize=0)
+        # ax.tick_params(axis='z', labelsize=0)
 
-#         # Creating the Animation object
-#         anim = animation.FuncAnimation(
-#             fig,
-#             plot_single_pose,
-#             num_steps,
-#             fargs=(poses, lines, ax, axrange, scat, contact),
-#             interval=1000 // 30,
-#         )
+        # Creating the Animation object
+        anim = animation.FuncAnimation(
+            fig,
+            plot_single_pose,
+            num_steps,
+            fargs=(poses, lines, ax, axrange, scat, contact),
+            interval=1000 // 30,
+        )
         
-#         # actually save the gif
-#         path = os.path.normpath(name)
-#         pathparts = path.split(os.sep)
-#         gifname = os.path.join(out, f"{pathparts[-1][:-4]}.gif")
-#         anim.save(gifname, savefig_kwargs={"transparent": True, "facecolor": "none"})
+        # actually save the gif
+        path = os.path.normpath(name)
+        pathparts = path.split(os.sep)
+        gifname = os.path.join(out, f"{pathparts[-1][:-4]}.gif")
+        anim.save(gifname, savefig_kwargs={"transparent": True, "facecolor": "none"})
         
-#         plt.close()
+        plt.close()
 
 # Assuming smpl_parents and plot_single_pose are defined elsewhere in your code
 
@@ -403,7 +403,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    with open('evaluation\inference\gBR_sBM_cAll_d04_mBR0_ch02_slice0.pkl', 'rb') as f:
+    with open('evaluation\inference\gJS_sBM_cAll_d01_mJS3_ch02_slice2.pkl', 'rb') as f:
         data = pickle.load(f)
 
     # Access the field named "full_pose" from the loaded data
@@ -411,7 +411,7 @@ if __name__ == '__main__':
     
     render_out = "renders"
     epoch = 0
-    name = "evaluation\inference\gBR_sBM_cAll_d04_mBR0_ch02_slice0.pkl"
+    name = "evaluation\inference\gJS_sBM_cAll_d01_mJS3_ch02_slice2.pkl"
     sound = False
     render = True
     sound_folder = ""
