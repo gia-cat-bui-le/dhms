@@ -149,7 +149,7 @@ def plot_single_pose(num, poses, lines, ax, axrange, scat, contact):
 
     if num == 0:
         axrange = (axrange, axrange, axrange)
-        xcenter, ycenter, zcenter = 0, 0, 0.5
+        xcenter, ycenter, zcenter = 0, 0, 0
         stepx, stepy, stepz = axrange[0] / 3, axrange[1] / 3, axrange[2] / 3
 
         x_min, x_max = xcenter - stepx, xcenter + stepx
@@ -403,7 +403,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    with open('evaluation\inference\gJS_sBM_cAll_d01_mJS3_ch02_slice2.pkl', 'rb') as f:
+    with open('evaluation\inference-baseline-interbetweening\gJS_sBM_cAll_d01_mJS3_ch02_slice0.pkl', 'rb') as f:
         data = pickle.load(f)
 
     # Access the field named "full_pose" from the loaded data
@@ -411,7 +411,7 @@ if __name__ == '__main__':
     
     render_out = "renders"
     epoch = 0
-    name = "evaluation\inference\gJS_sBM_cAll_d01_mJS3_ch02_slice2.pkl"
+    name = "evaluation\inference-baseline-interbetweening\gJS_sBM_cAll_d01_mJS3_ch02_slice0.pkl"
     sound = False
     render = True
     sound_folder = ""
