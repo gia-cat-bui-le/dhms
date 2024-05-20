@@ -100,7 +100,6 @@ transformers==4.17.0
 trimesh==3.10.5
 typer==0.4.2
 typing-extensions==4.1.1
-typing_extensions==4.4.0
 wandb==0.12.11
 wasabi==0.10.1
 yaml==0.2.5
