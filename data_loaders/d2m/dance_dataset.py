@@ -56,10 +56,10 @@ class FineDanceDataset(Dataset):
         backup_path = os.path.join(data_path, "dataset_backups")
         Path(backup_path).mkdir(parents=True, exist_ok=True)
         # save normalizer
-        if not train:
-            pickle.dump(
-                normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-            )
+        # if not train:
+        #     pickle.dump(
+        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
+        #     )
         # load raw data
         if not force_reload and pickle_name in os.listdir(backup_path):
             # print("Using cached dataset...")
@@ -217,10 +217,10 @@ class AISTPPDataset(Dataset):
         backup_path = os.path.join(data_path, "dataset_backups")
         Path(backup_path).mkdir(parents=True, exist_ok=True)
         # save normalizer
-        if not train:
-            pickle.dump(
-                normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-            )
+        # if not train:
+        #     pickle.dump(
+        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
+        #     )
         # load raw data
         if not force_reload and pickle_name in os.listdir(backup_path):
             # print("Using cached dataset...")
