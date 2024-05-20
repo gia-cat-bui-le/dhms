@@ -322,9 +322,9 @@ class TrainLoop:
             micro_2 = micro_2.unsqueeze(2).permute(0, 3, 2, 1)
             micro_cond_2 = {}
             micro_cond_2['y'] = {}
-            micro_cond_2['y']['lengths'] = [30 for len in batch['length_0']]
+            micro_cond_2['y']['lengths'] = [90 for len in batch['length_0']]
             micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_2['y']['music'] = torch.cat((batch['music_0'][:, -15:, :], batch['music_0'][:, 15:, :]), dim=1).to(batch['motion_feats_0'].device)
+            micro_cond_2['y']['music'] = torch.cat((batch['music_0'][:, -45 * 35:], batch['music_1'][:, :45 * 35]), dim=1).to(batch['motion_feats_0'].device)
             
             if self.inpainting_frames > 0:
                 micro_cond_2['y']['hframes'] = hframes
@@ -343,7 +343,6 @@ class TrainLoop:
                 self.ddp_model,
                 micro_2,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
-                self.cond_drop_prob,
                 model_kwargs=micro_cond_2,
                 noise=None,
                 dataset=self.data.dataset
