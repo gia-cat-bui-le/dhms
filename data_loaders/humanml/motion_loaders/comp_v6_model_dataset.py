@@ -417,7 +417,7 @@ class CompCCDGeneratedDataset(Dataset):
                     
                     model_kwargs_2["gt_keep_mask"] = ret.to("cuda:0" if torch.cuda.is_available() else "cpu")
                     
-                    if self.inpainting_frames > 0:
+                    if args.inpainting_frames > 0:
                         total_hist_frame = self.inpainting_frames + 15
                         hist_lst = [feats[:,:,:len] for feats, len in zip(sample_0, batch['length_0'])]
                         hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
