@@ -14,4 +14,4 @@ conda activate dance
 
 cd baseline-inbetweening
 
-python3 train_diffusion.py --save_dir save --dataset aistpp --eval_during_training --inference_dir data/evaluation/baseline-inbetweening
+python3 train_diffusion.py --save_dir save --dataset aistpp --eval_during_training --inference_dir /home/ltnghia02/data/evaluation/baseline-inbetweening

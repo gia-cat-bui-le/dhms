@@ -141,12 +141,12 @@ def add_data_options(parser):
     group = parser.add_argument_group('dataset')
     group.add_argument("--dataset", default='aistpp', choices=['aistpp', 'finedance'], type=str,
                        help="Dataset name (choose from list).")
-    group.add_argument("--data_dir", default="/raid/nhdang/Vy/data", type=str,
+    group.add_argument("--data_dir", default="/home/ltnghia02/data", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
     group.add_argument(
         "--force_reload", action="store_true", help="force reloads the datasets"
     )
-    group.add_argument("--inference_dir", default="/raid/nhdang/Vy/data/evaluation", type=str,
+    group.add_argument("--inference_dir", default="/home/ltnghia02/data/evaluation", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
     
 
