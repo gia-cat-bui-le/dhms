@@ -102,6 +102,5 @@ typer==0.4.2
 typing-extensions==4.1.1
 wandb==0.12.11
 wasabi==0.10.1
-yaml==0.2.5
 zipp==3.7.0
 zlib==1.2.13
