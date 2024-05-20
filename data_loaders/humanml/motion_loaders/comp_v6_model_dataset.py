@@ -417,16 +417,16 @@ class CompCCDGeneratedDataset(Dataset):
                     
                     model_kwargs_2["gt_keep_mask"] = ret.to("cuda:0" if torch.cuda.is_available() else "cpu")
                     
-                    # if self.inpainting_frames > 0:
-                    #     total_hist_frame = self.inpainting_frames + 15
-                    #     hist_lst = [feats[:,:,:len] for feats, len in zip(sample_0, batch['length_0'])]
-                    #     hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
+                    if self.inpainting_frames > 0:
+                        total_hist_frame = self.inpainting_frames + 15
+                        hist_lst = [feats[:,:,:len] for feats, len in zip(sample_0, batch['length_0'])]
+                        hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
                         
-                    #     fut_lst = [feats[:,:,:len] for feats, len in zip(sample_1, batch['length_1'])]
-                    #     fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
+                        fut_lst = [feats[:,:,:len] for feats, len in zip(sample_1, batch['length_1'])]
+                        fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
 
-                    #     model_kwargs_2['y']['hframes'] = hframes
-                    #     model_kwargs_2['y']['fut_frames'] = fut_frames
+                        model_kwargs_2['y']['hframes'] = hframes
+                        model_kwargs_2['y']['fut_frames'] = fut_frames
                     
                     schedule_jump_params = {
                         't_T': 250,
