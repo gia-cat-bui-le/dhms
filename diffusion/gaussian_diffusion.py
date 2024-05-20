@@ -944,13 +944,13 @@ class GaussianDiffusion():
                 hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-hist_frames:len]
             model_kwargs_1['y']['hframes'] = hist_motion
 
-        if inpainting_frames > 0:
-            # FIXME
-            hist_motion = torch.ones(B, nfeats, 1, inpainting_frames).to(final_0['sample'].device)
-            for idx in range(B):
-                len  = model_kwargs_0['y']['lengths'][idx]
-                hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-inpainting_frames:len]
-            model_kwargs_1['y']['hist_motion'] = hist_motion
+        # if inpainting_frames > 0:
+        #     # FIXME
+        #     hist_motion = torch.ones(B, nfeats, 1, inpainting_frames).to(final_0['sample'].device)
+        #     for idx in range(B):
+        #         len  = model_kwargs_0['y']['lengths'][idx]
+        #         hist_motion[idx,:,:,:] = final_0['sample'][idx,:,:,len-inpainting_frames:len]
+        #     model_kwargs_1['y']['hist_motion'] = hist_motion
         # model_kwargs_1['y']['hist_motion'] = [len + ]
         # shape_1 = (shape_1[0], shape_1[1], shape_1[2], shape_1[3] +  hist_frames)
         

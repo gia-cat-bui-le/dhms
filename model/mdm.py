@@ -266,7 +266,7 @@ class MDM(nn.Module):
         
         if self.arch == 'inpainting':
             mask = lengths_to_mask(y['lengths'], x.device)
-            if self.arch == 'inpainting' or self.hist_frames == 0 or y.get('hframes', None) == None:
+            if y.get('hframes', None) == None:
                 token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
                 aug_mask = torch.cat((token_mask, mask), 1)
                 xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
@@ -285,7 +285,7 @@ class MDM(nn.Module):
                 xseq = torch.cat((emb, hframes_emb, sep_token, x), axis=0)
                 # TODO add attention mask
                 xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + self.hist_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]     
+                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]     
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         return output
