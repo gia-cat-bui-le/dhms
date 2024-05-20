@@ -64,9 +64,7 @@ moviepy==1.0.3
 multidict==6.0.2
 networkx==2.7.1
 ninja==1.10.2
-ninja-base==1.10.2
 numpy==1.24.1
-numpy-base==1.23.5
 oauthlib==3.2.2
 omegaconf==2.1.1
 opencv-python==4.5.5.64
