@@ -103,4 +103,3 @@ typing-extensions==4.1.1
 wandb==0.12.11
 wasabi==0.10.1
 zipp==3.7.0
-zlib==1.2.13
