@@ -76,9 +76,6 @@ psutil==5.9.0
 pyglet==1.5.23
 pyopengl==3.1.0
 pyrender==0.1.45
-pytorch==1.12.1
-pytorch-lightning==1.6.2
-pytorch3d==0.7.2
 pytz==2021.3
 pyyaml==6.0
 readline==8.2
