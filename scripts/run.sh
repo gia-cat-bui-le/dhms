@@ -10,8 +10,8 @@
 
 source miniconda3/etc/profile.d/conda.sh
 
-conda activate dhms
+conda activate dance
 
 cd baseline-inbetweening
 
-python3 train_diffusion.py --save_dir baseline-inbetweening/save --dataset aistpp --eval_during_training --inference_dir data/baseline-inbetweening
+python3 train_diffusion.py --save_dir baseline-inbetweening/save --dataset aistpp --eval_during_training --inference_dir data/evaluation/baseline-inbetweening
