@@ -45,8 +45,6 @@ grpcio==1.44.0
 huggingface-hub==0.4.0
 hydra-colorlog==1.1.0
 hydra-core==1.1.1
-icu==58.2
-idna==3.3
 imageio==2.16.1
 imageio-ffmpeg==0.4.5
 importlib-metadata==4.11.3
@@ -56,7 +54,6 @@ iopath==0.1.9
 jedi==0.18.1
 jinja2==3.1.2
 joblib==1.1.0
-jpeg==9e
 kiwisolver==1.4.4
 langcodes==3.3.0
 lcms2==2.12
