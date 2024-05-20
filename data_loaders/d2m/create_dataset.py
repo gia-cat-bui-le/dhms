@@ -61,7 +61,7 @@ def parse_opt():
     parser.add_argument(
         "--datapath",
         type=str,
-        default="/raid/nhdang/Vy/data",
+        default="data",
         help="path to folder containing motions and music",
     )
     parser.add_argument(

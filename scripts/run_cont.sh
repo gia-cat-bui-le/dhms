@@ -10,10 +10,10 @@
 #SBATCH --cpus-per-task=40
 #SBATCH -w gpu05
 
-source /media/nhdang/hieunmt/miniconda3/etc/profile.d/conda.sh
-
-cd /media/nhdang/Vy_Cat/dhms
+source miniconda3/etc/profile.d/conda.sh
 
 conda activate dhms
 
-python3 train_diffusion.py --save_dir /raid/nhdang/Vy/dhms/pcmdm_baseline_cont --dataset aistpp --hist_frames 30 --overwrite --resume_checkpoint /raid/nhdang/Vy/dhms/pcmdm_cont/model000110000.pt --resume_step
+cd baseline-inbetweening
+
+python3 train_diffusion.py --save_dir baseline-inbetweening/save --dataset aistpp --hist_frames 30 --overwrite --resume_checkpoint /raid/nhdang/Vy/dhms/pcmdm_cont/model000110000.pt --resume_step
