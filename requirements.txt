@@ -56,13 +56,8 @@ jinja2==3.1.2
 joblib==1.1.0
 kiwisolver==1.4.4
 langcodes==3.3.0
-lcms2==2.12
-ld_impl_linux-64==2.38
-lerc==3.0
 libblas==3.9.0
 libcblas==3.9.0
-libdeflate==1.8
-libffi==3.3
 libgcc-ng==11.2.0
 libgfortran-ng==12.2.0
 libgfortran5==12.2.0
