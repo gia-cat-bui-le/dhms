@@ -281,7 +281,7 @@ class MDM(nn.Module):
                 sep_token = torch.tile(self.seperation_token, (bs,)).reshape(bs, -1).unsqueeze(0)
                 hframes = y['hframes'].squeeze(2).permute(2, 0, 1) #TODO find out the diff 
                 hframes_emb = self.skel_embedding(hframes)
-                fut_frames = y['fut_frames'].squeeze(2).permute(0, 2, 1)
+                fut_frames = y['fut_frames'].squeeze(2).permute(2, 0, 1)
                 fut_frames_emb = self.skel_embedding(fut_frames)
                 # hframes_emb = hframes_emb.permute(1, 0, 2) # [5 b dim]
                 xseq = torch.cat((emb, hframes_emb, fut_frames_emb, sep_token, x), axis=0)
