@@ -14,7 +14,6 @@ backcall==0.2.0
 blis==0.7.9
 blobfile==2.0.0
 brotlipy==0.7.0
-ca-certificates==2022.10.11
 cachetools==5.0.0
 catalogue==2.0.8
 certifi==2021.10.8
