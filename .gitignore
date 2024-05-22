@@ -152,3 +152,5 @@ data_loaders/d2m/aistpp_dataset.zip
 
 # ignore folders of Cat's laptop
 ./script_local/*
+*.txt
+*.txt

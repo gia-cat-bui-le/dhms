@@ -208,23 +208,6 @@ class MDM(nn.Module):
             self.seqTransEncoder = nn.TransformerEncoder(
                 seqTransEncoderLayer, num_layers=self.num_layers
             )
-        elif self.arch == "trans_dec":
-            print("TRANS_DEC init")
-            seqTransDecoderLayer = nn.TransformerDecoderLayer(
-                d_model=self.latent_dim,
-                nhead=self.num_heads,
-                dim_feedforward=self.ff_size,
-                dropout=self.dropout,
-                activation=activation,
-            )
-            self.seqTransDecoder = nn.TransformerDecoder(
-                seqTransDecoderLayer, num_layers=self.num_layers
-            )
-
-        else:
-            raise ValueError(
-                "Please choose correct architecture [trans_enc, trans_dec, gru]"
-            )
 
         self.embed_timestep = TimestepEmbedder(
             self.latent_dim, self.sequence_pos_encoder
