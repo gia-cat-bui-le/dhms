@@ -14,6 +14,7 @@ from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_apply,
                                   quaternion_multiply)
 from tqdm import tqdm
 import pickle
+import glob
 
 smpl_joints = [
     "root",  # 0
@@ -403,25 +404,30 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    with open('evaluation\inference\gLO_sBM_cAll_d13_mLO2_ch02_slice2.pkl', 'rb') as f:
-        data = pickle.load(f)
+    folder_path = "evaluation\inference-sinmdm"  # Change this to the path of your folder
+    file_pattern = "*.pkl"
+    file_list = glob.glob(folder_path + "/" + file_pattern)
 
-    # Access the field named "full_pose" from the loaded data
-    poses = data['full_pose']
-    
-    render_out = "renders"
-    epoch = 0
-    name = "evaluation\inference\gLO_sBM_cAll_d13_mLO2_ch02_slice2.pkl"
-    sound = False
-    render = True
-    sound_folder = ""
-    skeleton_render_3D(
-                poses,
-                epoch=f"{epoch}",
-                out=render_out,
-                name=name,
-                sound=sound,
-                stitch=True,
-                sound_folder=sound_folder,
-                render=render
-            )
+    for file_name in file_list:
+        with open(file_name, 'rb') as f:
+            data = pickle.load(f)
+
+        # Access the field named "full_pose" from the loaded data
+        poses = data['full_pose']
+        
+        render_out = "renders\sinmdm-3D"
+        epoch = 0
+        name = file_name
+        sound = False
+        render = True
+        sound_folder = ""
+        skeleton_render_3D(
+                    poses,
+                    epoch=f"{epoch}",
+                    out=render_out,
+                    name=name,
+                    sound=sound,
+                    stitch=True,
+                    sound_folder=sound_folder,
+                    render=render
+                )
