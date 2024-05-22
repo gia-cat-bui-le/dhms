@@ -51,6 +51,21 @@ from pytorch3d.transforms import axis_angle_to_quaternion, quaternion_to_axis_an
 from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 
 torch.multiprocessing.set_sharing_strategy("file_system")
+from pytorch3d.transforms import (
+    RotateAxisAngle,
+    axis_angle_to_quaternion,
+    quaternion_multiply,
+    quaternion_to_axis_angle,
+)
+from data_loaders.d2m.finedance.render_joints.smplfk import (
+    SMPLX_Skeleton,
+    do_smplxfk,
+    ax_to_6v,
+    ax_from_6v,
+)
+from diffusion.gaussian_diffusion import GaussianDiffusion
+from copy import deepcopy
+from utils.model_util import create_gaussian_diffusion
 
 
 class GenerateDataset(Dataset):
@@ -169,6 +184,8 @@ def get_dataset_loader(args, batch_size):
     dataset = get_dataset(args)
     num_cpus = multiprocessing.cpu_count()
 
+    print(f"batchsize: {batch_size}")
+
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -182,19 +199,34 @@ def get_dataset_loader(args, batch_size):
     return loader, dataset.normalizer
 
 
-def create_model_kwargs(batch_index, batch, scale):
-    bs = len(batch["length_0"])
+def change_music_shape(batch_music):
+    # batch_size, num_features = batch_music.shape
 
+    # # Reshape 'music' tensor to (batch_size, 1, num_features, 1)
+    # reshaped_music_tensor = batch_music.view(batch_size, 1, num_features, 1)
+
+    # # Update the original variable with the reshaped 'music' tensor
+    # return reshaped_music_tensor
+    return batch_music.unsqueeze(0)
+
+
+def create_model_kwargs(batch_index, batch, scale):
     model_kwargs_0 = {}
     model_kwargs_0["y"] = {}
     if args.inter_frames > 0:
         model_kwargs_0["y"]["lengths"] = [
-            len + args.inter_frames // 2 for len in batch["length_0"]
+            len + args.inter_frames // 2 for len in batch["length"]
         ]
     else:
-        model_kwargs_0["y"]["lengths"] = batch["length_0"]
-    model_kwargs_0["y"]["music"] = batch["music_0"][batch_index - 1].to(
-        "cuda:0" if torch.cuda.is_available() else "cpu"
+        model_kwargs_0["y"]["lengths"] = batch["length"]
+
+    # change shape of music
+    batch_music = batch["music"].unsqueeze(0)
+    print(f"music shape before: {batch_music.shape}")
+    # batch_music_0_reshape = change_music_shape(batch["music"][0][batch_index - 1])
+    # print(f'music shape after: {batch_music_0_reshape.shape}')
+    model_kwargs_0["y"]["music"] = (
+        batch["music"].unsqueeze(0).to("cuda:0" if torch.cuda.is_available() else "cpu")
     )
     model_kwargs_0["y"]["mask"] = (
         lengths_to_mask(model_kwargs_0["y"]["lengths"], dist_util.dev())
@@ -207,14 +239,14 @@ def create_model_kwargs(batch_index, batch, scale):
 
     if args.inter_frames > 0:
         model_kwargs_1["y"]["lengths"] = [
-            len + args.inter_frames // 2 for len in batch["length_1"]
+            len + args.inter_frames // 2 for len in batch["length"]
         ]
     else:
         model_kwargs_1["y"]["lengths"] = [
-            args.inpainting_frames + len for len in batch["length_1"]
+            args.inpainting_frames + len for len in batch["length"]
         ]
-    model_kwargs_1["y"]["music"] = batch["music_1"][batch_index].to(
-        "cuda:0" if torch.cuda.is_available() else "cpu"
+    model_kwargs_1["y"]["music"] = (
+        batch["music"].unsqueeze(0).to("cuda:0" if torch.cuda.is_available() else "cpu")
     )
     model_kwargs_1["y"]["mask"] = (
         lengths_to_mask(model_kwargs_1["y"]["lengths"], dist_util.dev())
@@ -237,7 +269,7 @@ def create_model_kwargs(batch_index, batch, scale):
             )
             * scale
         )
-    with open(f"./output_preview/model_kwargs/org_{i}.txt", "w") as file:
+    with open(f"./output_preview/model_kwargs/fn_{i}.txt", "w") as file:
         file.write(f"model 0:\n{model_kwargs_0}\n")
         file.write(f"model 1:\n{model_kwargs_1}\n")
 
@@ -249,10 +281,11 @@ if __name__ == "__main__":
     fixseed(args.seed)
     # TODO: fix the hardcode
     music_dir_len = len(os.listdir(args.music_dir))
+    print(f"music dir len {music_dir_len}")
     if music_dir_len > 32:
         args.batch_size = 32  # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
     else:
-        args.batch_size = 1
+        args.batch_size = 4
     name = os.path.basename(os.path.dirname(args.music_dir))
     niter = os.path.basename(args.model_path).replace("model", "").replace(".pt", "")
     log_file = os.path.join(
@@ -328,167 +361,194 @@ if __name__ == "__main__":
     wav_dir = "custom_input/feature"
     wavs = sorted(glob.glob(f"{wav_dir}/*.npy"))
     wav_out = wav_dir + "_sliced"
+    print(f"diffusion: {diffusion}")
+    composition = args.composition
+    use_ddim = False  # hardcode
+
+    if composition:
+        sample_fn = diffusion.p_sample_loop_comp
+    else:
+        sample_fn = (
+            diffusion.p_sample_loop_inpainting
+            if not use_ddim
+            else diffusion.ddim_sample_loop
+        )
+
+    print(f"composition: {composition}, sample fn: {sample_fn}")
+
+    # exit()
+
+    scale = 1
 
     with torch.no_grad():
+        print(f"")
         for i, batch in tqdm(enumerate(dataloader)):
+            batch["music"] = batch["music"].squeeze()
+            batch_music = batch["music"]
+            print(f"batch shape: {batch_music.shape}")
             if (
                 num_samples_limit is not None
                 and len(generated_motion) >= num_samples_limit
             ):
+                print("if num samples limit")
                 break
 
             with open("./output.txt", "w") as file:
+                print(f"write read file")
                 file.write(f"batch:\n{batch}\n")
                 batch_music = batch["music"]
                 file.write(f"{i}")
                 file.write(f"\nmusic:\n{batch_music}\n")
-                file.write(f"\nmusic length:{len(batch_music[0])}\n")
+                file.write(f"\nmusic length: {len(batch_music[0])}\n")
+                file.write(f"music shape: {batch_music.shape}")
 
-            n_slices = len(batch_music[0])
+            print(f"music shape {batch_music.shape}")
+            exit()
 
-            for i in range(1, n_slices):
-                pre_index, pos_index = i - 1, i
-                with open(f"./output_preview/output_{i}.txt", "w") as file:
-                    file.write(f"pre:\n{batch_music[0][i-1]}\n\n")
-                    file.write(f"post:\n{batch_music[0][i]}\n")
-                    file.write(f"squeeze:\n{batch_music.squeeze()}")
+            # pre_index, pos_index = i - 1, i
 
-                # if args.inter_frames > 0:
-                #     assert args.inter_frames % 2 == 0
-                #     batch['length_0'] = [len + args.inter_frames // 2 for len in batch['length_0']]
-                #     batch['length_1_with_transition'] = [len + args.inter_frames // 2 for len in batch['length_1_with_transition']]
-                bs = len(batch["length"])
-                model_kwargs_0, model_kwargs_1 = create_model_kwargs(i)
-                with open(f"./output_preview/model_kwargs/fn_{i}.txt", "w") as file:
-                    file.write(f"model 0:\n{model_kwargs_0}\n")
-                    file.write(f"model 1:\n{model_kwargs_1}\n")
+            # with open(f"./output_preview/output_{i}.txt", "w") as file:
+            #     file.write(f"pre:\n{batch_music[0][i-1]}\n\n")
+            #     file.write(f"post:\n{batch_music[0][i]}\n")
+            #     file.write(f"squeeze:\n{batch_music.squeeze()}")
 
-                model_kwargs_0 = {}
-                model_kwargs_0["y"] = {}
-                if args.inter_frames > 0:
-                    model_kwargs_0["y"]["lengths"] = [
-                        len + args.inter_frames // 2 for len in batch["length"]
-                    ]
-                else:
-                    model_kwargs_0["y"]["lengths"] = batch["length"]
-                model_kwargs_0["y"]["music"] = batch["music"].to(device)
-                print(batch["music"])
-                model_kwargs_0["y"]["mask"] = (
-                    lengths_to_mask(model_kwargs_0["y"]["lengths"], dist_util.dev())
-                    .unsqueeze(1)
-                    .unsqueeze(2)
-                )
+            bs = len(batch["length"])
 
-                model_kwargs_1 = {}
-                model_kwargs_1["y"] = {}
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-                if args.inter_frames > 0:
-                    model_kwargs_1["y"]["lengths"] = [
-                        len + args.inter_frames // 2 for len in batch["length"]
-                    ]
-                else:
-                    model_kwargs_1["y"]["lengths"] = [
-                        args.inpainting_frames + len for len in batch["length"]
-                    ]
-                model_kwargs_1["y"]["music"] = batch["music"].to(device)
-                model_kwargs_1["y"]["mask"] = (
-                    lengths_to_mask(model_kwargs_1["y"]["lengths"], dist_util.dev())
-                    .unsqueeze(1)
-                    .unsqueeze(2)
-                )
-                with open(f"./output_preview/model_kwargs/org_{i}.txt", "w") as file:
-                    file.write(f"model 0:\n{model_kwargs_0}\n")
-                    file.write(f"model 1:\n{model_kwargs_1}\n")
+            # TODO: bring to line 360
+            # no condition
+            model_kwargs_0 = {}
+            model_kwargs_0["y"] = {}
+            if args.inter_frames > 0:
+                model_kwargs_0["y"]["lengths"] = [
+                    len + args.inter_frames // 2 for len in batch["length"]
+                ]
+            else:
+                model_kwargs_0["y"]["lengths"] = batch["length"]
+            model_kwargs_0["y"]["music"] = batch["music"].squeeze()
+            shape = model_kwargs_0["y"]["music"].shape
+            print(f"shape: {shape}")
+            a_, seq_0, d_0 = model_kwargs_0["y"]["music"].shape
+            model_kwargs_0["y"]["music"] = (
+                model_kwargs_0["y"]["music"]
+                .reshape(a_, seq_0 * d_0)
+                .to("cuda:0" if torch.cuda.is_available() else "cpu")
+            )
+            model_kwargs_0["y"]["mask"] = (
+                lengths_to_mask(model_kwargs_0["y"]["lengths"], dist_util.dev())
+                .unsqueeze(1)
+                .unsqueeze(2)
+            )
 
-            break
+            batch_music, model_music = batch["music"], model_kwargs_0["y"]["music"]
+            with open("./output_preview/batch_music.txt", "w") as file:
+                file.write(f"batch music: {batch_music}\nshape: {batch_music.shape}\n")
+                file.write(f"model_music: {model_music}\nshape: {model_music.shape}\n")
+
+            # exit()
+
+            # condition
+            model_kwargs_1 = {}
+            model_kwargs_1["y"] = {}
+
+            if args.inter_frames > 0:
+                model_kwargs_1["y"]["lengths"] = [
+                    len + args.inter_frames // 2 for len in batch["length"]
+                ]
+            else:
+                model_kwargs_1["y"]["lengths"] = [
+                    args.inpainting_frames + len  # inpainting_frames ~ 1s ~ 30f
+                    for len in batch["length"]
+                ]
+            model_kwargs_1["y"]["music"] = batch["music"].squeeze()
+            a_, seq_0, d_0 = model_kwargs_1["y"]["music"].shape
+            model_kwargs_1["y"]["music"] = (
+                model_kwargs_1["y"]["music"]
+                .reshape(a_, seq_0 * d_0)
+                .to("cuda:0" if torch.cuda.is_available() else "cpu")
+            )
+            model_kwargs_1["y"]["mask"] = (
+                lengths_to_mask(model_kwargs_1["y"]["lengths"], dist_util.dev())
+                .unsqueeze(1)
+                .unsqueeze(2)
+            )
             # add CFG scale to batch
-            if args.guidance_param != 1.0:
+            if scale != 1.0:
                 model_kwargs_0["y"]["scale"] = (
                     torch.ones(
                         len(model_kwargs_0["y"]["lengths"]),
                         device="cuda:0" if torch.cuda.is_available() else "cpu",
                     )
-                    * args.guidedance_param
+                    * scale
                 )
                 model_kwargs_1["y"]["scale"] = (
                     torch.ones(
                         len(model_kwargs_1["y"]["lengths"]),
                         device="cuda:0" if torch.cuda.is_available() else "cpu",
                     )
-                    * args.guidedance_param
+                    * scale
                 )
-
-            if args.shuffle_noise:
-                feats = 151
-                nframe = model_kwargs_0["y"]["mask"].shape[-1]
-
-                noise_frame = 10
-                noise_stride = 5
-
-                noise_0 = torch.randn([1, feats, 1, nframe], device=device).repeat(
-                    bs, 1, 1, 1
-                )
-                for frame_index in range(noise_frame, nframe, noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - noise_frame,
-                            frame_index + noise_stride - noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_0[:, :, :, frame_index : frame_index + noise_stride] = (
-                        noise_0[:, :, :, list_index]
-                    )
-
-                nframe = model_kwargs_1["y"]["mask"].shape[-1]
-
-                noise_1 = torch.randn([1, feats, 1, nframe], device=device).repeat(
-                    bs, 1, 1, 1
-                )
-                for frame_index in range(noise_frame, nframe, noise_stride):
-                    list_index = list(
-                        range(
-                            frame_index - noise_frame,
-                            frame_index + noise_stride - noise_frame,
-                        )
-                    )
-                    random.shuffle(list_index)
-                    noise_1[:, :, :, frame_index : frame_index + noise_stride] = (
-                        noise_1[:, :, :, list_index]
-                    )
-            else:
-                noise_1, noise_0 = None, None
+            # TODO: bring down till here
 
             mm_num_now = len(mm_generated_motions) // dataloader.batch_size
             is_mm = False
             repeat_times = mm_num_repeats if is_mm else 1
-            mm_motions = []
 
             for t in range(repeat_times):
-                shape_0 = (bs, 151, 1, model_kwargs_0["y"]["mask"].shape[-1])
-                shape_1 = (bs, 151, 1, model_kwargs_1["y"]["mask"].shape[-1])
+                if args.shuffle_noise:
+                    feats = 151
+                    nframe = model_kwargs_0["y"]["mask"].shape[-1]
 
-                dump, sample_0 = create_pre_sample(
-                    model,
-                    shape_0,
-                    noise_0=noise_0,
-                    clip_denoised=clip_denoised,
-                    model_kwargs_0=model_kwargs_0,
-                    skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
-                    init_image=None,
-                    progress=False,
-                    dump_steps=None,
-                    const_noise=False,
-                )
+                    noise_frame = 10
+                    noise_stride = 5
 
-                dump, sample_1 = create_post_sample(
-                    dump,
-                    sample_0,
+                    noise_0 = torch.randn([1, feats, 1, nframe], device=device).repeat(
+                        bs, 1, 1, 1
+                    )
+                    for frame_index in range(noise_frame, nframe, noise_stride):
+                        list_index = list(
+                            range(
+                                frame_index - noise_frame,
+                                frame_index + noise_stride - noise_frame,
+                            )
+                        )
+                        random.shuffle(list_index)
+                        noise_0[:, :, :, frame_index : frame_index + noise_stride] = (
+                            noise_0[:, :, :, list_index]
+                        )
+
+                    nframe = model_kwargs_1["y"]["mask"].shape[-1]
+
+                    noise_1 = torch.randn([1, feats, 1, nframe], device=device).repeat(
+                        bs, 1, 1, 1
+                    )
+                    for frame_index in range(noise_frame, nframe, noise_stride):
+                        list_index = list(
+                            range(
+                                frame_index - noise_frame,
+                                frame_index + noise_stride - noise_frame,
+                            )
+                        )
+                        random.shuffle(list_index)
+                        noise_1[:, :, :, frame_index : frame_index + noise_stride] = (
+                            noise_1[:, :, :, list_index]
+                        )
+                else:
+                    noise_1, noise_0 = None, None
+
+                # TODO: tách xử lý sample_0 và sample_1 thành 2 fn
+                sample_0, sample_1 = sample_fn(
                     model,
                     args.hist_frames,
-                    args.inpainting_frames,
-                    shape_0,
-                    shape_1,
+                    (
+                        args.inpainting_frames
+                        if not args.composition
+                        else args.inter_frames
+                    ),
+                    (bs, 151, 1, model_kwargs_0["y"]["mask"].shape[-1]),
+                    (bs, 151, 1, model_kwargs_1["y"]["mask"].shape[-1]),
+                    noise_0=noise_0,
                     noise_1=noise_1,
                     clip_denoised=clip_denoised,
                     model_kwargs_0=model_kwargs_0,
@@ -498,203 +558,211 @@ if __name__ == "__main__":
                     progress=False,
                     dump_steps=None,
                     const_noise=False,
+                    # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                 )
-                # sample_0, sample_1 = sample_fn(
-                #     model,
-                #     args.hist_frames,
-                #     args.inpainting_frames if not args.composition else args.inter_frames,
-                #     (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1]),
-                #     (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1]),
-                #     noise_0=None,
-                #     noise_1=None,
-                #     clip_denoised=clip_denoised,
-                #     model_kwargs_0=model_kwargs_0,
-                #     model_kwargs_1=model_kwargs_1,
-                #     skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
-                #     init_image=None,
-                #     progress=False,
-                #     dump_steps=None,
-                #     const_noise=False,
-                #     # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
-                # )
+                with open(f"./output_preview/sample_{i}.txt") as file:
+                    file.write(f"sample 0:\n{sample_0}\n")
+                    file.write(f"sample 1:\n{sample_1}\n")
 
-                if args.inpainting_frames > 0:
-                    sample_1_tmp = sample_1[
-                        :, :, :, args.inpainting_frames :
-                    ]  # B 135 1 L
-                if args.inter_frames > 0:
-                    sample_0 = sample_0[:, :, :, : -args.inter_frames // 2]
-                    sample_1 = sample_1[:, :, :, args.inter_frames // 2 :]
-                if args.refine:
-                    model_kwargs_0_refine = {}
-                    model_kwargs_0_refine["y"] = {}
-                    if args.guidance_param != 1.0:
-                        model_kwargs_0_refine["y"]["scale"] = model_kwargs_0["y"][
-                            "scale"
-                        ]
-                    model_kwargs_0_refine["y"]["music"] = model_kwargs_0["y"]["music"]
-                    model_kwargs_0_refine["y"]["next_motion"] = sample_1_tmp[
-                        :, :, :, : args.inpainting_frames
-                    ]
-                    model_kwargs_0_refine["y"]["lengths"] = [
-                        len + args.inpainting_frames
-                        for len in model_kwargs_0["y"]["lengths"]
-                    ]
-                    model_kwargs_0_refine["y"]["mask"] = (
-                        lengths_to_mask(
-                            model_kwargs_0_refine["y"]["lengths"], dist_util.dev()
-                        )
-                        .unsqueeze(1)
-                        .unsqueeze(2)
-                    )
+            break
+            # add CFG scale to batch
 
-                    sample_0_refine = sample_fn_refine(  # bs 135 1 len+inpainting
-                        model,
-                        (bs, 151, 1, model_kwargs_0_refine["y"]["mask"].shape[-1]),
-                        noise=None,
-                        clip_denoised=False,
-                        model_kwargs=model_kwargs_0_refine,
-                        skip_timesteps=0,
-                        init_image=None,
-                        progress=True,
-                        dump_steps=None,
-                        const_noise=False,
-                    )
-                    print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
-                    assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
+            # sample_0, sample_1 = sample_fn(
+            #     model,
+            #     args.hist_frames,
+            #     args.inpainting_frames if not args.composition else args.inter_frames,
+            #     (bs, 151, 1, model_kwargs_0['y']['mask'].shape[-1]),
+            #     (bs, 151, 1, model_kwargs_1['y']['mask'].shape[-1]),
+            #     noise_0=None,
+            #     noise_1=None,
+            #     clip_denoised=clip_denoised,
+            #     model_kwargs_0=model_kwargs_0,
+            #     model_kwargs_1=model_kwargs_1,
+            #     skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
+            #     init_image=None,
+            #     progress=False,
+            #     dump_steps=None,
+            #     const_noise=False,
+            #     # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
+            # )
 
-                    sample_0_refine = sample_0_refine[
-                        :, :, :, : -args.inpainting_frames
-                    ]
-                    to_stack = sample_0_refine[:, :, :, -args.inpainting_frames :]
-                    sample_0 = sample_0 + args.refine_scale * (
-                        sample_0_refine - sample_0
-                    )
+            # if args.inpainting_frames > 0:
+            #     sample_1_tmp = sample_1[
+            #         :, :, :, args.inpainting_frames :
+            #     ]  # B 135 1 L
+            # if args.inter_frames > 0:
+            #     sample_0 = sample_0[:, :, :, : -args.inter_frames // 2]
+            #     sample_1 = sample_1[:, :, :, args.inter_frames // 2 :]
+            # if args.refine:
+            #     model_kwargs_0_refine = {}
+            #     model_kwargs_0_refine["y"] = {}
+            #     if args.guidance_param != 1.0:
+            #         model_kwargs_0_refine["y"]["scale"] = model_kwargs_0["y"][
+            #             "scale"
+            #         ]
+            #     model_kwargs_0_refine["y"]["music"] = model_kwargs_0["y"]["music"]
+            #     model_kwargs_0_refine["y"]["next_motion"] = sample_1_tmp[
+            #         :, :, :, : args.inpainting_frames
+            #     ]
+            #     model_kwargs_0_refine["y"]["lengths"] = [
+            #         len + args.inpainting_frames
+            #         for len in model_kwargs_0["y"]["lengths"]
+            #     ]
+            #     model_kwargs_0_refine["y"]["mask"] = (
+            #         lengths_to_mask(
+            #             model_kwargs_0_refine["y"]["lengths"], dist_util.dev()
+            #         )
+            #         .unsqueeze(1)
+            #         .unsqueeze(2)
+            #     )
 
-                    sample_0 = torch.cat((sample_0, to_stack), axis=-1)
+            #     sample_0_refine = sample_fn_refine(  # bs 135 1 len+inpainting
+            #         model,
+            #         (bs, 151, 1, model_kwargs_0_refine["y"]["mask"].shape[-1]),
+            #         noise=None,
+            #         clip_denoised=False,
+            #         model_kwargs=model_kwargs_0_refine,
+            #         skip_timesteps=0,
+            #         init_image=None,
+            #         progress=True,
+            #         dump_steps=None,
+            #         const_noise=False,
+            #     )
+            #     print("CHECKING: ", sample_0_refine.shape, sample_1.shape)
+            #     assert sample_0_refine.shape == sample_1.shape == (bs, 151, 1, 120)
 
-                    # print(sample_0.shape, sample_1.shape)
-                    assert sample_0.shape == sample_1.shape == (bs, 151, 1, 120)
+            #     sample_0_refine = sample_0_refine[
+            #         :, :, :, : -args.inpainting_frames
+            #     ]
+            #     to_stack = sample_0_refine[:, :, :, -args.inpainting_frames :]
+            #     sample_0 = sample_0 + args.refine_scale * (
+            #         sample_0_refine - sample_0
+            #     )
 
-                    sample = []
+            #     sample_0 = torch.cat((sample_0, to_stack), axis=-1)
 
-                    for idx in range(bs):
-                        motion_0_result = (
-                            sample_0[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
-                        )
-                        motion_1_result = (
-                            sample_1[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
-                        )
+            #     # print(sample_0.shape, sample_1.shape)
+            #     assert sample_0.shape == sample_1.shape == (bs, 151, 1, 120)
 
-                        assert (
-                            motion_0_result.shape
-                            == motion_1_result.shape
-                            == (1, 120, 151)
-                        )
+            #     sample = []
 
-                        motion_result = torch.cat(
-                            (motion_0_result, motion_1_result), dim=0
-                        )
+            #     for idx in range(bs):
+            #         motion_0_result = (
+            #             sample_0[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+            #         )
+            #         motion_1_result = (
+            #             sample_1[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
+            #         )
 
-                        # print(motion_result.shape)
+            #         assert (
+            #             motion_0_result.shape
+            #             == motion_1_result.shape
+            #             == (1, 120, 151)
+            #         )
 
-                        assert motion_result.shape == (2, 120, 151)
+            #         motion_result = torch.cat(
+            #             (motion_0_result, motion_1_result), dim=0
+            #         )
 
-                        if motion_result.shape[2] == 151:
-                            sample_contact, motion_result = torch.split(
-                                motion_result, (4, motion_result.shape[2] - 4), dim=2
-                            )
-                        else:
-                            sample_contact = None
-                        # do the FK all at once
-                        b, s, c = motion_result.shape
-                        pos = motion_result[:, :, :3].to(
-                            device
-                        )  # np.zeros((sample.shape[0], 3))
-                        q = motion_result[:, :, 3:].reshape(b, s, 24, 6)
-                        # go 6d to ax
-                        q = ax_from_6v(q).to(device)
+            #         # print(motion_result.shape)
 
-                        b, s, c1, c2 = q.shape
-                        assert s % 2 == 0
-                        half = s // 2
-                        if b > 1:
-                            # if long mode, stitch position using linear interp
+            #         assert motion_result.shape == (2, 120, 151)
 
-                            fade_out = torch.ones((1, s, 1)).to(pos.device)
-                            fade_in = torch.ones((1, s, 1)).to(pos.device)
-                            fade_out[:, half:, :] = torch.linspace(1, 0, half)[
-                                None, :, None
-                            ].to(pos.device)
-                            fade_in[:, :half, :] = torch.linspace(0, 1, half)[
-                                None, :, None
-                            ].to(pos.device)
+            #         if motion_result.shape[2] == 151:
+            #             sample_contact, motion_result = torch.split(
+            #                 motion_result, (4, motion_result.shape[2] - 4), dim=2
+            #             )
+            #         else:
+            #             sample_contact = None
+            #         # do the FK all at once
+            #         b, s, c = motion_result.shape
+            #         pos = motion_result[:, :, :3].to(
+            #             device
+            #         )  # np.zeros((sample.shape[0], 3))
+            #         q = motion_result[:, :, 3:].reshape(b, s, 24, 6)
+            #         # go 6d to ax
+            #         q = ax_from_6v(q).to(device)
 
-                            pos[:-1] *= fade_out
-                            pos[1:] *= fade_in
+            #         b, s, c1, c2 = q.shape
+            #         assert s % 2 == 0
+            #         half = s // 2
+            #         if b > 1:
+            #             # if long mode, stitch position using linear interp
 
-                            full_pos = torch.zeros((s + half * (b - 1), 3)).to(
-                                pos.device
-                            )
-                            id_ = 0
-                            for pos_slice in pos:
-                                full_pos[id_ : id_ + s] += pos_slice
-                                id_ += half
+            #             fade_out = torch.ones((1, s, 1)).to(pos.device)
+            #             fade_in = torch.ones((1, s, 1)).to(pos.device)
+            #             fade_out[:, half:, :] = torch.linspace(1, 0, half)[
+            #                 None, :, None
+            #             ].to(pos.device)
+            #             fade_in[:, :half, :] = torch.linspace(0, 1, half)[
+            #                 None, :, None
+            #             ].to(pos.device)
 
-                            # stitch joint angles with slerp
-                            slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(
-                                pos.device
-                            )
+            #             pos[:-1] *= fade_out
+            #             pos[1:] *= fade_in
 
-                            left, right = q[:-1, half:], q[1:, :half]
-                            # convert to quat
-                            left, right = (
-                                axis_angle_to_quaternion(left),
-                                axis_angle_to_quaternion(right),
-                            )
-                            merged = quat_slerp(
-                                left, right, slerp_weight
-                            )  # (b-1) x half x ...
-                            # convert back
-                            merged = quaternion_to_axis_angle(merged)
+            #             full_pos = torch.zeros((s + half * (b - 1), 3)).to(
+            #                 pos.device
+            #             )
+            #             id_ = 0
+            #             for pos_slice in pos:
+            #                 full_pos[id_ : id_ + s] += pos_slice
+            #                 id_ += half
 
-                            full_q = torch.zeros((s + half * (b - 1), c1, c2)).to(
-                                pos.device
-                            )
-                            full_q[:half] += q[0, :half]
-                            id_ = half
-                            for q_slice in merged:
-                                full_q[id_ : id_ + half] += q_slice
-                                id_ += half
-                            full_q[id_ : id_ + half] += q[-1, half:]
+            #             # stitch joint angles with slerp
+            #             slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(
+            #                 pos.device
+            #             )
 
-                            # unsqueeze for fk
-                            full_pos = full_pos.unsqueeze(0)
-                            full_q = full_q.unsqueeze(0)
+            #             left, right = q[:-1, half:], q[1:, :half]
+            #             # convert to quat
+            #             left, right = (
+            #                 axis_angle_to_quaternion(left),
+            #                 axis_angle_to_quaternion(right),
+            #             )
+            #             merged = quat_slerp(
+            #                 left, right, slerp_weight
+            #             )  # (b-1) x half x ...
+            #             # convert back
+            #             merged = quaternion_to_axis_angle(merged)
 
-                            full_pose = (
-                                smpl.forward(full_q, full_pos).detach().cpu().numpy()
-                            )  # b, s, 24, 3
+            #             full_q = torch.zeros((s + half * (b - 1), c1, c2)).to(
+            #                 pos.device
+            #             )
+            #             full_q[:half] += q[0, :half]
+            #             id_ = half
+            #             for q_slice in merged:
+            #                 full_q[id_ : id_ + half] += q_slice
+            #                 id_ += half
+            #             full_q[id_ : id_ + half] += q[-1, half:]
 
-                            # assert full_pose.shape == (1, 180, 24, 3)
+            #             # unsqueeze for fk
+            #             full_pos = full_pos.unsqueeze(0)
+            #             full_q = full_q.unsqueeze(0)
 
-                            filename = batch["filename"][idx]
-                            outname = f'evaluation/inference_edge/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
-                            out_path = os.path.join("./", outname)
-                            # Create the directory if it doesn't exist
-                            os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                            # print(out_path)
-                            with open(out_path, "wb") as file_pickle:
-                                pickle.dump(
-                                    {
-                                        "smpl_poses": full_q.squeeze(0)
-                                        .reshape((-1, 72))
-                                        .cpu()
-                                        .numpy(),
-                                        "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
-                                        "full_pose": full_pose.squeeze(),
-                                    },
-                                    file_pickle,
-                                )
+            #             full_pose = (
+            #                 smpl.forward(full_q, full_pos).detach().cpu().numpy()
+            #             )  # b, s, 24, 3
 
-                            sample.append(full_pose)
+            #             # assert full_pose.shape == (1, 180, 24, 3)
+
+            #             filename = batch["filename"][idx]
+            #             outname = f'evaluation/inference_edge/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+            #             out_path = os.path.join("./", outname)
+            #             # Create the directory if it doesn't exist
+            #             os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            #             # print(out_path)
+            #             with open(out_path, "wb") as file_pickle:
+            #                 pickle.dump(
+            #                     {
+            #                         "smpl_poses": full_q.squeeze(0)
+            #                         .reshape((-1, 72))
+            #                         .cpu()
+            #                         .numpy(),
+            #                         "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+            #                         "full_pose": full_pose.squeeze(),
+            #                     },
+            #                     file_pickle,
+            #                 )
+
+            #             sample.append(full_pose)

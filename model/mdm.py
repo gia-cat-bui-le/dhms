@@ -9,10 +9,16 @@ from teach.data.tools import lengths_to_mask
 from model.x_transformers.x_transformers import ContinuousTransformerWrapper, Encoder
 
 
-class BPE_Schedule():
-    def __init__(self, training_rate: float, inference_step: int, max_steps: int) -> None:
-        assert training_rate >= 0 and training_rate <= 1, "training_rate must be between 0 and 1"
-        assert inference_step == -1 or (inference_step >= 0 and inference_step <= max_steps), "inference_step must be between 0 and max_steps"
+class BPE_Schedule:
+    def __init__(
+        self, training_rate: float, inference_step: int, max_steps: int
+    ) -> None:
+        assert (
+            training_rate >= 0 and training_rate <= 1
+        ), "training_rate must be between 0 and 1"
+        assert inference_step == -1 or (
+            inference_step >= 0 and inference_step <= max_steps
+        ), "inference_step must be between 0 and max_steps"
         self.training_rate = training_rate
         self.inference_step = inference_step
         self.max_steps = max_steps
@@ -24,34 +30,60 @@ class BPE_Schedule():
     def get_schedule_fn(self, t: torch.Tensor, training: bool) -> torch.Tensor:
         # False --> absolute
         # True --> relative
-        if training: # at TRAINING: then random dropout
+        if training:  # at TRAINING: then random dropout
             return self.last_random < self.training_rate
         # at INFERENCE: step function as BPE schedule
-        elif self.inference_step == -1: # --> all denoising chain with APE (absolute)
+        elif self.inference_step == -1:  # --> all denoising chain with APE (absolute)
             return torch.zeros_like(t, dtype=torch.bool)
-        elif self.inference_step == 0: # --> all denoising chain with RPE (relative)
+        elif self.inference_step == 0:  # --> all denoising chain with RPE (relative)
             return torch.ones_like(t, dtype=torch.bool)
-        else: # --> BPE with binary step function. Step from APE to RPE at "self.inference_step"
+        else:  # --> BPE with binary step function. Step from APE to RPE at "self.inference_step"
             return ~(t > self.max_steps - self.inference_step)
-    
+
     def use_bias(self, t: torch.Tensor, training: bool) -> torch.Tensor:
         # function that returns True if we should use the absolute bias (only when using multi-segments **inference**)
-        assert (t[0] == t).all(), "Bias from mixed schedule only supported when using same timestep for all batch elements: " + str(t)
-        return ~self.get_schedule_fn(t[0], training) # if APE --> use bias to limit attention to the each subsequence
+        assert (t[0] == t).all(), (
+            "Bias from mixed schedule only supported when using same timestep for all batch elements: "
+            + str(t)
+        )
+        return ~self.get_schedule_fn(
+            t[0], training
+        )  # if APE --> use bias to limit attention to the each subsequence
 
     def get_time_weights(self, t: torch.Tensor, training: bool) -> torch.Tensor:
         # 0 --> absolute
         # 1 --> relative
         return self.get_schedule_fn(t, training).to(torch.int32)
 
+
 class MDM(nn.Module):
-    def __init__(self, modeltype, njoints, nfeats, translation, pose_rep, glob, glob_rot,
-                 latent_dim=256, ff_size=1024, num_layers=8, num_heads=4, dropout=0.1,
-                 ablation=None, activation="gelu", legacy=False, data_rep='rot6d', dataset='aistpp', #clip_dim=512,
-                 arch='trans_enc', emb_trans_dec=False, clip_version=None, **kargs):
+    def __init__(
+        self,
+        modeltype,
+        njoints,
+        nfeats,
+        translation,
+        pose_rep,
+        glob,
+        glob_rot,
+        latent_dim=256,
+        ff_size=1024,
+        num_layers=8,
+        num_heads=4,
+        dropout=0.1,
+        ablation=None,
+        activation="gelu",
+        legacy=False,
+        data_rep="rot6d",
+        dataset="aistpp",  # clip_dim=512,
+        arch="trans_enc",
+        emb_trans_dec=False,
+        clip_version=None,
+        **kargs,
+    ):
         super().__init__()
 
-        #self.legacy = legacy
+        # self.legacy = legacy
         self.modeltype = modeltype
         self.njoints = njoints
         self.nfeats = nfeats
@@ -72,36 +104,41 @@ class MDM(nn.Module):
 
         self.ablation = ablation
         self.activation = activation
-        self.action_emb = kargs.get('action_emb', None)
-        
-        self.music_dim = 35 * 90 #baseline feats
+        self.action_emb = kargs.get("action_emb", None)
+
+        self.music_dim = 35 * 90  # baseline feats
         # pos_dim = 3
         # rot_dim = self.njoints * self.nfeats  # 24 joints, 6dof
         # self.input_feats = pos_dim + rot_dim + 4
-    
+
         # output_feats = self.input_feats
 
         self.input_feats = self.njoints * self.nfeats
 
-        self.normalize_output = kargs.get('normalize_encoder_output', False)
+        self.normalize_output = kargs.get("normalize_encoder_output", False)
 
-        self.cond_drop_prob = kargs.get('cond_drop_prob')
+        self.cond_drop_prob = kargs.get("cond_drop_prob")
 
-        self.cond_mode = kargs.get('cond_mode', 'no_cond')
-        self.cond_mask_prob = kargs.get('cond_mask_prob', 0.)
+        self.cond_mode = kargs.get("cond_mode", "no_cond")
+        self.cond_mask_prob = kargs.get("cond_mask_prob", 0.0)
         self.arch = arch
-        self.gru_emb_dim = self.latent_dim if self.arch == 'gru' else 0
-        
-        self.max_seq_att = kargs.get('max_seq_att', 1024)
-        self.input_process = InputProcess(self.data_rep, self.input_feats+self.gru_emb_dim, self.latent_dim)
-        self.process_cond_input = [nn.Linear(2*self.latent_dim, self.latent_dim) for _ in range(self.num_layers)]
-        
+        self.gru_emb_dim = self.latent_dim if self.arch == "gru" else 0
+
+        self.max_seq_att = kargs.get("max_seq_att", 1024)
+        self.input_process = InputProcess(
+            self.data_rep, self.input_feats + self.gru_emb_dim, self.latent_dim
+        )
+        self.process_cond_input = [
+            nn.Linear(2 * self.latent_dim, self.latent_dim)
+            for _ in range(self.num_layers)
+        ]
+
         self.sequence_pos_encoder = PositionalEncoding(self.latent_dim, self.dropout)
         self.emb_trans_dec = emb_trans_dec
 
-        self.motion_mask = kargs['motion_mask']
-        self.hist_frames = kargs['hist_frames']
-        
+        self.motion_mask = kargs["motion_mask"]
+        self.hist_frames = kargs["hist_frames"]
+
         #!here
         #########################
         # self.use_chunked_att = kargs.get('use_chunked_att', False)
@@ -139,50 +176,67 @@ class MDM(nn.Module):
         #     )
         # )
         ########################
-        
-        if self.arch == 'inpainting':
+
+        if self.arch == "inpainting":
             # print("TRANS_ENC init")
-            seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
-                                                            nhead=self.num_heads,
-                                                            dim_feedforward=self.ff_size,
-                                                            dropout=self.dropout,
-                                                            activation=self.activation)
+            seqTransEncoderLayer = nn.TransformerEncoderLayer(
+                d_model=self.latent_dim,
+                nhead=self.num_heads,
+                dim_feedforward=self.ff_size,
+                dropout=self.dropout,
+                activation=self.activation,
+            )
 
-            self.seqTransEncoder = nn.TransformerEncoder(seqTransEncoderLayer,
-                                                        num_layers=self.num_layers)
-        elif self.arch == 'trans_dec':
+            self.seqTransEncoder = nn.TransformerEncoder(
+                seqTransEncoderLayer, num_layers=self.num_layers
+            )
+        elif self.arch == "trans_dec":
             print("TRANS_DEC init")
-            seqTransDecoderLayer = nn.TransformerDecoderLayer(d_model=self.latent_dim,
-                                                            nhead=self.num_heads,
-                                                            dim_feedforward=self.ff_size,
-                                                            dropout=self.dropout,
-                                                            activation=activation)
-            self.seqTransDecoder = nn.TransformerDecoder(seqTransDecoderLayer,
-                                                        num_layers=self.num_layers)
-        
+            seqTransDecoderLayer = nn.TransformerDecoderLayer(
+                d_model=self.latent_dim,
+                nhead=self.num_heads,
+                dim_feedforward=self.ff_size,
+                dropout=self.dropout,
+                activation=activation,
+            )
+            self.seqTransDecoder = nn.TransformerDecoder(
+                seqTransDecoderLayer, num_layers=self.num_layers
+            )
+
         else:
-            raise ValueError('Please choose correct architecture [trans_enc, trans_dec, gru]')
+            raise ValueError(
+                "Please choose correct architecture [trans_enc, trans_dec, gru]"
+            )
 
-        self.embed_timestep = TimestepEmbedder(self.latent_dim, self.sequence_pos_encoder)
+        self.embed_timestep = TimestepEmbedder(
+            self.latent_dim, self.sequence_pos_encoder
+        )
 
-        if self.cond_mode != 'no_cond':
-            if 'music' in self.cond_mode:
+        if self.cond_mode != "no_cond":
+            if "music" in self.cond_mode:
                 self.embed_music = nn.Linear(self.music_dim, self.latent_dim)
                 # print("EMBED MUSIC")
 
-        self.output_process = OutputProcess(self.data_rep, self.input_feats, self.latent_dim, self.njoints,
-                                            self.nfeats)
+        self.output_process = OutputProcess(
+            self.data_rep, self.input_feats, self.latent_dim, self.njoints, self.nfeats
+        )
 
         # self.rot2xyz = Rotation2xyz(device='cpu', dataset=self.dataset)
 
     def parameters_wo_clip(self):
-        return [p for name, p in self.named_parameters() if not name.startswith('clip_model.')]
+        return [
+            p
+            for name, p in self.named_parameters()
+            if not name.startswith("clip_model.")
+        ]
 
     def load_and_freeze_clip(self, clip_version):
-        clip_model, clip_preprocess = clip.load(clip_version, device='cpu',
-                                                jit=False)  # Must set jit=False for training
+        clip_model, clip_preprocess = clip.load(
+            clip_version, device="cpu", jit=False
+        )  # Must set jit=False for training
         clip.model.convert_weights(
-            clip_model)  # Actually this line is unnecessary since clip by default already on float16
+            clip_model
+        )  # Actually this line is unnecessary since clip by default already on float16
 
         # Freeze CLIP weights
         clip_model.eval()
@@ -197,10 +251,14 @@ class MDM(nn.Module):
         # print("Reshaped Shape:", cond.shape)
         if force_mask:
             return torch.zeros_like(cond)
-        elif self.training and self.cond_mask_prob > 0.:
-            mask = torch.bernoulli(torch.ones(bs, device=cond.device) * self.cond_mask_prob).view(bs, 1)  # 1-> use null_cond, 0-> use real cond
+        elif self.training and self.cond_mask_prob > 0.0:
+            mask = torch.bernoulli(
+                torch.ones(bs, device=cond.device) * self.cond_mask_prob
+            ).view(
+                bs, 1
+            )  # 1-> use null_cond, 0-> use real cond
             # print("Mask Shape:", mask.shape)
-            masked_cond = cond * (1. - mask)
+            masked_cond = cond * (1.0 - mask)
             # print("Masked Cond Shape:", masked_cond.shape)
             return masked_cond
         else:
@@ -212,7 +270,7 @@ class MDM(nn.Module):
         timesteps: [batch_size] (int)
         """
         bs, njoints, nfeats, nframes = x.shape
-        
+
         #! here
         # ########
         # mask = (y['mask'].reshape((bs, nframes))[:, :nframes].to(x.device)).bool() # [bs, max_frames]
@@ -228,13 +286,13 @@ class MDM(nn.Module):
         # # store info needed for the relative PE --> rotary embedding
         # rotary_kwargs = {'timesteps': timesteps, 'pos_pe_abs': y.get("pos_pe_abs", None), 'training': self.training, 'pe_bias': pe_bias }
         # ##########
-        
+
         #! here
         # time_emb = self.embed_timestep(timesteps)  # [1, bs, d]
         emb = self.embed_timestep(timesteps)
 
-        force_mask = y.get('uncond', False)
-        
+        force_mask = y.get("uncond", False)
+
         #! here
         # music_emb = self.embed_music(self.mask_cond(y['music'], force_mask=force_mask))
         # # print("music emb before: ", music_emb.shape)
@@ -242,12 +300,13 @@ class MDM(nn.Module):
         # # print("music emb after: ", music_emb.shape)
         # emb = time_emb + music_emb
         # x = self.input_process(x)
-        
-        music_emb = self.embed_music(y['music'])
+        tmp = y["music"]
+        print(f"music emb: {tmp.shape}")
+        music_emb = self.embed_music(y["music"])
         emb += self.mask_cond(music_emb, force_mask=force_mask)
 
         x = self.input_process(x)
-        
+
         #! here
         # # ============== MAIN ARCHITECTURE ==============
         # # APE or RPE is injected inside seqTransEncoder forward function
@@ -256,22 +315,29 @@ class MDM(nn.Module):
         # output = self.seqTransEncoder(x, mask=mask, cond_tokens=emb, attn_bias=pe_bias, rotary_kwargs=rotary_kwargs, chunked_attn=chunked_attn)  # [bs, seqlen, d]
         # output = output.permute(1, 0, 2)  # [seqlen, bs, d]
 
-        mask = lengths_to_mask(y['lengths'], x.device)
-        if self.arch == 'inpainting' or self.hist_frames == 0 or y.get('hframes', None) == None:
+        mask = lengths_to_mask(y["lengths"], x.device)
+        if (
+            self.arch == "inpainting"
+            or self.hist_frames == 0
+            or y.get("hframes", None) == None
+        ):
             token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
-            
+
             aug_mask = torch.cat((token_mask, mask), 1)
             xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
             xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-            
+
             if self.motion_mask:
                 # print(aug_mask)
-                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[
+                    1:
+                ]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
             else:
                 output = self.seqTransEncoder(xseq)[1:]
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         return output
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
@@ -280,16 +346,18 @@ class PositionalEncoding(nn.Module):
 
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model)
+        )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
 
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
         # not used in the final model
-        x = x + self.pe[:x.shape[0], :]
+        x = x + self.pe[: x.shape[0], :]
         return self.dropout(x)
 
 
@@ -317,18 +385,18 @@ class InputProcess(nn.Module):
         self.input_feats = input_feats
         self.latent_dim = latent_dim
         self.poseEmbedding = nn.Linear(self.input_feats, self.latent_dim)
-        if self.data_rep == 'rot_vel':
+        if self.data_rep == "rot_vel":
             self.velEmbedding = nn.Linear(self.input_feats, self.latent_dim)
 
     def forward(self, x):
         bs, njoints, nfeats, nframes = x.shape
         # print("INPUT PROCESS: ", bs, njoints, nfeats, nframes)
-        x = x.permute((3, 0, 1, 2)).reshape(nframes, bs, njoints*nfeats)
+        x = x.permute((3, 0, 1, 2)).reshape(nframes, bs, njoints * nfeats)
 
-        if self.data_rep in ['rot6d', 'xyz', 'hml_vec']:
+        if self.data_rep in ["rot6d", "xyz", "hml_vec"]:
             x = self.poseEmbedding(x)  # [seqlen, bs, d]
             return x
-        elif self.data_rep == 'rot_vel':
+        elif self.data_rep == "rot_vel":
             first_pose = x[[0]]  # [1, bs, 150]
             first_pose = self.poseEmbedding(first_pose)  # [1, bs, d]
             vel = x[1:]  # [seqlen-1, bs, 150]
@@ -347,14 +415,14 @@ class OutputProcess(nn.Module):
         self.njoints = njoints
         self.nfeats = nfeats
         self.poseFinal = nn.Linear(self.latent_dim, self.input_feats)
-        if self.data_rep == 'rot_vel':
+        if self.data_rep == "rot_vel":
             self.velFinal = nn.Linear(self.latent_dim, self.input_feats)
 
     def forward(self, output):
         nframes, bs, d = output.shape
-        if self.data_rep in ['rot6d', 'xyz', 'hml_vec']:
+        if self.data_rep in ["rot6d", "xyz", "hml_vec"]:
             output = self.poseFinal(output)  # [seqlen, bs, 150]
-        elif self.data_rep == 'rot_vel':
+        elif self.data_rep == "rot_vel":
             first_pose = output[[0]]  # [1, bs, d]
             first_pose = self.poseFinal(first_pose)  # [1, bs, 150]
             vel = output[1:]  # [seqlen-1, bs, d]

@@ -138,14 +138,15 @@ dmypy.json
 *.json
 
 # ignore these folders
-./save/
-./scripts/
-./newPCMDM/
-./data_loaders/d2m/aistpp_dataset
+./save/*
+./scripts/*
+./newPCMDM/*
+./data_loaders/d2m/aistpp_dataset/*
 *.pkl
 *.npy
 *.wav
 *.pt
+data_loaders/d2m/aistpp_dataset.zip
 
-# ignore in Cat's computer
-./script_local/
+# ignore folders of Cat's laptop
+./script_local/*
