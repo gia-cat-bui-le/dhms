@@ -140,7 +140,7 @@ class MDM(nn.Module):
         self.hist_frames = kargs["hist_frames"]
 
         #!here
-        #########################
+        # #########################
         # self.use_chunked_att = kargs.get('use_chunked_att', False)
         # bpe_training_rate = kargs.get('bpe_training_ratio', 0.5) # for training, we dropout with prob 50% --> APE vs RPE
         # bpe_inference_step = kargs.get('bpe_denoising_step', None)
@@ -175,17 +175,35 @@ class MDM(nn.Module):
         #         rotary_bpe_schedule = self.bpe_schedule, # bpe schedule for rotary embeddings (RPE)
         #     )
         # )
-        ########################
-
-        if self.arch == "inpainting":
+        # ########################
+        
+        if self.hist_frames > 0:
+            # self.hist_frames = 5
+            self.seperation_token = nn.Parameter(torch.randn(latent_dim))
+            self.skel_embedding = nn.Linear(self.njoints, self.latent_dim)
+        
+        if self.arch == 'inpainting':
             # print("TRANS_ENC init")
-            seqTransEncoderLayer = nn.TransformerEncoderLayer(
-                d_model=self.latent_dim,
-                nhead=self.num_heads,
-                dim_feedforward=self.ff_size,
-                dropout=self.dropout,
-                activation=self.activation,
-            )
+            seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
+                                                            nhead=self.num_heads,
+                                                            dim_feedforward=self.ff_size,
+                                                            dropout=self.dropout,
+                                                            activation=self.activation)
+
+            self.seqTransEncoder = nn.TransformerEncoder(seqTransEncoderLayer,
+                                                        num_layers=self.num_layers)
+        elif self.arch == 'trans_dec':
+            print("TRANS_DEC init")
+            seqTransDecoderLayer = nn.TransformerDecoderLayer(d_model=self.latent_dim,
+                                                            nhead=self.num_heads,
+                                                            dim_feedforward=self.ff_size,
+                                                            dropout=self.dropout,
+                                                            activation=activation)
+            self.seqTransDecoder = nn.TransformerDecoder(seqTransDecoderLayer,
+                                                        num_layers=self.num_layers)
+        
+        else:
+            raise ValueError('Please choose correct architecture [trans_enc, trans_dec, gru]')
 
             self.seqTransEncoder = nn.TransformerEncoder(
                 seqTransEncoderLayer, num_layers=self.num_layers
@@ -270,7 +288,7 @@ class MDM(nn.Module):
         timesteps: [batch_size] (int)
         """
         bs, njoints, nfeats, nframes = x.shape
-
+        
         #! here
         # ########
         # mask = (y['mask'].reshape((bs, nframes))[:, :nframes].to(x.device)).bool() # [bs, max_frames]
@@ -286,13 +304,14 @@ class MDM(nn.Module):
         # # store info needed for the relative PE --> rotary embedding
         # rotary_kwargs = {'timesteps': timesteps, 'pos_pe_abs': y.get("pos_pe_abs", None), 'training': self.training, 'pe_bias': pe_bias }
         # ##########
-
-        #! here
+        
         # time_emb = self.embed_timestep(timesteps)  # [1, bs, d]
-        emb = self.embed_timestep(timesteps)
+        #!
+        
+        emb = self.embed_timestep(timesteps)  # [1, bs, d]
 
-        force_mask = y.get("uncond", False)
-
+        force_mask = y.get('uncond', False)
+        
         #! here
         # music_emb = self.embed_music(self.mask_cond(y['music'], force_mask=force_mask))
         # # print("music emb before: ", music_emb.shape)
@@ -300,13 +319,12 @@ class MDM(nn.Module):
         # # print("music emb after: ", music_emb.shape)
         # emb = time_emb + music_emb
         # x = self.input_process(x)
-        tmp = y["music"]
-        print(f"music emb: {tmp.shape}")
-        music_emb = self.embed_music(y["music"])
+        music_emb = self.embed_music(y['music'])
         emb += self.mask_cond(music_emb, force_mask=force_mask)
 
         x = self.input_process(x)
-
+        #!
+        
         #! here
         # # ============== MAIN ARCHITECTURE ==============
         # # APE or RPE is injected inside seqTransEncoder forward function
@@ -315,25 +333,32 @@ class MDM(nn.Module):
         # output = self.seqTransEncoder(x, mask=mask, cond_tokens=emb, attn_bias=pe_bias, rotary_kwargs=rotary_kwargs, chunked_attn=chunked_attn)  # [bs, seqlen, d]
         # output = output.permute(1, 0, 2)  # [seqlen, bs, d]
 
-        mask = lengths_to_mask(y["lengths"], x.device)
-        if (
-            self.arch == "inpainting"
-            or self.hist_frames == 0
-            or y.get("hframes", None) == None
-        ):
-            token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
-
-            aug_mask = torch.cat((token_mask, mask), 1)
-            xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
-            xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-
-            if self.motion_mask:
-                # print(aug_mask)
-                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[
-                    1:
-                ]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+        # mask = lengths_to_mask(y['lengths'], x.device)
+        
+        if self.arch == 'inpainting':
+            mask = lengths_to_mask(y['lengths'], x.device)
+            if y.get('hframes', None) == None:
+                token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
+                aug_mask = torch.cat((token_mask, mask), 1)
+                xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
+                xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+                if self.motion_mask:
+                    output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+                else:
+                    output = self.seqTransEncoder(xseq)[1:]
             else:
-                output = self.seqTransEncoder(xseq)[1:]
+                token_mask = torch.ones((bs, 2 + 2*self.hist_frames), dtype=bool, device=x.device)
+                aug_mask = torch.cat((token_mask, mask), 1)
+                sep_token = torch.tile(self.seperation_token, (bs,)).reshape(bs, -1).unsqueeze(0)
+                hframes = y['hframes'].squeeze(2).permute(2, 0, 1) #TODO find out the diff 
+                hframes_emb = self.skel_embedding(hframes)
+                fut_frames = y['fut_frames'].squeeze(2).permute(2, 0, 1)
+                fut_frames_emb = self.skel_embedding(fut_frames)
+                # hframes_emb = hframes_emb.permute(1, 0, 2) # [5 b dim]
+                xseq = torch.cat((emb, hframes_emb, fut_frames_emb, sep_token, x), axis=0)
+                # TODO add attention mask
+                xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + 2*self.hist_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         return output

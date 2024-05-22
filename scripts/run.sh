@@ -1,19 +1,17 @@
 #!/bin/bash
-#SBATCH --job-name=job
-#SBATCH --ntasks=1
+#SBATCH --job-name=baseline-sinmdm
 #SBATCH --gpus=1             # total number of GPUs
-#SBATCH --output="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training/dhms.out"
-#SBATCH --error="/media/nhdang/Vy_Cat/dhms/scripts/log_out/training/dhms.err"
-#SBATCH --nodes=1
+#SBATCH --output="/media/nhdang/Vy_Cat/baseline-sinmdm/scripts/log_out/training_baseline_sinmdm/dhms.out"
+#SBATCH --error="/media/nhdang/Vy_Cat/baseline-sinmdm/scripts/log_out/training_baseline_sinmdm/dhms.err"
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=16G
-#SBATCH --cpus-per-task=8
-#SBATCH -w gpu05
+#SBATCH --cpus-per-task=16
+#SBATCH -w gpu01
 
 source /media/nhdang/hieunmt/miniconda3/etc/profile.d/conda.sh
 
-cd /media/nhdang/Vy_Cat/dhms
-
 conda activate dhms
 
-python3 train_diffusion.py --save_dir ./save/pcmdm --dataset aistpp --hist_frames 75
+cd /media/nhdang/Vy_Cat/baseline-sinmdm
+
+python3 train_diffusion.py --save_dir /raid/nhdang/Vy/dhms/baseline-sinmdm --dataset aistpp --eval_during_training --inference_dir /raid/nhdang/Vy/data/baseline-sinmdm

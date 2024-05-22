@@ -148,5 +148,7 @@ dmypy.json
 *.pt
 data_loaders/d2m/aistpp_dataset.zip
 
+/renders
+
 # ignore folders of Cat's laptop
 ./script_local/*

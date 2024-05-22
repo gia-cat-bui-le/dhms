@@ -115,31 +115,17 @@ def add_diffusion_options(parser):
 
 
 def add_model_options(parser):
-    group = parser.add_argument_group("model")
-    # =================== FlowMDM specific arguments ===================
-    # group.add_argument(
-    #     "--bpe_training_ratio",
-    #     default=0.5,
-    #     type=float,
-    #     help="Ratio of usage for absolute positional embeddings (APE) during training versus relative ones (RPE).",
-    # )
-    # group.add_argument(
-    #     "--bpe_denoising_step",
-    #     default=100,
-    #     type=int,
-    #     help="Denoising step where transitioning from absolute to relative positional embeddings (APE -> RPE) at inference --i.e.--> schedule of Blended Positional Embeddings (BPE). 0 for all RPE, -1 or >= than 'diffusion_steps' for all APE",
-    # )
-    # group.add_argument(
-    #     "--rpe_horizon",
-    #     default=30,
-    #     type=int,
-    #     help="Window size, or horizon (H), for the local/relative attention",
-    # )
-    # group.add_argument(
-    #     "--use_chunked_att",
-    #     action="store_true",
-    #     help="If True, it uses chunked windowed local/relative attention like in LongFormer.",
-    # )
+    group = parser.add_argument_group('model')
+    #! here
+    # # =================== FlowMDM specific arguments ===================
+    # group.add_argument("--bpe_training_ratio", default=0.5, type=float,
+    #                    help="Ratio of usage for absolute positional embeddings (APE) during training versus relative ones (RPE).")
+    # group.add_argument("--bpe_denoising_step", default=100, type=int,
+    #                    help="Denoising step where transitioning from absolute to relative positional embeddings (APE -> RPE) at inference --i.e.--> schedule of Blended Positional Embeddings (BPE). 0 for all RPE, -1 or >= than 'diffusion_steps' for all APE")
+    # group.add_argument("--rpe_horizon", default=30, type=int,
+    #                    help="Window size, or horizon (H), for the local/relative attention")
+    # group.add_argument("--use_chunked_att", action='store_true',
+    #                    help="If True, it uses chunked windowed local/relative attention like in LongFormer.")
     # =================== MDM related arguments  ===================
     group.add_argument(
         "--max_seq_att", default=1024, type=int, help="Max window size for attention"
@@ -154,46 +140,24 @@ def add_model_options(parser):
 
     group.add_argument("--feature_type", default="baseline", type=str)
     group.add_argument("--cond_drop_prob", default=0.25, type=float)
-    group.add_argument(
-        "--arch",
-        default="inpainting",
-        choices=["trans_enc", "trans_dec", "gru", "past_cond", "inpainting"],
-        type=str,
-        help="Architecture types as reported in the paper.",
-    )
-    group.add_argument(
-        "--emb_trans_dec",
-        default=False,
-        type=bool,
-        help="For trans_dec architecture only, if true, will inject condition as a class token"
-        " (in addition to cross-attention).",
-    )
-    group.add_argument(
-        "--cond_mask_prob",
-        default=0.1,
-        type=float,
-        help="The probability of masking the condition during training."
-        " For classifier-free guidance learning.",
-    )
-    group.add_argument(
-        "--lambda_mse", default=0.636, type=float, help="Joint positions loss."
-    )
-    group.add_argument(
-        "--lambda_rcxyz", default=0.646, type=float, help="Joint positions loss."
-    )
-    group.add_argument(
-        "--lambda_vel", default=2.964, type=float, help="Joint velocity loss."
-    )
-    group.add_argument(
-        "--lambda_fc", default=10.942, type=float, help="Foot contact loss."
-    )
-    group.add_argument(
-        "--lambda_cycle", default=0.0, type=float, help="Foot contact loss."
-    )
+    group.add_argument("--arch", default='inpainting',
+                       choices=['trans_enc', 'trans_dec', 'gru', 'past_cond', 'inpainting'], type=str,
+                       help="Architecture types as reported in the paper.")
+    group.add_argument("--emb_trans_dec", default=False, type=bool,
+                       help="For trans_dec architecture only, if true, will inject condition as a class token"
+                            " (in addition to cross-attention).")
+    group.add_argument("--cond_mask_prob", default=.1, type=float,
+                       help="The probability of masking the condition during training."
+                            " For classifier-free guidance learning.")
+    group.add_argument("--lambda_mse", default=0.636, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_rcxyz", default=0.646, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
+    group.add_argument("--lambda_fc", default=10.942, type=float, help="Foot contact loss.")
+    group.add_argument("--lambda_cycle", default=1.0, type=float, help="Foot contact loss.")
     # group.add_argument("--unconstrained", action='store_true',
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "
     #                         "Currently tested on HumanAct12 only.")
-    group.add_argument("--hist_frames", default=75, type=int, help="hist_frames")
+    group.add_argument("--hist_frames", default=30, type=int, help="hist_frames")
     group.add_argument("--motion_mask", default=True, type=bool, help="if mask")
 
     group.add_argument(
@@ -206,30 +170,17 @@ def add_model_options(parser):
 
 
 def add_data_options(parser):
-    group = parser.add_argument_group("dataset")
-    group.add_argument(
-        "--dataset",
-        default="aistpp",
-        choices=["aistpp", "finedance"],
-        type=str,
-        help="Dataset name (choose from list).",
-    )
-    group.add_argument(
-        "--data_dir",
-        default="/raid/nhdang/Vy/data",
-        type=str,
-        help="If empty, will use defaults according to the specified dataset.",
-    )
+    group = parser.add_argument_group('dataset')
+    group.add_argument("--dataset", default='aistpp', choices=['aistpp', 'finedance'], type=str,
+                       help="Dataset name (choose from list).")
+    group.add_argument("--data_dir", default="/home/ltnghia02/data", type=str,
+                       help="If empty, will use defaults according to the specified dataset.")
     group.add_argument(
         "--force_reload", action="store_true", help="force reloads the datasets"
     )
-    group.add_argument(
-        "--inference_dir",
-        default="/raid/nhdang/Vy/data/evaluation",
-        type=str,
-        help="If empty, will use defaults according to the specified dataset.",
-    )
-
+    group.add_argument("--inference_dir", default="/home/ltnghia02/data/evaluation", type=str,
+                       help="If empty, will use defaults according to the specified dataset.")
+    
 
 def add_training_options(parser):
     group = parser.add_argument_group("training")

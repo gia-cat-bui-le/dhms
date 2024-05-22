@@ -51,41 +51,24 @@ def get_model_args(args, data):
 
     feature_dim = 35 if args.feature_type == "baseline" else 4800
     cond_drop_prob = args.cond_drop_prob
-
-    return {
-        "modeltype": "",
-        "njoints": njoints,
-        "nfeats": nfeats,
-        "translation": True,
-        "pose_rep": data_rep,
-        "glob": True,
-        "glob_rot": True,
-        "latent_dim": args.latent_dim,
-        "ff_size": 1024,
-        "num_layers": args.layers,
-        "num_heads": 4,
-        "dropout": 0.1,
-        "activation": F.gelu,
-        "data_rep": data_rep,
-        "cond_mode": cond_mode,
-        "cond_mask_prob": args.cond_mask_prob,
-        "action_emb": action_emb,
-        "arch": args.arch,
-        "emb_trans_dec": args.emb_trans_dec,
-        "dataset": args.dataset,
-        "hist_frames": args.hist_frames,
-        "motion_mask": args.motion_mask,
-        "music_dim": feature_dim,
-        "cond_drop_prob": cond_drop_prob,
-        # FlowMDM
-        # "diffusion_steps": args.diffusion_steps,
-        # "max_seq_att": args.max_seq_att,
-        # "bpe_denoising_step": args.bpe_denoising_step,
-        # "bpe_training_ratio": args.bpe_training_ratio,
-        # "rpe_horizon": args.rpe_horizon,
-        # "use_chunked_att": args.use_chunked_att,
-    }
-
+    
+    return {'modeltype': '', 'njoints': njoints, 'nfeats': nfeats,
+            'translation': True, 'pose_rep': data_rep, 'glob': True, 'glob_rot': True,
+            'latent_dim': args.latent_dim, 'ff_size': 1024, 'num_layers': args.layers, 'num_heads': 4,
+            'dropout': 0.1, 'activation': F.gelu, 'data_rep': data_rep, 'cond_mode': cond_mode,
+            'cond_mask_prob': args.cond_mask_prob, 'action_emb': action_emb, 'arch': args.arch,
+            'emb_trans_dec': args.emb_trans_dec, 'dataset': args.dataset,
+            'hist_frames': args.hist_frames, 'motion_mask': args.motion_mask, 'music_dim': feature_dim,
+            'cond_drop_prob': cond_drop_prob,
+            #! here
+            # # FlowMDM
+            # 'diffusion_steps': args.diffusion_steps,
+            # 'max_seq_att': args.max_seq_att, 
+            # 'bpe_denoising_step': args.bpe_denoising_step,
+            # 'bpe_training_ratio': args.bpe_training_ratio,
+            # 'rpe_horizon': args.rpe_horizon,
+            # 'use_chunked_att': args.use_chunked_att,
+            }
 
 def create_gaussian_diffusion(args):
     # default params
