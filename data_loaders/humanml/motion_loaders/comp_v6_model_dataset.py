@@ -278,7 +278,7 @@ class CompMDMGeneratedDataset(Dataset):
 
 class CompCCDGeneratedDataset(Dataset):
 
-    def __init__(self, args, model, diffusion, dataloader, mm_num_samples, mm_num_repeats, num_samples_limit, scale=1.):
+    def __init__(self, args, model, diffusion, dataloader, mm_num_samples, mm_num_repeats, num_samples_limit, scale=1., normalizer=None):
         self.dataloader = dataloader
         # dataloader = self.dataloader
         # print(dataloader)
@@ -472,6 +472,8 @@ class CompCCDGeneratedDataset(Dataset):
                         motion_result = torch.cat((motion_0_result, motion_2_result, motion_1_result), dim=0)
                         
                         assert motion_result.shape == (3, 90, nfeats)
+                        
+                        motion_result = normalizer.unnormalize(motion_result)
                         
                         if motion_result.shape[2] == nfeats:
                             sample_contact, motion_result = torch.split(

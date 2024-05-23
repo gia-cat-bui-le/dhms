@@ -133,7 +133,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
 
     logger.log("creating data loader...")
     split = False
-    origin_loader, _ = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=split)
+    origin_loader, normalizer = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=split)
     
     # gt_loader = get_dataset_loader(name=args.dataset, eval_batch_size=args.eval_batch_size, split=split, hml_mode='eval')
     # num_actions = gen_loader.dataset.num_actions
@@ -154,7 +154,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
     eval_motion_loaders = {
         'vald': lambda: get_mdm_loader(
             args, model, diffusion, args.eval_batch_size,
-            origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
+            origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param, normalizer=normalizer
         )
     }
 
