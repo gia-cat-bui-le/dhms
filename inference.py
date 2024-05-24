@@ -33,7 +33,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
 from evaluation.metrics_finedance import quantized_metrics as quantized_metrics_finedance, calc_and_save_feats as calc_and_save_feats_finedance
 
-def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
+def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False, normalizer=None):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     if args.dataset == "aistpp":
         njoints = 24
@@ -45,6 +45,8 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
     for batch in origin_loader:
         motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1"], batch["filename"]
         motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=1)).to(device)
+        
+        motion = normalizer.unnormalize(motion)
         
         b, s, c = motion.shape
         
@@ -158,7 +160,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
         )
     }
 
-    inference(args, eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm)
+    inference(args, eval_motion_loaders, origin_loader, args.out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=run_mm, normalizer=normalizer)
 
 if __name__ == '__main__':
     args = evaluation_parser()
