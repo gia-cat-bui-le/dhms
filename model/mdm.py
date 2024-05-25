@@ -211,6 +211,37 @@ class MDM(nn.Module):
         else:
             return cond
 
+    def get_rcond(self, output):
+        # with torch.no_grad():
+            if self.normalizer is not None:
+                output = self.normalizer.unnormalize(output)
+            #! this
+            joints3d = smpl(output, self.smplxfk)[:,:,:22,:]
+            B,T,J,_ = joints3d.shape
+            l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx = 7, 8, 10, 11
+            relevant_joints = [l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx]
+            pred_foot = joints3d[:, :, relevant_joints, :]          # B,T,J,4
+            foot_vel = torch.zeros_like(pred_foot)
+            foot_vel[:, :-1] = (
+                pred_foot[:, 1:, :, :] - pred_foot[:, :-1, :, :]
+            )  # (N, S-1, 4, 3)
+            foot_y_ankle = pred_foot[:, :, :2, 1]
+            foot_y_toe = pred_foot[:, :, 2:, 1]
+            fc_mask_ankle = torch.unsqueeze((foot_y_ankle <= (-1.2+0.012)), dim=3).repeat(1, 1, 1, 3)
+            fc_mask_teo = torch.unsqueeze((foot_y_toe <= (-1.2+0.05)), dim=3).repeat(1, 1, 1, 3)
+            contact_lable = torch.cat([fc_mask_ankle, fc_mask_teo], dim=2).int().to(output).reshape(B, T, -1)
+
+            contact_toe_thresh, contact_ankle_thresh, contact_vel_thresh = -1.2+0.08, -1.2+0.015, 0.3 / 30           # 30 is fps
+            contact_score_toe = torch.sigmoid((contact_toe_thresh - pred_foot[:, :, :2, 1])/contact_toe_thresh*5) * \
+            torch.sigmoid((contact_vel_thresh - torch.norm(foot_vel[:, :, :2, [0, 2]], dim=-1))/contact_vel_thresh*5)
+            contact_score_toe = torch.unsqueeze(contact_score_toe, dim=3).repeat(1, 1, 1, 3)
+            contact_score_ankle = torch.sigmoid((contact_ankle_thresh - pred_foot[:, :, 2:, 1])/contact_ankle_thresh*5) * \
+            torch.sigmoid((contact_vel_thresh - torch.norm(foot_vel[:, :, 2:, [0, 2]], dim=-1))/contact_vel_thresh*5)
+            contact_score_ankle = torch.unsqueeze(contact_score_ankle, dim=3).repeat(1, 1, 1, 3)
+            contact_score = torch.cat([contact_score_ankle, contact_score_ankle], dim = -2).reshape(B, T, -1)
+            r_cond = torch.cat([contact_lable, contact_score, pred_foot.reshape(B,T,-1), foot_vel.reshape(B,T,-1)], dim = -1) 
+            return r_cond
+    
     def forward(self, x, timesteps, y=None):
         """
         x: [batch_size, njoints, nfeats, max_frames], denoted x_t in the paper
@@ -218,51 +249,14 @@ class MDM(nn.Module):
         """
         bs, njoints, nfeats, nframes = x.shape
         
-        #! here
-        # ########
-        # mask = (y['mask'].reshape((bs, nframes))[:, :nframes].to(x.device)).bool() # [bs, max_frames]
-
-        # self.bpe_schedule.step(timesteps, self.training) # update the BPE scheduler (decides either APE or RPE for each timestep)
-        # if self.training or self.bpe_schedule.use_bias(timesteps, self.training):
-        #     pe_bias = y.get("pe_bias", None) # This is for limiting the attention to inside each conditioned subsequence. The BPE will decide if we use it or not depending on the dropout at training time.
-        #     chunked_attn = False
-        # else: # when using RPE at inference --> we use the bias to limit the attention to the each subsequence
-        #     pe_bias = None
-        #     chunked_attn = self.use_chunked_att # faster attention for inference with RPE for very long sequences (see LongFormer paper for details)
-
-        # # store info needed for the relative PE --> rotary embedding
-        # rotary_kwargs = {'timesteps': timesteps, 'pos_pe_abs': y.get("pos_pe_abs", None), 'training': self.training, 'pe_bias': pe_bias }
-        # ##########
-        
-        # time_emb = self.embed_timestep(timesteps)  # [1, bs, d]
-        #!
-        
         emb = self.embed_timestep(timesteps)  # [1, bs, d]
 
         force_mask = y.get('uncond', False)
         
-        #! here
-        # music_emb = self.embed_music(self.mask_cond(y['music'], force_mask=force_mask))
-        # # print("music emb before: ", music_emb.shape)
-        # music_emb = music_emb.unsqueeze(0).expand(nframes, -1, -1)
-        # # print("music emb after: ", music_emb.shape)
-        # emb = time_emb + music_emb
-        # x = self.input_process(x)
         music_emb = self.embed_music(y['music'])
         emb += self.mask_cond(music_emb, force_mask=force_mask)
 
         x = self.input_process(x)
-        #!
-        
-        #! here
-        # # ============== MAIN ARCHITECTURE ==============
-        # # APE or RPE is injected inside seqTransEncoder forward function
-        # x, emb = x.permute(1, 0, 2), emb.permute(1, 0, 2)
-        # # print("x: ", x.shape, "emb: ", emb.shape)
-        # output = self.seqTransEncoder(x, mask=mask, cond_tokens=emb, attn_bias=pe_bias, rotary_kwargs=rotary_kwargs, chunked_attn=chunked_attn)  # [bs, seqlen, d]
-        # output = output.permute(1, 0, 2)  # [seqlen, bs, d]
-
-        # mask = lengths_to_mask(y['lengths'], x.device)
         
         if self.arch == 'inpainting':
             mask = lengths_to_mask(y['lengths'], x.device)
