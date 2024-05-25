@@ -56,7 +56,7 @@ def parse_eval_opt():
     parser.add_argument(
         "--motion_path",
         type=str,
-        default="evaluation\inference",
+        default="evaluation\inference-sinmdm-60000",
         help="Where to load saved motions",
     )
     opt = parser.parse_args()
