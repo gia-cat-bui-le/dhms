@@ -46,7 +46,8 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
         motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1"], batch["filename"]
         motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=1)).to(device)
         
-        motion = normalizer.unnormalize(motion)
+        if normalizer is not None:
+            motion = normalizer.unnormalize(motion)
         
         b, s, c = motion.shape
         

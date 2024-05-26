@@ -473,7 +473,8 @@ class CompCCDGeneratedDataset(Dataset):
                         
                         assert motion_result.shape == (3, 90, nfeats)
                         
-                        motion_result = normalizer.unnormalize(motion_result)
+                        if normalizer is not None:
+                            motion_result = normalizer.unnormalize(motion_result)
                         
                         if motion_result.shape[2] == nfeats:
                             sample_contact, motion_result = torch.split(
