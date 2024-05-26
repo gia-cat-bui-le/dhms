@@ -404,7 +404,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    folder_path = "evaluation\inference-sinmdm-normalize"  # Change this to the path of your folder
+    folder_path = "result\EDGE\motions"  # Change this to the path of your folder
     file_pattern = "*.pkl"
     file_list = glob.glob(folder_path + "/" + file_pattern)
 
@@ -415,7 +415,7 @@ if __name__ == '__main__':
         # Access the field named "full_pose" from the loaded data
         poses = data['full_pose']
         
-        render_out = "renders\inference-sinmdm-normalize"
+        render_out = "renders\edge"
         epoch = 0
         name = file_name
         sound = False

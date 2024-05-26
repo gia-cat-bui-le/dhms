@@ -1,7 +1,7 @@
 import numpy as np
 import pickle 
-from features.kinetic import extract_kinetic_features
-from features.manual_new import extract_manual_features
+from evaluation.features.kinetic import extract_kinetic_features
+from evaluation.features.manual_new import extract_manual_features
 from scipy import linalg
 import json
 # kinetic, manual
@@ -11,7 +11,7 @@ from scipy.signal import argrelextrema
 import librosa
 import matplotlib.pyplot as plt 
 
-music_root = 'data_loaders\d2m\\aistpp_dataset\\test\wavs_sliced'
+music_root = 'data_loaders\d2m\\aistpp_dataset\\test\wavs'
 
 
 def get_mb(key, length=None):
@@ -101,7 +101,7 @@ def calc_ba_score(root):
         joint3d.reshape(sq, 24*3)
 
         dance_beats, length = calc_db(joint3d, pkl)     
-        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0] + '.wav'), joint3d.shape[0])
+        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0][5:] + '.wav'), joint3d.shape[0])
 
         ba_scores.append(BA(music_beats, dance_beats))
         
