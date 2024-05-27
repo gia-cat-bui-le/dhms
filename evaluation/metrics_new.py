@@ -198,25 +198,7 @@ def calc_and_save_feats(root):
         # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
-        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)
-        
-        # if not hasattr(joint3d, 'full_pose'):
-        #     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        #     smpl = SMPLSkeleton(device=device)
-            
-        #     q = torch.from_numpy(joint3d["q"])
-        #     pos = torch.from_numpy(joint3d["pos"])
-            
-        #     seq_len = q.shape[0]
-        #     print(seq_len)
-            
-        #     full_pose = process_dataset(pos.unsqueeze(0), q.unsqueeze(0)).squeeze(0).detach().cpu().numpy()  # b, s, 24, 3
-            
-        #     joint3d = full_pose.reshape([seq_len, -1])
-        
-        print(joint3d["full_pose"].shape)
-        # seq_len = joint3d["full_pose"].shape[0]
-        # joint3d = joint3d['full_pose'][:,:].reshape([seq_len, -1])
+        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True).item()['pred_position'][:1200,:]
         
         # print(extract_manual_features(joint3d.reshape(-1, 24, 3)))
         roott = joint3d[:1, :3]  # the root Tx72 (Tx(24x3))

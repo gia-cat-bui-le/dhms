@@ -414,6 +414,7 @@ if __name__ == '__main__':
 
         # Access the field named "full_pose" from the loaded data
         poses = data['full_pose']
+        print(torch.Tensor(poses).shape)
         
         render_out = "renders\edge"
         epoch = 0

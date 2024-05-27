@@ -3,17 +3,17 @@ from evaluation.beat_align import *
 from evaluation.pfc import *
 from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
 
-log_file = "result/log/edge.log"
+log_file = "result/log/bailando.log"
     
 if __name__ == '__main__':
 
     #TODO: fix the path
-    gt_root = 'data_loaders\d2m\\aistpp_dataset\\test\motions'
+    gt_root = 'result\Bailando\gt'
     
     # calc_and_save_feats(gt_root)
 
     pred_roots = [
-        'result\EDGE\motions'
+        'result\Bailando\ep000010'
     ]
     
     with open(log_file, 'a') as f:

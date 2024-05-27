@@ -11,7 +11,7 @@ from scipy.signal import argrelextrema
 import librosa
 import matplotlib.pyplot as plt 
 
-music_root = 'data_loaders\d2m\\aistpp_dataset\\test\wavs'
+music_root = 'data_loaders\\d2m\\aistpp_dataset\\wavs'
 
 
 def get_mb(key, length=None):
@@ -96,12 +96,12 @@ def calc_ba_score(root):
         # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
-        joint3d = pickle.load(open(os.path.join(root, pkl), "rb"))["full_pose"]
+        joint3d = np.load(open(os.path.join(root, pkl), "rb"), allow_pickle=True).item()['pred_position']
         sq = joint3d.shape[0]
         joint3d.reshape(sq, 24*3)
 
         dance_beats, length = calc_db(joint3d, pkl)     
-        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0][5:] + '.wav'), joint3d.shape[0])
+        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0] + '.wav'), joint3d.shape[0])
 
         ba_scores.append(BA(music_beats, dance_beats))
         
