@@ -49,7 +49,6 @@ def calc_physical_score(dir):
 
     out = np.mean(scores) * 10000
     print(f"{dir} has a mean PFC of {out}")
-    return out
 
 
 def parse_eval_opt():
@@ -57,7 +56,7 @@ def parse_eval_opt():
     parser.add_argument(
         "--motion_path",
         type=str,
-        default="evaluation\inference-sinmdm-60000",
+        default="evaluation\inference",
         help="Where to load saved motions",
     )
     opt = parser.parse_args()

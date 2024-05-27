@@ -1,7 +1,7 @@
 import numpy as np
 import pickle 
-from evaluation.features.kinetic import extract_kinetic_features
-from evaluation.features.manual_new import extract_manual_features
+from features.kinetic import extract_kinetic_features
+from features.manual_new import extract_manual_features
 from scipy import linalg
 import json
 # kinetic, manual
@@ -90,18 +90,14 @@ def calc_ba_score(root):
     # gt_list = []
     ba_scores = []
 
-    from tqdm import tqdm
-
-    for pkl in tqdm(os.listdir(root)):
+    for pkl in os.listdir(root):
         # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
-        joint3d = pickle.load(open(os.path.join(root, pkl), "rb"))["full_pose"]
-        sq = joint3d.shape[0]
-        joint3d.reshape(sq, 24*3)
+        joint3d = pickle.load(open(os.path.isdir(os.path.join(root, pkl)), "rb"))["full_pose"].reshape(joint3d.shape[0], 24*3)
 
-        dance_beats, length = calc_db(joint3d, pkl)     
-        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0][5:] + '.wav'), joint3d.shape[0])
+        dance_beats, length = calc_db(joint3d, pkl)        
+        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0] + '.wav'), joint3d.shape[0])
 
         ba_scores.append(BA(music_beats, dance_beats))
         
@@ -115,7 +111,7 @@ if __name__ == '__main__':
     # gt_root = '/mnt/lustre/lisiyao1/dance/bailando/aist_features_zero_start'
     # pred_root = '/mnt/lustressd/lisiyao1/dance_experiements/experiments/sep_vqvae_root_global_vel_wav_acc_batch8/vis/pkl/ep000500'
     # pred_root = ''
-    pred_root = 'evaluation\inference-sinmdm-60000'
+    pred_root = 'save\\results'
     # pred_root = '/mnt/lustre/lisiyao1/dance/bailando/experiments/music_gpt_ds8_lbin512_c512_di3full/eval/pkl/ep000300'
     # pred_root = '/mnt/lustre/lisiyao1/dance/bailando/experiments/music_cross_cond_gpt_ds8_lbin512_c512_di3_init_0.01_beta0.9_full_dim768_3_9_9_ac_reward2_with_entropy_loss_alpha0.5_lr1e-4_no_pretrain/eval/pkl/ep000020'
     # pred_root = '/mnt/lustre/lisiyao1/dance/bailando/experiments/music_cross_cond_gpt_ds8_lbin512_c512_di3_init_0.01_beta0.9_full_dim768_3_9_9_ac_reward2_with_entropy_loss_alpha0.5_lr1e-4_no_pretrain/vis/pkl/ep000300'

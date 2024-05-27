@@ -4,12 +4,6 @@ from evaluation.features.kinetic import extract_kinetic_features
 from evaluation.features.manual_new import extract_manual_features
 from scipy import linalg
 
-from vis import SMPLSkeleton
-import torch
-from pytorch3d.transforms import (RotateAxisAngle, axis_angle_to_quaternion,
-                                  quaternion_multiply,
-                                  quaternion_to_axis_angle)
-
 # kinetic, manual
 import os
 def normalize(feat, feat2):
@@ -154,37 +148,6 @@ def calculate_avg_distance(feature_list, mean=None, std=None):
     dist /= (n * n - n) / 2
     return dist
 
-def process_dataset(root_pos, local_q):
-    # FK skeleton
-    smpl = SMPLSkeleton()
-    # to Tensor
-    root_pos = torch.Tensor(root_pos)
-    local_q = torch.Tensor(local_q)
-    # to ax
-    bs, sq, c = local_q.shape
-    # print(local_q.shape)
-    local_q = local_q.reshape((bs, sq, -1, 3))
-
-    # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
-    root_q = local_q[:, :, :1, :]  # sequence x 1 x 3
-    root_q_quat = axis_angle_to_quaternion(root_q)
-    rotation = torch.Tensor(
-        [0.7071068, 0.7071068, 0, 0]
-    )  # 90 degrees about the x axis
-    root_q_quat = quaternion_multiply(rotation, root_q_quat)
-    root_q = quaternion_to_axis_angle(root_q_quat)
-    local_q[:, :, :1, :] = root_q
-
-    # don't forget to rotate the root position too 😩
-    pos_rotation = RotateAxisAngle(90, axis="X", degrees=True)
-    root_pos = pos_rotation.transform_points(
-        root_pos
-    )  # basically (y, z) -> (-z, y), expressed as a rotation for readability
-
-    # do FK
-    positions = smpl.forward(local_q, root_pos)  # batch x sequence x 24 x 3
-    return positions
-
 def calc_and_save_feats(root):
     if not os.path.exists(os.path.join(root, 'kinetic_features')):
         os.mkdir(os.path.join(root, 'kinetic_features'))
@@ -198,26 +161,8 @@ def calc_and_save_feats(root):
         # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
-        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)
-        
-        # if not hasattr(joint3d, 'full_pose'):
-        #     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        #     smpl = SMPLSkeleton(device=device)
             
-        #     q = torch.from_numpy(joint3d["q"])
-        #     pos = torch.from_numpy(joint3d["pos"])
-            
-        #     seq_len = q.shape[0]
-        #     print(seq_len)
-            
-        #     full_pose = process_dataset(pos.unsqueeze(0), q.unsqueeze(0)).squeeze(0).detach().cpu().numpy()  # b, s, 24, 3
-            
-        #     joint3d = full_pose.reshape([seq_len, -1])
-        
-        print(joint3d["full_pose"].shape)
-        # seq_len = joint3d["full_pose"].shape[0]
-        # joint3d = joint3d['full_pose'][:,:].reshape([seq_len, -1])
-        
+        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)['full_pose'][:180,:].reshape([180, -1])
         # print(extract_manual_features(joint3d.reshape(-1, 24, 3)))
         roott = joint3d[:1, :3]  # the root Tx72 (Tx(24x3))
         # print(roott)
@@ -234,12 +179,12 @@ def calc_and_save_feats(root):
 if __name__ == '__main__':
 
     #TODO: fix the path
-    gt_root = 'data_loaders\d2m\\aistpp_dataset\\test\motions'
+    gt_root = 'evaluation\gt'
     
     calc_and_save_feats(gt_root)
 
     pred_roots = [
-        'result\EDGE\motions'
+        'evaluation\inference'
     ]
 
     for pred_root in pred_roots:
