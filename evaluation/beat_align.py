@@ -158,7 +158,7 @@ def calc_ba_score(root):
         # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
-        result_motion = np.load(open(os.path.isdir(os.path.join(root, pkl)), "rb"), allow_pickle=True)[None, ...]
+        result_motion = np.load(os.path.join(root, pkl), allow_pickle=True)[None, ...]
         joint3d = extract_feature(result_motion[:, 120:], smpl, "kinetic")
 
         dance_beats, length = calc_db(joint3d, pkl)        
