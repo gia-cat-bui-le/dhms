@@ -72,12 +72,12 @@ def get_motion_loader(opt_path, batch_size, ground_truth_dataset, mm_num_samples
     return motion_loader, mm_motion_loader
 
 # our loader
-def get_mdm_loader(args, model, diffusion, batch_size, ground_truth_loader, mm_num_samples, mm_num_repeats, num_samples_limit, scale):
+def get_mdm_loader(args, model, diffusion, batch_size, ground_truth_loader, mm_num_samples, mm_num_repeats, num_samples_limit, scale, normalizer=None):
     opt = {
         'name': 'test',  # FIXME
     }
     print('Generating %s ...' % opt['name'])
-    dataset = CompCCDGeneratedDataset(args, model, diffusion, ground_truth_loader, mm_num_samples, mm_num_repeats, num_samples_limit, scale)
+    dataset = CompCCDGeneratedDataset(args, model, diffusion, ground_truth_loader, mm_num_samples, mm_num_repeats, num_samples_limit, scale, normalizer=normalizer)
 
     motion_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn, drop_last=True, num_workers=4)
 

@@ -46,21 +46,20 @@ def get_dataset(args, name, split=True):
     
     if split is False:
         
-        # step = parse_resume_step_from_filename(args.model_path)
+        step = parse_resume_step_from_filename(args.model_path)
         
-        # normalizer_checkpoint = bf.join(
-        #     bf.dirname(args.model_path), f"normalizer-{step:09}.pt"
-        # )
+        normalizer_checkpoint = bf.join(
+            bf.dirname(args.model_path), f"normalizer-{step:09}.pt"
+        )
         
-        # checkpoint = torch.load(normalizer_checkpoint)
-        # loaded_normalizer = checkpoint["normalizer"]
+        checkpoint = torch.load(normalizer_checkpoint)
+        loaded_normalizer = checkpoint["normalizer"]
         
         dataset = DATA(
         data_path=args.data_dir,
         train=split,
         force_reload=args.force_reload,
-        normalizer=None
-        # normalizer=loaded_normalizer
+        normalizer=loaded_normalizer
     )
     else:
         dataset = DATA(
