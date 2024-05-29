@@ -5,9 +5,160 @@ import torch.nn.functional as F
 import clip
 from model.rotation2xyz import Rotation2xyz
 from teach.data.tools import lengths_to_mask
+from vis import SMPLSkeleton
+from einops import rearrange, reduce, repeat
 
 from model.x_transformers.x_transformers import ContinuousTransformerWrapper, Encoder
+from .rotary_embedding_torch import RotaryEmbedding
 
+class DenseFiLM(nn.Module):
+    """Feature-wise linear modulation (FiLM) generator."""
+
+    def __init__(self, embed_channels):
+        super().__init__()
+        self.embed_channels = embed_channels
+        self.block = nn.Sequential(
+            nn.Mish(), nn.Linear(embed_channels, embed_channels * 2)
+        )
+
+    def forward(self, position):
+        pos_encoding = self.block(position)
+        pos_encoding = rearrange(pos_encoding, "b c -> b 1 c")
+        scale_shift = pos_encoding.chunk(2, dim=-1)
+        return scale_shift
+
+
+def featurewise_affine(x, scale_shift):
+    scale, shift = scale_shift
+    return (scale + 1) * x + shift
+
+class FiLMTransformerDecoderLayer(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        dim_feedforward=2048,
+        dropout=0.1,
+        activation=F.relu,
+        layer_norm_eps=1e-5,
+        batch_first=False,
+        norm_first=True,
+        device=None,
+        dtype=None,
+        rotary=None,
+    ):
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(
+            d_model, nhead, dropout=dropout, batch_first=batch_first
+        )
+        self.multihead_attn = nn.MultiheadAttention(
+            d_model, nhead, dropout=dropout, batch_first=batch_first
+        )
+        # Feedforward
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+
+        self.norm_first = norm_first
+        self.norm1 = nn.LayerNorm(d_model, eps=layer_norm_eps)
+        self.norm2 = nn.LayerNorm(d_model, eps=layer_norm_eps)
+        self.norm3 = nn.LayerNorm(d_model, eps=layer_norm_eps)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+        self.activation = activation
+
+        self.film1 = DenseFiLM(d_model)
+        self.film2 = DenseFiLM(d_model)
+        self.film3 = DenseFiLM(d_model)
+
+        self.rotary = rotary
+        self.use_rotary = rotary is not None
+
+    # x, cond, t
+    def forward(
+        self,
+        tgt,
+        memory,
+        t,
+        tgt_mask=None,
+        memory_mask=None,
+        tgt_key_padding_mask=None,
+        memory_key_padding_mask=None,
+    ):
+        x = tgt
+        if self.norm_first:
+            # self-attention -> film -> residual
+            x_1 = self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask)
+            x = x + featurewise_affine(x_1, self.film1(t))
+            # cross-attention -> film -> residual
+            x_2 = self._mha_block(
+                self.norm2(x), memory, memory_mask, memory_key_padding_mask
+            )
+            x = x + featurewise_affine(x_2, self.film2(t))
+            # feedforward -> film -> residual
+            x_3 = self._ff_block(self.norm3(x))
+            x = x + featurewise_affine(x_3, self.film3(t))
+        else:
+            x = self.norm1(
+                x
+                + featurewise_affine(
+                    self._sa_block(x, tgt_mask, tgt_key_padding_mask), self.film1(t)
+                )
+            )
+            x = self.norm2(
+                x
+                + featurewise_affine(
+                    self._mha_block(x, memory, memory_mask, memory_key_padding_mask),
+                    self.film2(t),
+                )
+            )
+            x = self.norm3(x + featurewise_affine(self._ff_block(x), self.film3(t)))
+        return x
+
+    # self-attention block
+    # qkv
+    def _sa_block(self, x, attn_mask, key_padding_mask):
+        qk = self.rotary.rotate_queries_or_keys(x) if self.use_rotary else x
+        x = self.self_attn(
+            qk,
+            qk,
+            x,
+            attn_mask=attn_mask,
+            key_padding_mask=key_padding_mask,
+            need_weights=False,
+        )[0]
+        return self.dropout1(x)
+
+    # multihead attention block
+    # qkv
+    def _mha_block(self, x, mem, attn_mask, key_padding_mask):
+        q = self.rotary.rotate_queries_or_keys(x) if self.use_rotary else x
+        k = self.rotary.rotate_queries_or_keys(mem) if self.use_rotary else mem
+        x = self.multihead_attn(
+            q,
+            k,
+            mem,
+            attn_mask=attn_mask,
+            key_padding_mask=key_padding_mask,
+            need_weights=False,
+        )[0]
+        return self.dropout2(x)
+
+    # feed forward block
+    def _ff_block(self, x):
+        x = self.linear2(self.dropout(self.activation(self.linear1(x))))
+        return self.dropout3(x)
+
+class DecoderLayerStack(nn.Module):
+    def __init__(self, stack):
+        super().__init__()
+        self.stack = stack
+
+    def forward(self, x, cond, t):
+        for layer in self.stack:
+            x = layer(x, cond, t)
+        return x
 
 class BPE_Schedule():
     def __init__(self, training_rate: float, inference_step: int, max_steps: int) -> None:
@@ -102,6 +253,15 @@ class MDM(nn.Module):
         self.motion_mask = kargs['motion_mask']
         self.hist_frames = kargs['hist_frames']
         
+        use_rotary = True
+        
+        if use_rotary:
+            self.rotary = RotaryEmbedding(dim=latent_dim)
+        else:
+            self.abs_pos_encoding = PositionalEncoding(
+                latent_dim, dropout, batch_first=True
+            )
+        
         #!here
         # #########################
         # self.use_chunked_att = kargs.get('use_chunked_att', False)
@@ -177,6 +337,26 @@ class MDM(nn.Module):
 
         self.output_process = OutputProcess(self.data_rep, self.input_feats, self.latent_dim, self.njoints,
                                             self.nfeats)
+        
+        self.refine_final_layer1 = nn.Linear(self.latent_dim, self.nfeats)
+        self.refine_input_projection1 = nn.Linear(self.nfeats, self.latent_dim)
+        self.refine_cond_projection1 = nn.Linear(48, self.latent_dim)
+        self.refine_norm_cond1 = nn.LayerNorm(latent_dim)
+        
+        refine_decoderstack = nn.ModuleList([])
+        for _ in range(1):
+            refine_decoderstack.append(
+                FiLMTransformerDecoderLayer(
+                    latent_dim,
+                    num_heads,
+                    dim_feedforward=ff_size,
+                    dropout=dropout,
+                    activation=activation,
+                    batch_first=True,
+                    rotary=self.rotary,
+                )
+            )
+        self.refine_seqTransDecoder1 = DecoderLayerStack(refine_decoderstack)
 
         # self.rot2xyz = Rotation2xyz(device='cpu', dataset=self.dataset)
 
@@ -213,10 +393,22 @@ class MDM(nn.Module):
 
     def get_rcond(self, output):
         # with torch.no_grad():
+            from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
             if self.normalizer is not None:
                 output = self.normalizer.unnormalize(output)
-            #! this
-            joints3d = smpl(output, self.smplxfk)[:,:,:22,:]
+                
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            smpl = SMPLSkeleton(device=device)
+            
+            bs, njoints, nfeats, nframes = output.shape
+            output = output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            model_contact, output = torch.split(
+                output, (4, output.shape[2] - 4), dim=2
+            )
+            model_x = output[:, :, :3]
+            model_q = ax_from_6v(output[:, :, 3:].reshape(bs, nframes, -1, 6))
+            
+            joints3d = smpl(model_q, model_x)[:,:,:22,:]
             B,T,J,_ = joints3d.shape
             l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx = 7, 8, 10, 11
             relevant_joints = [l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx]
@@ -249,12 +441,12 @@ class MDM(nn.Module):
         """
         bs, njoints, nfeats, nframes = x.shape
         
-        emb = self.embed_timestep(timesteps)  # [1, bs, d]
+        time_emb = self.embed_timestep(timesteps)  # [1, bs, d]
 
         force_mask = y.get('uncond', False)
         
         music_emb = self.embed_music(y['music'])
-        emb += self.mask_cond(music_emb, force_mask=force_mask)
+        emb = time_emb + self.mask_cond(music_emb, force_mask=force_mask)
 
         x = self.input_process(x)
         
@@ -284,7 +476,21 @@ class MDM(nn.Module):
                 output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + 2*self.hist_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
-        return output
+        
+        output = output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+        
+        r_output = self.refine_input_projection1(output)
+        r_cond = self.get_rcond(output)
+        r_cond = self.refine_cond_projection1(r_cond)
+        rc = torch.cat((r_cond, time_emb), dim=-2)
+        r_cond_tokens = self.refine_norm_cond1(rc)
+        refine_output = self.refine_seqTransDecoder1(r_output, r_cond_tokens, emb)
+        refine_output = self.refine_final_layer1(refine_output)     # / 10
+        out = output + refine_output
+        
+        out = out.reshape(bs, njoints, nfeats, nframes).permute(0, 2, 1)
+        
+        return out
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
