@@ -95,14 +95,14 @@ class GenerateDataset(Dataset):
     def __getitem__(self, idx):
         filename_ = self.data["filenames"][idx]
         feature = torch.from_numpy(np.load(filename_)).to(torch.float32)
-        num_feats, feature_slice, audio_len = slice_audio(filename_, 3.0)
+        num_feats, feature_slice = slice_audio(filename_, 3.0)
         feature_slice = torch.from_numpy(feature_slice)
 
         data_length = 90
 
         print("FEATURE SHAPE: ", feature_slice.shape)
         bs, seq, d = feature_slice.shape
-        return {"length": data_length, "music": feature_slice.reshape(bs, seq * d), "filename": filename_, "audio_len": audio_len}
+        return {"length": data_length, "music": feature_slice.reshape(bs, seq * d), "filename": filename_}
 
     def load_data(self):
         # open data path
@@ -134,7 +134,7 @@ def slice_audio(audio_file, length):
         start_idx += window
         idx += 1
 
-    return idx, np.array(audio_slices), len(audio)
+    return idx, np.array(audio_slices)
 
 
 def get_audio_length(audio_file_path):
@@ -353,8 +353,6 @@ if __name__ == "__main__":
         sample_fn_refine = diffusion.p_sample_loop
 
     wav_dir = "custom_input/feature"
-    if not os.path.exists("custom_input/feature"):
-        os.makedirs("custom_input/feature", exist_ok=True) 
     wavs = sorted(glob.glob(f"{wav_dir}/*.npy"))
     wav_out = wav_dir + "_sliced"
     print(f"diffusion: {diffusion}")
@@ -393,7 +391,6 @@ if __name__ == "__main__":
                 batch_music = batch["music"][i]
                 batch_filename = batch["filename"][i]
                 batch_length = batch["length"][i]
-                batch_audio_len = batch["audio_len"][i]
                 
                 print(f"batch shape: {batch_music.shape}")
                 if (
@@ -602,7 +599,7 @@ if __name__ == "__main__":
                         assert full_pose.shape[1] == 55
                     
                     filename = batch_filename
-                    outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                    outname = f'{args.inference_dir}/long_seq/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                     out_path = os.path.join("./", outname)
                     print(out_path)
                     # Create the directory if it doesn't exist
@@ -611,9 +608,9 @@ if __name__ == "__main__":
                     with open(out_path, "wb") as file_pickle:
                         pickle.dump(
                             {
-                                "smpl_poses": full_q.squeeze(0)[:batch_audio_len, :, :].reshape((-1, njoints * 3)).cpu().numpy(),
-                                "smpl_trans": full_pos.squeeze(0)[:batch_audio_len, :].cpu().numpy(),
-                                "full_pose": full_pose[:batch_audio_len, :, :].squeeze(),
+                                "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                                "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+                                "full_pose": full_pose.squeeze(),
                             },
                             file_pickle,
                         )

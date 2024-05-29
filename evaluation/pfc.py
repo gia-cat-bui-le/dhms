@@ -19,7 +19,7 @@ def calc_physical_score(dir):
     if len(it) > 1000:
         it = random.sample(it, 1000)
     for pkl in tqdm(it):
-        info = pickle.load(open(pkl, "rb"))
+        info = np.load(pkl, allow_pickle=True)
         joint3d = info["full_pose"]
         root_v = (joint3d[1:, 0, :] - joint3d[:-1, 0, :]) / DT  # root velocity (S-1, 3)
         root_a = (root_v[1:] - root_v[:-1]) / DT  # (S-2, 3) root accelerations
@@ -48,7 +48,7 @@ def calc_physical_score(dir):
         accelerations.append(foot_mins[:, 0].mean())
 
     out = np.mean(scores) * 10000
-    print(f"{dir} has a mean PFC of {out}")
+    return out
 
 
 def parse_eval_opt():

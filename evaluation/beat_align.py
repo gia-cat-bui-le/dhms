@@ -1,7 +1,7 @@
 import numpy as np
 import pickle 
-from features.kinetic import extract_kinetic_features
-from features.manual_new import extract_manual_features
+from evaluation.features.kinetic import extract_kinetic_features
+from evaluation.features.manual_new import extract_manual_features
 from scipy import linalg
 import json
 # kinetic, manual
@@ -94,7 +94,10 @@ def calc_ba_score(root):
         # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
-        joint3d = pickle.load(open(os.path.isdir(os.path.join(root, pkl)), "rb"))["full_pose"].reshape(joint3d.shape[0], 24*3)
+        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)["full_pose"]
+        seq_len = joint3d.shape[0]
+        
+        joint3d.reshape(seq_len, 24*3)
 
         dance_beats, length = calc_db(joint3d, pkl)        
         music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0] + '.wav'), joint3d.shape[0])

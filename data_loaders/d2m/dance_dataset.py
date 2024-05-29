@@ -438,9 +438,11 @@ class AISTPPDataset(Dataset):
         if self.train:
             self.normalizer = Normalizer(global_pose_vec_input)
         else:
+            pass
             # print(self.normalizer)
             assert self.normalizer is not None
-        global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
+        if self.normalizer is not None:
+            global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
 
         assert not torch.isnan(global_pose_vec_input).any()
         data_name = "Train" if self.train else "Test"

@@ -404,7 +404,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    folder_path = "inference"  # Change this to the path of your folder
+    folder_path = "evaluation\\baseline-sinmdm\long_seq"  # Change this to the path of your folder
     file_pattern = "*.pkl"
     file_list = glob.glob(folder_path + "/" + file_pattern)
 

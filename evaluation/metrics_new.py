@@ -148,6 +148,43 @@ def calculate_avg_distance(feature_list, mean=None, std=None):
     dist /= (n * n - n) / 2
     return dist
 
+from vis import SMPLSkeleton
+import torch
+from pytorch3d.transforms import (RotateAxisAngle, axis_angle_to_quaternion,
+                                  quaternion_multiply,
+                                  quaternion_to_axis_angle)
+
+def process_dataset(root_pos, local_q):
+    # FK skeleton
+    smpl = SMPLSkeleton()
+    # to Tensor
+    root_pos = torch.Tensor(root_pos)
+    local_q = torch.Tensor(local_q)
+    # to ax
+    bs, sq, c = local_q.shape
+    # print(local_q.shape)
+    local_q = local_q.reshape((bs, sq, -1, 3))
+
+    # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
+    root_q = local_q[:, :, :1, :]  # sequence x 1 x 3
+    root_q_quat = axis_angle_to_quaternion(root_q)
+    rotation = torch.Tensor(
+        [0.7071068, 0.7071068, 0, 0]
+    )  # 90 degrees about the x axis
+    root_q_quat = quaternion_multiply(rotation, root_q_quat)
+    root_q = quaternion_to_axis_angle(root_q_quat)
+    local_q[:, :, :1, :] = root_q
+
+    # don't forget to rotate the root position too 😩
+    pos_rotation = RotateAxisAngle(90, axis="X", degrees=True)
+    root_pos = pos_rotation.transform_points(
+        root_pos
+    )  # basically (y, z) -> (-z, y), expressed as a rotation for readability
+
+    # do FK
+    positions = smpl.forward(local_q, root_pos)  # batch x sequence x 24 x 3
+    return positions
+
 def calc_and_save_feats(root):
     if not os.path.exists(os.path.join(root, 'kinetic_features')):
         os.mkdir(os.path.join(root, 'kinetic_features'))
@@ -161,7 +198,13 @@ def calc_and_save_feats(root):
         # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
-            
+        
+        # q = torch.from_numpy(np.load(os.path.join(root, pkl), allow_pickle=True)['q']).unsqueeze(0)
+        # pos = torch.from_numpy(np.load(os.path.join(root, pkl), allow_pickle=True)['pos']).unsqueeze(0)
+        
+        # joint3d = process_dataset(pos, q).squeeze().reshape(-1, 72).numpy()
+        # print(joint3d.shape)
+        
         joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)['full_pose'][:180,:].reshape([180, -1])
         # print(extract_manual_features(joint3d.reshape(-1, 24, 3)))
         roott = joint3d[:1, :3]  # the root Tx72 (Tx(24x3))
@@ -179,12 +222,12 @@ def calc_and_save_feats(root):
 if __name__ == '__main__':
 
     #TODO: fix the path
-    gt_root = 'evaluation\gt'
+    gt_root = 'evaluation\\baseline-sinmdm\gt'
     
     calc_and_save_feats(gt_root)
 
     pred_roots = [
-        'evaluation\inference'
+        'evaluation\\baseline-sinmdm\inference'
     ]
 
     for pred_root in pred_roots:
