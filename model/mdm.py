@@ -400,8 +400,9 @@ class MDM(nn.Module):
             device = "cuda" if torch.cuda.is_available() else "cpu"
             smpl = SMPLSkeleton(device=device)
             
-            bs, njoints, nfeats, nframes = output.shape
-            output = output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+            bs, nframes, nfeats = output.shape
+            # bs, njoints, nfeats, nframes = output.shape
+            # output = output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
             model_contact, output = torch.split(
                 output, (4, output.shape[2] - 4), dim=2
             )
@@ -477,7 +478,8 @@ class MDM(nn.Module):
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         
-        output = output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+        # output = output.reshape(bs, njoints*nfeats, nframes).permute(0, 2, 1)
+        output = output.permute(1, 0, 2)
         
         r_output = self.refine_input_projection1(output)
         r_cond = self.get_rcond(output)
@@ -488,7 +490,8 @@ class MDM(nn.Module):
         refine_output = self.refine_final_layer1(refine_output)     # / 10
         out = output + refine_output
         
-        out = out.reshape(bs, njoints, nfeats, nframes).permute(0, 2, 1)
+        out = out.reshape(nframes, bs, njoints, nfeats)
+        out = out.permute(1, 2, 3, 0)  # [bs, njoints, nfeats, nframes]
         
         return out
 
