@@ -338,8 +338,8 @@ class MDM(nn.Module):
         self.output_process = OutputProcess(self.data_rep, self.input_feats, self.latent_dim, self.njoints,
                                             self.nfeats)
         
-        self.refine_final_layer1 = nn.Linear(self.latent_dim, self.nfeats)
-        self.refine_input_projection1 = nn.Linear(self.nfeats, self.latent_dim)
+        self.refine_final_layer1 = nn.Linear(self.latent_dim, self.njoints)
+        self.refine_input_projection1 = nn.Linear(self.njoints, self.latent_dim)
         self.refine_cond_projection1 = nn.Linear(48, self.latent_dim)
         self.refine_norm_cond1 = nn.LayerNorm(latent_dim)
         
@@ -394,8 +394,8 @@ class MDM(nn.Module):
     def get_rcond(self, output):
         # with torch.no_grad():
             from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
-            if self.normalizer is not None:
-                output = self.normalizer.unnormalize(output)
+            # if self.normalizer is not None:
+            #     output = self.normalizer.unnormalize(output)
                 
             device = "cuda" if torch.cuda.is_available() else "cpu"
             smpl = SMPLSkeleton(device=device)
@@ -409,7 +409,7 @@ class MDM(nn.Module):
             model_x = output[:, :, :3]
             model_q = ax_from_6v(output[:, :, 3:].reshape(bs, nframes, -1, 6))
             
-            joints3d = smpl(model_q, model_x)[:,:,:22,:]
+            joints3d = smpl.forward(model_q, model_x)[:,:,:22,:]
             B,T,J,_ = joints3d.shape
             l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx = 7, 8, 10, 11
             relevant_joints = [l_ankle_idx, r_ankle_idx, l_foot_idx, r_foot_idx]
@@ -484,9 +484,9 @@ class MDM(nn.Module):
         r_output = self.refine_input_projection1(output)
         r_cond = self.get_rcond(output)
         r_cond = self.refine_cond_projection1(r_cond)
-        rc = torch.cat((r_cond, time_emb), dim=-2)
+        rc = torch.cat((r_cond, time_emb.permute(1, 0, 2)), dim=1)
         r_cond_tokens = self.refine_norm_cond1(rc)
-        refine_output = self.refine_seqTransDecoder1(r_output, r_cond_tokens, emb)
+        refine_output = self.refine_seqTransDecoder1(r_output, r_cond_tokens, emb.permute(1, 0, 2).squeeze(dim=1))
         refine_output = self.refine_final_layer1(refine_output)     # / 10
         out = output + refine_output
         
@@ -584,8 +584,8 @@ class OutputProcess(nn.Module):
             output = torch.cat((first_pose, vel), axis=0)  # [seqlen, bs, 150]
         else:
             raise ValueError
-        output = output.reshape(nframes, bs, self.njoints, self.nfeats)
-        output = output.permute(1, 2, 3, 0)  # [bs, njoints, nfeats, nframes]
+        # output = output.reshape(nframes, bs, self.njoints, self.nfeats)
+        # output = output.permute(1, 2, 3, 0)  # [bs, njoints, nfeats, nframes]
         return output
 
 
