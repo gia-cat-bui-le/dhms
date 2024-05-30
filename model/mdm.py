@@ -490,8 +490,8 @@ class MDM(nn.Module):
         refine_output = self.refine_final_layer1(refine_output)     # / 10
         out = output + refine_output
         
-        out = out.reshape(nframes, bs, njoints, nfeats)
-        out = out.permute(1, 2, 3, 0)  # [bs, njoints, nfeats, nframes]
+        out = out.reshape(bs, nframes, njoints, nfeats)
+        out = out.permute(0, 2, 3, 1)  # [bs, njoints, nfeats, nframes]
         
         return out
 
