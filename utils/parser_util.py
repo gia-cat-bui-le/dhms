@@ -107,7 +107,7 @@ def add_model_options(parser):
                        help="Transformer/GRU width.")
     
     group.add_argument("--feature_type", default="baseline", type=str)
-    group.add_argument("--cond_drop_prob", default=0.25, type=float,
+    group.add_argument("--cond_drop_prob", default=0.1, type=float,
                         help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
     group.add_argument("--arch", default='inpainting',
