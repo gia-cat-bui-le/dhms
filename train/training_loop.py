@@ -492,10 +492,10 @@ class TrainLoop:
         ) as f:
             torch.save(self.opt.state_dict(), f)
             
-        ckpt = {
-                "normalizer": self.normalizer,
-                }
-        torch.save(ckpt, os.path.join(self.save_dir, f"normalizer-{(self.step+self.resume_step):09d}.pt"))
+        # ckpt = {
+        #         "normalizer": self.normalizer,
+        #         }
+        # torch.save(ckpt, os.path.join(self.save_dir, f"normalizer-{(self.step+self.resume_step):09d}.pt"))
 
 
 def parse_resume_step_from_filename(filename):
