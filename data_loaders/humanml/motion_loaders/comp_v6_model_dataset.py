@@ -460,11 +460,6 @@ class CompCCDGeneratedDataset(Dataset):
                     
                     assert sample_0.shape == sample_1.shape == sample_2.shape == (bs, nfeats, 1, 90)
                     
-                    if normalizer is not None:
-                        sample_0 = normalizer.unnormalize(sample_0)
-                        sample_1 = normalizer.unnormalize(sample_1)
-                        sample_2 = normalizer.unnormalize(sample_2)
-                    
                     sample = []
                     
                     for idx in range(bs):
