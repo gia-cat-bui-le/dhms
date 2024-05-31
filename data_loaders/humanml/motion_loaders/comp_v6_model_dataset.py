@@ -462,11 +462,6 @@ class CompCCDGeneratedDataset(Dataset):
                     
                     sample = []
                     
-                    if normalizer is not None:
-                        sample_0 = normalizer.unnormalize(sample_0)
-                        sample_1 = normalizer.unnormalize(sample_1)
-                        sample_2 = normalizer.unnormalize(sample_2)
-                    
                     for idx in range(bs):
                         motion_0_result = sample_0[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
                         motion_1_result = sample_1[idx].squeeze().unsqueeze(dim=0).permute(0, 2, 1)
