@@ -359,14 +359,6 @@ if __name__ == "__main__":
     composition = args.composition
     use_ddim = False  # hardcode
 
-    # if composition:
-    #     sample_fn = diffusion.p_sample_loop_comp
-    # else:
-    #     sample_fn = (
-    #         diffusion.p_sample_loop_inpainting
-    #         if not use_ddim
-    #         else diffusion.ddim_sample_loop
-    #     )
     sample_fn = diffusion.p_sample_loop
 
     print(f"composition: {composition}, sample fn: {sample_fn}")
@@ -450,7 +442,7 @@ if __name__ == "__main__":
                     print(f"shape check:\n\tsample 0: {sample_0.shape}\n\tsample 1: {sample_1.shape}")
                     
                     music_0 = model_kwargs['y']['music'][idx, -45 * 35:].unsqueeze(0)
-                    music_1 = model_kwargs['y']['music'][idx + 1, -45 * 35:].unsqueeze(0)
+                    music_1 = model_kwargs['y']['music'][idx + 1, :45 * 35].unsqueeze(0)
                     
                     print(f"shape check:\n\tmusic 0: {music_0.shape}\n\tmusic 1: {music_1.shape}")
                 
@@ -467,7 +459,7 @@ if __name__ == "__main__":
                     model_kwargs_2['y'] = {}
 
                     model_kwargs_2['y']['lengths'] = [90 for len in range(1)]
-                    model_kwargs_2['y']['music'] = torch.cat((music_0[:, -45 * 35:], music_1[:, :45 * 35]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs_2['y']['music'] = torch.cat((music_0, music_1), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
                     model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_2['y']['lengths'], 
                                         dist_util.dev()).unsqueeze(1).unsqueeze(2)
                     # add CFG scale to batch
@@ -517,8 +509,8 @@ if __name__ == "__main__":
                     
                     assert sample_0.shape == sample_1.shape == sample_2.shape == (1, nfeats, 1, 90)
                     
-                    motion_final.append(sample_1.squeeze().unsqueeze(dim=0).permute(0, 2, 1))
                     motion_final.append(sample_2.squeeze().unsqueeze(dim=0).permute(0, 2, 1))
+                    motion_final.append(sample_1.squeeze().unsqueeze(dim=0).permute(0, 2, 1))
                     
                 motion_result = torch.cat(motion_final, dim=0)
                 if motion_result.shape[2] == nfeats:
