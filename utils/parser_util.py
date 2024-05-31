@@ -117,7 +117,7 @@ def add_model_options(parser):
                        help="For trans_dec architecture only, if true, will inject condition as a class token"
                             " (in addition to cross-attention).")
     group.add_argument("--lambda_mse", default=0.636, type=float, help="Joint positions loss.")
-    group.add_argument("--lambda_rcxyz", default=0.646, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_rcxyz", default=1.0, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
     group.add_argument("--lambda_fc", default=10.942, type=float, help="Foot contact loss.")
     group.add_argument("--lambda_cycle", default=1.0, type=float, help="Foot contact loss.")
