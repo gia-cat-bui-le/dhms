@@ -16,8 +16,8 @@ def create_dataset(opt):
     elif opt.dataset_name == 'finedance':
         path_folder = os.path.join(opt.datapath, 'finedance/')
     # split the data according to the splits files
-    # print("Creating train / test split")
-    # split_data(path_folder, opt.dataset_name)
+    print("Creating train / test split")
+    split_data(path_folder, opt.dataset_name)
     
     inpainting_frame = opt.inpainting_frame
     motion_len = opt.motion_len
