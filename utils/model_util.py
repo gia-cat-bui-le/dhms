@@ -55,7 +55,7 @@ def get_model_args(args, data):
             'translation': True, 'pose_rep': data_rep, 'glob': True, 'glob_rot': True,
             'latent_dim': args.latent_dim, 'ff_size': 1024, 'num_layers': args.layers, 'num_heads': 4,
             'dropout': 0.1, 'activation': F.gelu, 'data_rep': data_rep, 'cond_mode': cond_mode,
-            'cond_mask_prob': args.cond_mask_prob, 'action_emb': action_emb, 'arch': args.arch,
+            'action_emb': action_emb, 'arch': args.arch,
             'emb_trans_dec': args.emb_trans_dec, 'dataset': args.dataset,
             'hist_frames': args.hist_frames, 'motion_mask': args.motion_mask, 'music_dim': feature_dim,
             'cond_drop_prob': cond_drop_prob,

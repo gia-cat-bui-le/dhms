@@ -33,7 +33,7 @@ def parse_and_load_from_model(parser):
         else:
             print('Warning: was not able to load [{}], using default value [{}] instead.'.format(a, args.__dict__[a]))
 
-    if args.cond_mask_prob == 0:
+    if args.cond_drop_prob == 0:
         args.guidance_param = 1
     return args
 
@@ -107,18 +107,17 @@ def add_model_options(parser):
                        help="Transformer/GRU width.")
     
     group.add_argument("--feature_type", default="baseline", type=str)
-    group.add_argument("--cond_drop_prob", default=0.25, type=float)
+    group.add_argument("--cond_drop_prob", default=0.25, type=float,
+                        help="The probability of masking the condition during training."
+                            " For classifier-free guidance learning.")
     group.add_argument("--arch", default='inpainting',
                        choices=['trans_enc', 'trans_dec', 'gru', 'past_cond', 'inpainting'], type=str,
                        help="Architecture types as reported in the paper.")
     group.add_argument("--emb_trans_dec", default=False, type=bool,
                        help="For trans_dec architecture only, if true, will inject condition as a class token"
                             " (in addition to cross-attention).")
-    group.add_argument("--cond_mask_prob", default=.1, type=float,
-                       help="The probability of masking the condition during training."
-                            " For classifier-free guidance learning.")
     group.add_argument("--lambda_mse", default=0.636, type=float, help="Joint positions loss.")
-    group.add_argument("--lambda_rcxyz", default=0.646, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_rcxyz", default=1.0, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
     group.add_argument("--lambda_fc", default=10.942, type=float, help="Foot contact loss.")
     group.add_argument("--lambda_cycle", default=1.0, type=float, help="Foot contact loss.")

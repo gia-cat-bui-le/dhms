@@ -127,6 +127,9 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
     # args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
 
     print(f'Eval mode [{args.eval_mode}]')
+    print(f'Eval batch size [{args.eval_batch_size}]')
+
+    args.eval_batch_size = 73
 
     dist_util.setup_dist(args.device)
     logger.configure()
