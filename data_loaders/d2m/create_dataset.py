@@ -16,8 +16,8 @@ def create_dataset(opt):
     elif opt.dataset_name == 'finedance':
         path_folder = os.path.join(opt.datapath, 'finedance/')
     # split the data according to the splits files
-    print("Creating train / test split")
-    split_data(path_folder, opt.dataset_name)
+    # print("Creating train / test split")
+    # split_data(path_folder, opt.dataset_name)
     
     inpainting_frame = opt.inpainting_frame
     motion_len = opt.motion_len
@@ -33,8 +33,8 @@ def create_dataset(opt):
         if opt.extract_jukebox:
             extract_feature = 'jukebox'
             print("Extracting jukebox features")
-            jukebox_extract(f"{path_folder}/train/wavs_sliced", f"{path_folder}/train/jukebox_feats")
-            jukebox_extract(f"{path_folder}/test/wavs_sliced", f"{path_folder}/test/jukebox_feats")
+            jukebox_extract(f"{path_folder}/train/wavs", f"{path_folder}/train/jukebox_feats")
+            jukebox_extract(f"{path_folder}/test/wavs", f"{path_folder}/test/jukebox_feats")
             
         # slice motions/music into sliding windows to create training dataset
         print("Slicing train data")
