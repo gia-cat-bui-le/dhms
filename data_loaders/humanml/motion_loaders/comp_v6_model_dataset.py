@@ -460,6 +460,11 @@ class CompCCDGeneratedDataset(Dataset):
                     
                     assert sample_0.shape == sample_1.shape == sample_2.shape == (bs, nfeats, 1, 90)
                     
+                    if normalizer is not None:
+                        sample_0 = normalizer.unnormalize(sample_0)
+                        sample_1 = normalizer.unnormalize(sample_1)
+                        sample_2 = normalizer.unnormalize(sample_2)
+                    
                     sample = []
                     
                     for idx in range(bs):
@@ -472,9 +477,6 @@ class CompCCDGeneratedDataset(Dataset):
                         motion_result = torch.cat((motion_0_result, motion_2_result, motion_1_result), dim=0)
                         
                         assert motion_result.shape == (3, 90, nfeats)
-                        
-                        if normalizer is not None:
-                            motion_result = normalizer.unnormalize(motion_result)
                         
                         if motion_result.shape[2] == nfeats:
                             sample_contact, motion_result = torch.split(
