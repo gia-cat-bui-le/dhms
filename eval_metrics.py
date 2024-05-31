@@ -8,17 +8,17 @@ from evaluation.features.kinetic import extract_kinetic_features
 from evaluation.features.manual_new import extract_manual_features
 from vis import SMPLSkeleton
 
-log_file = "evaluation\\baseline-sinmdm\\result_long.log"
+log_file = "evaluation\\baseline-sinmdm-normalizer\\result.log"
         
 if __name__ == '__main__':
 
     #TODO: fix the path
-    gt_root = 'data_loaders\d2m\\aistpp_dataset\\test\motions'
+    gt_root = 'evaluation\\baseline-sinmdm-normalizer\gt'
     
-    # calc_and_save_feats(gt_root)
+    calc_and_save_feats(gt_root)
 
     pred_roots = [
-        'evaluation\\baseline-sinmdm\long_seq'
+        'evaluation\\baseline-sinmdm-normalizer\inference'
     ]
     
     with open(log_file, 'a') as f:

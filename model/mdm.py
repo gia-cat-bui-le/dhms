@@ -88,7 +88,7 @@ class MDM(nn.Module):
         self.cond_drop_prob = kargs.get('cond_drop_prob')
 
         self.cond_mode = kargs.get('cond_mode', 'no_cond')
-        self.cond_mask_prob = kargs.get('cond_mask_prob', 0.)
+        self.cond_mask_prob = self.cond_drop_prob
         self.arch = arch
         self.gru_emb_dim = self.latent_dim if self.arch == 'gru' else 0
         

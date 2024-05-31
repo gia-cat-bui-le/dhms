@@ -11,7 +11,7 @@ from scipy.signal import argrelextrema
 import librosa
 import matplotlib.pyplot as plt 
 
-music_root = 'data_loaders\d2m\\aistpp_dataset\\test\wavs'
+music_root = 'data_loaders\d2m\\aistpp_dataset\\test\wavs_sliced'
 
 
 def get_mb(key, length=None):
