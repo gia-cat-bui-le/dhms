@@ -25,7 +25,7 @@ def slice_audio(audio_file, stride, length, out_dir, num_slices, inpainting_fram
         audio_slice = audio[start_idx : start_idx + window]
         # audio_slice = [audio[start_idx : start_idx + motion_len_], audio[start_idx : start_idx + motion_len_ + inpainting_frames_], audio[start_idx + motion_len_ : start_idx + window]]
         # sf.write(f"{out_dir}/{file_name}_slice{idx}.wav", audio_slice, sr)
-        np.save(f"{out_dir}/{file_name}_slice{idx}.npy", audio_slice)
+        # np.save(f"{out_dir}/{file_name}_slice{idx}.npy", audio_slice)
         start_idx += stride_step
         idx += 1
     return idx
@@ -105,7 +105,7 @@ def slice_motion(motion_file, stride, length, out_dir, num_slices, inpainting_fr
                 }
         
         # out = {"pos": pos_slice, "q": q_slice, "pos1": pos_slice_1, "q1": q_slice_1}
-        pickle.dump(out, open(f"{out_dir}/{file_name}_slice{slice_count}.pkl", "wb"))
+        # pickle.dump(out, open(f"{out_dir}/{file_name}_slice{slice_count}.pkl", "wb"))
         start_idx += stride_step
         slice_count += 1
     return slice_count

@@ -137,7 +137,7 @@ class FineDanceDataset(Dataset):
 
         motion_path = os.path.join(split_data_path, "motions_sliced")
         # motion_path = os.path.join(split_data_path, "motions")
-        sound_path = os.path.join(split_data_path, f"music_npy_sliced")
+        sound_path = os.path.join(split_data_path, f"jukebox_feats_sliced")
         # wav_path = os.path.join(split_data_path, f"wavs_sliced")
         # wav_path = os.path.join(split_data_path, f"wavs")
         # sort motions and sounds
@@ -317,7 +317,7 @@ class AISTPPDataset(Dataset):
 
         motion_path = os.path.join(split_data_path, "motions_sliced")
         # motion_path = os.path.join(split_data_path, "motions")
-        sound_path = os.path.join(split_data_path, f"music_npy_sliced")
+        sound_path = os.path.join(split_data_path, f"jukebox_feats_sliced")
         # wav_path = os.path.join(split_data_path, f"wavs_sliced")
         # wav_path = os.path.join(split_data_path, f"wavs")
         # sort motions and sounds
