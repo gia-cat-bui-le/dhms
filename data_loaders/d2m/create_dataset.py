@@ -33,15 +33,15 @@ def create_dataset(opt):
         if opt.extract_jukebox:
             extract_feature = 'jukebox'
             print("Extracting jukebox features")
-            jukebox_extract(f"{path_folder}/train/wavs", f"{path_folder}/train/jukebox_feats")
-            jukebox_extract(f"{path_folder}/test/wavs", f"{path_folder}/test/jukebox_feats")
+            jukebox_extract(f"{path_folder}/train/wavs_sliced", f"{path_folder}/train/jukebox_feats_sliced")
+            jukebox_extract(f"{path_folder}/test/wavs_sliced", f"{path_folder}/test/jukebox_feats_sliced")
             
         # slice motions/music into sliding windows to create training dataset
         print("Slicing train data")
         
-        slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/jukebox_feats", f"{path_folder}/train/wavs", 0.5, slice_len, inpainting_frame, motion_len)
+        # slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/jukebox_feats", f"{path_folder}/train/wavs", 0.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
-        slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/jukebox_feats", f"{path_folder}/test/wavs", 0.5, slice_len, inpainting_frame, motion_len)
+        # slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/jukebox_feats", f"{path_folder}/test/wavs", 0.5, slice_len, inpainting_frame, motion_len)
     else:
         print("Slicing train data")
         slice_finedance(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", f"{path_folder}/train/wavs", 1.5, slice_len, inpainting_frame, motion_len)
