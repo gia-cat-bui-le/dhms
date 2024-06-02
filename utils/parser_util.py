@@ -107,7 +107,7 @@ def add_model_options(parser):
                        help="Transformer/GRU width.")
     
     group.add_argument("--feature_type", default="baseline", type=str)
-    group.add_argument("--cond_drop_prob", default=0.1, type=float,
+    group.add_argument("--cond_drop_prob", default=0.25, type=float,
                         help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
     group.add_argument("--arch", default='inpainting',
@@ -117,9 +117,9 @@ def add_model_options(parser):
                        help="For trans_dec architecture only, if true, will inject condition as a class token"
                             " (in addition to cross-attention).")
     group.add_argument("--lambda_mse", default=0.636, type=float, help="Joint positions loss.")
-    group.add_argument("--lambda_rcxyz", default=1.0, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_rcxyz", default=0.646, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
-    group.add_argument("--lambda_fc", default=11.2, type=float, help="Foot contact loss.")
+    group.add_argument("--lambda_fc", default=10.942, type=float, help="Foot contact loss.")
     group.add_argument("--lambda_cycle", default=1.0, type=float, help="Foot contact loss.")
     # group.add_argument("--unconstrained", action='store_true',
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "
