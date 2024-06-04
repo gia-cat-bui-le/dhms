@@ -435,7 +435,7 @@ class AISTPPDataset(Dataset):
         global_pose_vec_input = vectorize_many(l).float().detach()
 
         # normalize the data. Both train and test need the same normalizer.
-        if self.train and self.normalizer is not None:
+        if self.train and self.normalizer is None:
             self.normalizer = Normalizer(global_pose_vec_input)
         elif not self.train:
             assert self.normalizer is not None
