@@ -437,7 +437,7 @@ class AISTPPDataset(Dataset):
         # normalize the data. Both train and test need the same normalizer.
         if self.train and self.normalizer is not None:
             self.normalizer = Normalizer(global_pose_vec_input)
-        else:
+        elif not self.train:
             assert self.normalizer is not None
         if self.normalizer is not None:
             print("[AISTPPDataset]: using normalizer")
