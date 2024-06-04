@@ -165,9 +165,18 @@ def parse_resume_step_from_filename(filename):
 
 def get_dataset(args):
     DATA = GenerateDataset
+    
+    step = parse_resume_step_from_filename(args.model_path)
+        
+    normalizer_checkpoint = bf.join(
+        bf.dirname(args.model_path), f"normalizer-{step:09}.pt"
+    )
+    
+    checkpoint = torch.load(normalizer_checkpoint)
+    loaded_normalizer = checkpoint["normalizer"]
 
     step = parse_resume_step_from_filename(args.model_path)
-    dataset = DATA(data_path=os.path.join(args.music_dir), normalizer=None)
+    dataset = DATA(data_path=os.path.join(args.music_dir), normalizer=loaded_normalizer)
 
     return dataset
 

@@ -56,10 +56,10 @@ class FineDanceDataset(Dataset):
         backup_path = os.path.join(data_path, "dataset_backups")
         Path(backup_path).mkdir(parents=True, exist_ok=True)
         # save normalizer
-        # if not train:
-        #     pickle.dump(
-        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-        #     )
+        if not train:
+            pickle.dump(
+                normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
+            )
         # load raw data
         if not force_reload and pickle_name in os.listdir(backup_path):
             # print("Using cached dataset...")
@@ -217,10 +217,10 @@ class AISTPPDataset(Dataset):
         backup_path = os.path.join(data_path, "dataset_backups")
         Path(backup_path).mkdir(parents=True, exist_ok=True)
         # save normalizer
-        # if not train:
-        #     pickle.dump(
-        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-        #     )
+        if not train:
+            pickle.dump(
+                normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
+            )
         # load raw data
         if not force_reload and pickle_name in os.listdir(backup_path):
             # print("Using cached dataset...")
@@ -435,14 +435,13 @@ class AISTPPDataset(Dataset):
         global_pose_vec_input = vectorize_many(l).float().detach()
 
         # normalize the data. Both train and test need the same normalizer.
-        # if self.train:
-        #     self.normalizer = Normalizer(global_pose_vec_input)
-        # else:
-        #     pass
-        #     # print(self.normalizer)
-        #     assert self.normalizer is not None
-        # if self.normalizer is not None:
-        #     global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
+        if self.train and self.normalizer is not None:
+            self.normalizer = Normalizer(global_pose_vec_input)
+        else:
+            assert self.normalizer is not None
+        if self.normalizer is not None:
+            print("[AISTPPDataset]: using normalizer")
+            global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
 
         assert not torch.isnan(global_pose_vec_input).any()
         data_name = "Train" if self.train else "Test"

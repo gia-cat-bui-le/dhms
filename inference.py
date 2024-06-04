@@ -47,6 +47,7 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
         motion = torch.from_numpy(np.concatenate((motion_0, motion_1_with_transition), axis=1)).to(device)
         
         if normalizer is not None:
+            print("[inference]: using normalizer")
             motion = normalizer.unnormalize(motion)
         
         b, s, c = motion.shape
