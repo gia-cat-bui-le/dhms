@@ -139,8 +139,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
     logger.configure()
 
     logger.log("creating data loader...")
-    split = False
-    origin_loader, normalizer = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=split)
+    origin_loader, normalizer = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=False)
     
     # gt_loader = get_dataset_loader(name=args.dataset, eval_batch_size=args.eval_batch_size, split=split, hml_mode='eval')
     # num_actions = gen_loader.dataset.num_actions

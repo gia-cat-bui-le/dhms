@@ -52,8 +52,12 @@ def get_dataset(args, name, split=True):
             bf.dirname(args.model_path), f"normalizer-{step:09}.pt"
         )
         
+        print(normalizer_checkpoint)
+        
         checkpoint = torch.load(normalizer_checkpoint)
         loaded_normalizer = checkpoint["normalizer"]
+        
+        print(loaded_normalizer)
         
         dataset = DATA(
         data_path=args.data_dir,
