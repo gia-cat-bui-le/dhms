@@ -472,7 +472,7 @@ class CompCCDGeneratedDataset(Dataset):
                         motion_result = torch.cat((motion_0_result, motion_2_result, motion_1_result), dim=0)
                         
                         if normalizer is not None:
-                            print("[CompCCD]: normalizer")
+                            # print("[CompCCD]: normalizer")
                             motion_result = normalizer.unnormalize(motion_result)
                         
                         assert motion_result.shape == (3, 90, nfeats)
