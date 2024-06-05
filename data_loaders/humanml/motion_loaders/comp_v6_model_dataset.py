@@ -429,6 +429,8 @@ class CompCCDGeneratedDataset(Dataset):
                         model_kwargs_2['y']['hframes'] = hframes
                         model_kwargs_2['y']['fut_frames'] = fut_frames
                         
+                    model_kwargs_2['y']['inpainted_motion'] = input_motions
+                        
                     model_kwargs_2['y']['inpainting_mask'] = torch.ones_like(input_motions, dtype=torch.float,
                                                                 device=input_motions.device)  # True means use gt motion
                     for i, length in enumerate(model_kwargs_2['y']['lengths']):
