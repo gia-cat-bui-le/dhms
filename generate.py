@@ -127,7 +127,7 @@ def slice_audio(audio_file, length):
             audio_slice = audio[start_idx : start_idx + window]
         else:
             missing_length = window - (len(audio) - start_idx)
-            missing_audio_slice = np.zeros((missing_length, 35), dtype=np.float32)
+            missing_audio_slice = np.zeros((missing_length, 4800), dtype=np.float32)
             audio_slice = np.concatenate((audio[start_idx:], missing_audio_slice))
 
         audio_slices.append(audio_slice)
@@ -441,8 +441,8 @@ if __name__ == "__main__":
                     
                     print(f"shape check:\n\tsample 0: {sample_0.shape}\n\tsample 1: {sample_1.shape}")
                     
-                    music_0 = model_kwargs['y']['music'][idx, -45 * 35:].unsqueeze(0)
-                    music_1 = model_kwargs['y']['music'][idx + 1, :45 * 35].unsqueeze(0)
+                    music_0 = model_kwargs['y']['music'][idx, -45 * 4800:].unsqueeze(0)
+                    music_1 = model_kwargs['y']['music'][idx + 1, :45 * 4800].unsqueeze(0)
                     
                     print(f"shape check:\n\tmusic 0: {music_0.shape}\n\tmusic 1: {music_1.shape}")
                 
