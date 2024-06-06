@@ -50,32 +50,12 @@ class FineDanceDataset(Dataset):
         self.data_len = data_len
         
         self.hist_frames = hist_frames
-
-        pickle_name = "processed_train_data.pkl" if train else "processed_test_data.pkl"
-
-        backup_path = os.path.join(data_path, "dataset_backups")
-        Path(backup_path).mkdir(parents=True, exist_ok=True)
-        # save normalizer
-        # if not train:
-        #     pickle.dump(
-        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-        #     )
-        # load raw data
-        if not force_reload and pickle_name in os.listdir(backup_path):
-            # print("Using cached dataset...")
-            with open(os.path.join(backup_path, pickle_name), "rb") as f:
-                data = pickle.load(f)
-        else:
-            # print("Loading dataset...")
-            data = self.load_aistpp()  # Call this last
-            with open(os.path.join(backup_path, pickle_name), "wb") as f:
-                pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+        
+        data = self.load_aistpp()  # Call this last
 
         self.data = {
             "pose_0": data["full_pose_0"][:, :, :139],
             "pose_1": data["full_pose_1"][:, :, :139],
-            # "pose_0_with_transition": pose_input_0_with_transition,
-            # "pose_1_with_transition": pose_input_1_with_transition,
             "length_0": data['length_0'],
             "length_1": data['length_1'],
             "length_transition": data['length_transition'],
@@ -212,33 +192,8 @@ class AISTPPDataset(Dataset):
         
         self.hist_frames = hist_frames
 
-        pickle_name = "processed_train_data.pkl" if train else "processed_test_data.pkl"
-
-        backup_path = os.path.join(data_path, "dataset_backups")
-        Path(backup_path).mkdir(parents=True, exist_ok=True)
-        # save normalizer
-        # if not train:
-        #     pickle.dump(
-        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-        #     )
-        # load raw data
-        if not force_reload and pickle_name in os.listdir(backup_path):
-            # print("Using cached dataset...")
-            with open(os.path.join(backup_path, pickle_name), "rb") as f:
-                data = pickle.load(f)
-        else:
-            # print("Loading dataset...")
-            data = self.load_aistpp()  # Call this last
-            with open(os.path.join(backup_path, pickle_name), "wb") as f:
-                pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
-
-        # print(
-        #     f"Loaded {self.name} Dataset With Dimensions:\n\tPos_0: {data['pos_0'].shape}, Q_0: {data['q_0'].shape}"
-        #     f"\n\tPos_1: {data['pos_1'].shape}, Q_1: {data['q_1'].shape}"
-        #     # f"\n\tPos_0_with_transition: {data['pos_0_with_transition'].shape}, Q_0_with_transition: {data['q_0_with_transition'].shape}"
-        #     # f"\n\tPos_1_with_transition: {data['pos_1_with_transition'].shape}, Q_1_with_transition: {data['q_1_with_transition'].shape}"
-        # )
-
+        data = self.load_aistpp()  # Call this last
+        
         # process data, convert to 6dof etc
         pose_input_0 = self.process_dataset(data["pos_0"], data["q_0"])
         pose_input_1 = self.process_dataset(data["pos_1"], data["q_1"])
