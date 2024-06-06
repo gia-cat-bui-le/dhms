@@ -50,26 +50,8 @@ class FineDanceDataset(Dataset):
         self.data_len = data_len
         
         self.hist_frames = hist_frames
-
-        pickle_name = "processed_train_data.pkl" if train else "processed_test_data.pkl"
-
-        backup_path = os.path.join(data_path, "dataset_backups")
-        Path(backup_path).mkdir(parents=True, exist_ok=True)
-        # save normalizer
-        # if not train:
-        #     pickle.dump(
-        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-        #     )
-        # load raw data
-        if not force_reload and pickle_name in os.listdir(backup_path):
-            # print("Using cached dataset...")
-            with open(os.path.join(backup_path, pickle_name), "rb") as f:
-                data = pickle.load(f)
-        else:
-            # print("Loading dataset...")
-            data = self.load_aistpp()  # Call this last
-            with open(os.path.join(backup_path, pickle_name), "wb") as f:
-                pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+        
+        data = self.load_aistpp()  # Call this last
 
         self.data = {
             "pose_0": data["full_pose_0"][:, :, :139],
@@ -92,30 +74,19 @@ class FineDanceDataset(Dataset):
 
     def __getitem__(self, idx):
         filename_ = self.data["filenames"][idx]
-        # print("CHECK LENGTH: ", self.data['length_0'], self.data['length_transition'], self.data['length_1'])
         feature = torch.from_numpy(np.load(filename_))
-        # print("FEATURE SHAPE: ", feature.shape)
         feature_0 = feature[: self.data['length_0']].float()
-        # feature_0_with_transition = feature[: self.data['length_0'] + self.data['length_transition']]
         feature_1 = feature[self.data['length_0'] :].float()
-        # feature_1_with_transition = feature[self.data['length_0']:]
-        # print(feature_0.shape, feature_0_with_transition.shape, feature_1.shape)
         seq_0, d_0 = feature_0.shape
-        # seq_0_with_transition, d_0_with_transition = feature_0_with_transition.shape
-        # seq_1_with_transition, d_1_with_transition = feature_1_with_transition.shape
         seq_1, d_1 = feature_1.shape
         return {
             "pose_0": torch.from_numpy(self.data['pose_0'][idx]).float(),
             "pose_1": torch.from_numpy(self.data['pose_1'][idx]).float(),
-            # "pose_0_with_transition": self.data['pose_0_with_transition'][idx],
-            # "pose_1_with_transition": self.data['pose_1_with_transition'][idx],
             "length_0": self.data['length_0'],
             "length_1": self.data['length_1'],
             "length_transition": self.data['length_transition'],
             "music_0": feature_0.reshape(seq_0 * d_0),
-            # "music_0_with_transition": feature_0_with_transition.reshape(seq_0_with_transition * d_0_with_transition),
             "music_1": feature_1.reshape(seq_1 * d_1),
-            # "music_1_with_transition": feature_1_with_transition.reshape(seq_1_with_transition * d_1_with_transition),
             "filename": filename_
         }
 
@@ -136,27 +107,20 @@ class FineDanceDataset(Dataset):
         #   |    |- wavs
 
         motion_path = os.path.join(split_data_path, "motions_sliced")
-        # motion_path = os.path.join(split_data_path, "motions")
-        sound_path = os.path.join(split_data_path, f"music_npy_sliced")
-        # wav_path = os.path.join(split_data_path, f"wavs_sliced")
-        # wav_path = os.path.join(split_data_path, f"wavs")
+        sound_path = os.path.join(split_data_path, f"jukebox_feats_sliced")
         # sort motions and sounds
         motions = sorted(glob.glob(os.path.join(motion_path, "*.pkl")))
         features = sorted(glob.glob(os.path.join(sound_path, "*.npy")))
-        # wavs = sorted(glob.glob(os.path.join(wav_path, "*.wav")))
-
+        
         # stack the motions and features together
         all_names = []
         all_full_pose_0 = []
         all_full_pose_1 = []
         assert len(motions) == len(features)
-        # print(len(motions), len(features))
         for motion, feature in zip(motions, features):
-            # print(motion)
             # make sure name is matching
             m_name = os.path.splitext(os.path.basename(motion))[0]
             f_name = os.path.splitext(os.path.basename(feature))[0]
-            # w_name = os.path.splitext(os.path.basename(wav))[0]
             assert m_name == f_name, str((motion, feature))
             # load motion
             
@@ -211,44 +175,15 @@ class AISTPPDataset(Dataset):
         self.data_len = data_len
         
         self.hist_frames = hist_frames
-
-        pickle_name = "processed_train_data.pkl" if train else "processed_test_data.pkl"
-
-        backup_path = os.path.join(data_path, "dataset_backups")
-        Path(backup_path).mkdir(parents=True, exist_ok=True)
-        # save normalizer
-        # if not train:
-        #     pickle.dump(
-        #         normalizer, open(os.path.join(backup_path, "normalizer.pkl"), "wb")
-        #     )
-        # load raw data
-        if not force_reload and pickle_name in os.listdir(backup_path):
-            # print("Using cached dataset...")
-            with open(os.path.join(backup_path, pickle_name), "rb") as f:
-                data = pickle.load(f)
-        else:
-            # print("Loading dataset...")
-            data = self.load_aistpp()  # Call this last
-            with open(os.path.join(backup_path, pickle_name), "wb") as f:
-                pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
-
-        # print(
-        #     f"Loaded {self.name} Dataset With Dimensions:\n\tPos_0: {data['pos_0'].shape}, Q_0: {data['q_0'].shape}"
-        #     f"\n\tPos_1: {data['pos_1'].shape}, Q_1: {data['q_1'].shape}"
-        #     # f"\n\tPos_0_with_transition: {data['pos_0_with_transition'].shape}, Q_0_with_transition: {data['q_0_with_transition'].shape}"
-        #     # f"\n\tPos_1_with_transition: {data['pos_1_with_transition'].shape}, Q_1_with_transition: {data['q_1_with_transition'].shape}"
-        # )
+        data = self.load_aistpp()  # Call this last
 
         # process data, convert to 6dof etc
         pose_input_0 = self.process_dataset(data["pos_0"], data["q_0"])
         pose_input_1 = self.process_dataset(data["pos_1"], data["q_1"])
-        # pose_input_0_with_transition = self.process_dataset(data["pos_0_with_transition"], data["q_0_with_transition"])
-        # pose_input_1_with_transition = self.process_dataset(data["pos_1_with_transition"], data["q_1_with_transition"])
+       
         self.data = {
             "pose_0": pose_input_0,
             "pose_1": pose_input_1,
-            # "pose_0_with_transition": pose_input_0_with_transition,
-            # "pose_1_with_transition": pose_input_1_with_transition,
             "length_0": data['length_0'],
             "length_1": data['length_1'],
             "length_transition": data['length_transition'],
@@ -256,46 +191,25 @@ class AISTPPDataset(Dataset):
         }
         assert len(pose_input_0) == len(data["filenames"])
         self.length = len(pose_input_0)
-        
-        # print(f'DATA SHAPE: \n\tPose: {self.data["pose_0"].shape}\n\tMusic: {len(self.data["filenames"])}')
 
     def __len__(self):
         return self.length
 
     def __getitem__(self, idx):
-        # filename_ = self.data["filenames"][idx]
-        # feature = torch.from_numpy(np.load(filename_))
-        # seq, d = feature.shape
-        # return {
-        #     'pose': self.data["pose"][idx].permute(1, 0), 
-        #     'pose_1': self.data["pose_1"][idx].permute(1, 0),
-        #     'music': feature.reshape(seq*d),
-        # }
         filename_ = self.data["filenames"][idx]
-        # print("CHECK LENGTH: ", self.data['length_0'], self.data['length_transition'], self.data['length_1'])
         feature = torch.from_numpy(np.load(filename_))
-        # print("FEATURE SHAPE: ", feature.shape)
         feature_0 = feature[: self.data['length_0']]
-        # feature_0_with_transition = feature[: self.data['length_0'] + self.data['length_transition']]
         feature_1 = feature[self.data['length_0'] :]
-        # feature_1_with_transition = feature[self.data['length_0']:]
-        # print(feature_0.shape, feature_0_with_transition.shape, feature_1.shape)
         seq_0, d_0 = feature_0.shape
-        # seq_0_with_transition, d_0_with_transition = feature_0_with_transition.shape
-        # seq_1_with_transition, d_1_with_transition = feature_1_with_transition.shape
         seq_1, d_1 = feature_1.shape
         return {
             "pose_0": self.data['pose_0'][idx],
             "pose_1": self.data['pose_1'][idx],
-            # "pose_0_with_transition": self.data['pose_0_with_transition'][idx],
-            # "pose_1_with_transition": self.data['pose_1_with_transition'][idx],
             "length_0": self.data['length_0'],
             "length_1": self.data['length_1'],
             "length_transition": self.data['length_transition'],
             "music_0": feature_0.reshape(seq_0 * d_0),
-            # "music_0_with_transition": feature_0_with_transition.reshape(seq_0_with_transition * d_0_with_transition),
             "music_1": feature_1.reshape(seq_1 * d_1),
-            # "music_1_with_transition": feature_1_with_transition.reshape(seq_1_with_transition * d_1_with_transition),
             "filename": filename_
         }
 
@@ -316,14 +230,10 @@ class AISTPPDataset(Dataset):
         #   |    |- wavs
 
         motion_path = os.path.join(split_data_path, "motions_sliced")
-        # motion_path = os.path.join(split_data_path, "motions")
-        sound_path = os.path.join(split_data_path, f"music_npy_sliced")
-        # wav_path = os.path.join(split_data_path, f"wavs_sliced")
-        # wav_path = os.path.join(split_data_path, f"wavs")
+        sound_path = os.path.join(split_data_path, f"jukebox_feats_sliced")
         # sort motions and sounds
         motions = sorted(glob.glob(os.path.join(motion_path, "*.pkl")))
         features = sorted(glob.glob(os.path.join(sound_path, "*.npy")))
-        # wavs = sorted(glob.glob(os.path.join(wav_path, "*.wav")))
 
         # stack the motions and features together
         all_pos = []
@@ -331,62 +241,37 @@ class AISTPPDataset(Dataset):
         all_pos1 = []
         all_q1 = []
         all_names = []
-        # all_pos_1_with_transition = []
-        # all_q_1_with_transition = []
-        # all_pos_0_with_transition = []
-        # all_q_0_with_transition = []
         assert len(motions) == len(features)
-        # print(len(motions), len(features))
         for motion, feature in zip(motions, features):
             # print(motion)
             # make sure name is matching
             m_name = os.path.splitext(os.path.basename(motion))[0]
             f_name = os.path.splitext(os.path.basename(feature))[0]
-            # w_name = os.path.splitext(os.path.basename(wav))[0]
             assert m_name == f_name, str((motion, feature))
             # load motion
             
             data = pickle.load(open(motion, "rb"))
             pos_0 = data["pos_0"]
             q_0 = data["q_0"]
-            # pos_0_with_transition = data["pos_0_with_transition"]
-            # q_0_with_transition = data["q_0_with_transition"]
-            # pos_1_with_transition = data["pos_1_with_transition"]
-            # q_1_with_transition = data["q_1_with_transition"]
             pos1 = data["pos_1"]
             q1 = data["q_1"]
             all_pos.append(pos_0)
             all_q.append(q_0)
-            # all_pos_0_with_transition.append(pos_0_with_transition)
-            # all_q_0_with_transition.append(q_0_with_transition)
             all_pos1.append(pos1)
             all_q1.append(q1)
-            # all_pos_1_with_transition.append(pos_1_with_transition)
-            # all_q_1_with_transition.append(q_1_with_transition)
             all_names.append(feature)
-            # all_wavs.append(wav)
 
         all_pos = np.array(all_pos)  # N x seq x 3
         all_q = np.array(all_q)  # N x seq x (joint * 3)
         all_pos1 = np.array(all_pos1)  # N x seq x 3
         all_q1 = np.array(all_q1)  # N x seq x (joint * 3)
-        # all_pos_1_with_transition = np.array(all_pos_1_with_transition)  # N x seq x 3
-        # all_q_1_with_transition = np.array(all_q_1_with_transition) 
-        # all_pos_0_with_transition = np.array(all_pos_0_with_transition)  # N x seq x 3
-        # all_q_0_with_transition = np.array(all_q_0_with_transition) 
         # downsample the motions to the data fps
         all_pos = all_pos[:, :: self.data_stride, :]
         all_q = all_q[:, :: self.data_stride, :]
         all_pos1 = all_pos1[:, :: self.data_stride, :]
         all_q1 = all_q1[:, :: self.data_stride, :]
-        # all_pos_1_with_transition = all_pos_1_with_transition[:, :: self.data_stride, :]
-        # all_q_1_with_transition = all_q_1_with_transition[:, :: self.data_stride, :]
-        # all_pos_0_with_transition = all_pos_0_with_transition[:, :: self.data_stride, :]
-        # all_q_0_with_transition = all_q_0_with_transition[:, :: self.data_stride, :]
         data = {"pos_0": all_pos, "q_0": all_q, 
-                "pos_1": all_pos1, "q_1": all_q1, 
-                # "pos_0_with_transition": all_pos_0_with_transition, "q_0_with_transition": all_q_0_with_transition,
-                # "pos_1_with_transition": all_pos_1_with_transition, "q_1_with_transition": all_q_1_with_transition,
+                "pos_1": all_pos1, "q_1": all_q1,
                 "length_0": data['length_0'],
                 "length_1": data['length_1'],
                 "length_transition": data['length_transition'],
