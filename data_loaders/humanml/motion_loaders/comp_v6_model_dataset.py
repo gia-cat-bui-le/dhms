@@ -410,7 +410,7 @@ class CompCCDGeneratedDataset(Dataset):
                     model_kwargs_2['y'] = {}
 
                     model_kwargs_2['y']['lengths'] = [90 for len in batch['length_0']]
-                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['y']['music'][:, -45 * 35:], model_kwargs_1['y']['music'][:, :45 * 35]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['y']['music'][:, -45 * 4800:], model_kwargs_1['y']['music'][:, :45 * 4800]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
                     model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_2['y']['lengths'], 
                                         dist_util.dev()).unsqueeze(1).unsqueeze(2)
                     # add CFG scale to batch
