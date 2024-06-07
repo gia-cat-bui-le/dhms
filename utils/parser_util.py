@@ -117,7 +117,7 @@ def add_model_options(parser):
                        help="For trans_dec architecture only, if true, will inject condition as a class token"
                             " (in addition to cross-attention).")
     group.add_argument("--lambda_mse", default=0.636, type=float, help="Joint positions loss.")
-    group.add_argument("--lambda_rcxyz", default=0.646, type=float, help="Joint positions loss.")
+    group.add_argument("--lambda_rcxyz", default=1.0, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
     group.add_argument("--lambda_fc", default=10.942, type=float, help="Foot contact loss.")
     group.add_argument("--lambda_cycle", default=1.0, type=float, help="Foot contact loss.")
@@ -157,8 +157,8 @@ def add_training_options(parser):
                        help="If True, will enable to use an already existing save_dir.")
     group.add_argument("--train_platform_type", default='NoPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform'], type=str,
                        help="Choose platform to log results. NoPlatform means no logging.")
-    group.add_argument("--lr", default=2e-4, type=float, help="Learning rate.")
-    group.add_argument("--weight_decay", default=0.0001, type=float, help="Optimizer weight decay.")
+    group.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
+    group.add_argument("--weight_decay", default=0, type=float, help="Optimizer weight decay.")
     group.add_argument("--lr_anneal_steps", default=200000, type=int, help="Number of learning rate anneal steps.")
     group.add_argument("--eval_batch_size", default=32, type=int,
                        help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
