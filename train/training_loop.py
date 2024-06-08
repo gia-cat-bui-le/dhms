@@ -326,7 +326,7 @@ class TrainLoop:
             micro_cond_2['y'] = {}
             micro_cond_2['y']['lengths'] = [90 for len in batch['length_0']]
             micro_cond_2['y']['mask'] = lengths_to_mask(micro_cond_2['y']['lengths'], micro_2.device).unsqueeze(1).unsqueeze(2)
-            micro_cond_2['y']['music'] = torch.cat((batch['music_0'][:, -45 * 35:], batch['music_1'][:, :45 * 35]), dim=1).to(batch['motion_feats_0'].device)
+            micro_cond_2['y']['music'] = torch.cat((batch['music_0'][:, -45 * 4800:], batch['music_1'][:, :45 * 4800]), dim=1).to(batch['motion_feats_0'].device)
             
             if self.inpainting_frames > 0:
                 micro_cond_2['y']['hframes'] = hframes
