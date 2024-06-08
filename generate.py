@@ -66,7 +66,153 @@ from data_loaders.d2m.finedance.render_joints.smplfk import (
 from diffusion.gaussian_diffusion import GaussianDiffusion
 from copy import deepcopy
 from utils.model_util import create_gaussian_diffusion
+from data_loaders.d2m.preprocess import Normalizer, vectorize_many
+from typing import List, Dict
 
+def collate_tensors(batch):
+    dims = batch[0].dim()
+    max_size = [max([b.size(i) for b in batch]) for i in range(dims)]
+    size = (len(batch),) + tuple(max_size)
+    canvas = batch[0].new_zeros(size=size)
+    for i, b in enumerate(batch):
+        sub_tensor = canvas[i]
+        for d in range(dims):
+            sub_tensor = sub_tensor.narrow(d, 0, b.size(d))
+        sub_tensor.add_(b)
+    return canvas
+
+def collate_pairs_and_text(lst_elements: List, ) -> Dict:
+    batch = {"motion_feats": collate_tensors([el["pose"] for el in lst_elements]),
+            "filename": [x["filename"] for x in lst_elements],
+            }
+    return batch
+
+class OriginDataset(Dataset):
+    def __init__(
+        self,
+        data_path: str,
+        feature_type: str = "baseline",
+        normalizer: Any = None,
+    ):
+        self.data_path = data_path
+        # print(self.data_path)
+
+        self.feature_type = feature_type
+
+        self.normalizer = normalizer
+
+        # load raw data
+        print("Loading dataset...")
+        data = self.load_data()  # Call this last
+        
+        pose_input = self.process_dataset(data["pos"], data["q"])
+
+        self.data = {
+            "pose": pose_input,
+            "filenames": data["filenames"],
+        }
+        
+        self.length = len(data["pos"])
+
+    def __len__(self):
+        return self.length
+    
+    def process_dataset(self, root_pos, local_q):
+        # FK skeleton
+        smpl = SMPLSkeleton()
+        # to Tensor
+        root_pos = torch.Tensor(root_pos)
+        local_q = torch.Tensor(local_q)
+        # to ax
+        bs, sq, c = local_q.shape
+        # print(local_q.shape)
+        local_q = local_q.reshape((bs, sq, -1, 3))
+
+        # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
+        root_q = local_q[:, :, :1, :]  # sequence x 1 x 3
+        root_q_quat = axis_angle_to_quaternion(root_q)
+        rotation = torch.Tensor(
+            [0.7071068, 0.7071068, 0, 0]
+        )  # 90 degrees about the x axis
+        root_q_quat = quaternion_multiply(rotation, root_q_quat)
+        root_q = quaternion_to_axis_angle(root_q_quat)
+        local_q[:, :, :1, :] = root_q
+
+        # don't forget to rotate the root position too 😩
+        pos_rotation = RotateAxisAngle(90, axis="X", degrees=True)
+        root_pos = pos_rotation.transform_points(
+            root_pos
+        )  # basically (y, z) -> (-z, y), expressed as a rotation for readability
+
+        # do FK
+        positions = smpl.forward(local_q, root_pos)  # batch x sequence x 24 x 3
+        feet = positions[:, :, (7, 8, 10, 11)]
+        feetv = torch.zeros(feet.shape[:3])
+        feetv[:, :-1] = (feet[:, 1:] - feet[:, :-1]).norm(dim=-1)
+        contacts = (feetv < 0.01).to(local_q)  # cast to right dtype
+
+        # to 6d
+        local_q = ax_to_6v(local_q)
+
+        # now, flatten everything into: batch x sequence x [...]
+        l = [contacts, root_pos, local_q]
+        global_pose_vec_input = vectorize_many(l).float().detach()
+
+        # normalize the data. Both train and test need the same normalizer.
+        # if self.train:
+        #     self.normalizer = Normalizer(global_pose_vec_input)
+        # else:
+        #     pass
+        #     # print(self.normalizer)
+        #     assert self.normalizer is not None
+        # if self.normalizer is not None:
+        #     global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
+
+        assert not torch.isnan(global_pose_vec_input).any()
+
+        print(f"Dataset Motion Features Dim: {global_pose_vec_input.shape}")
+
+        return global_pose_vec_input
+
+    def __getitem__(self, idx):
+        
+        filename_ = self.data["filenames"][idx]
+        
+        return {
+            "pose": self.data['pose'][idx],
+            "filename": filename_
+        }
+
+    def load_data(self):
+        # open data path
+        motion_path = os.path.join(self.data_path)
+        # sort motions and sounds
+        motions = sorted(glob.glob(os.path.join(motion_path, "*.pkl")))
+        
+        all_pos = []
+        all_q = []
+        all_names = []
+        
+        for motion in motions:
+            data = pickle.load(open(motion, "rb"))
+            pos = data["smpl_trans"][:1200]
+            q = data["smpl_poses"][:1200]
+            scale = data["smpl_scaling"][0]
+            pos /= scale
+            
+            all_pos.append(pos)
+            all_q.append(q)
+            all_names.append(motion)
+        
+        all_pos = np.array(all_pos)  # N x seq x 3
+        print(torch.from_numpy(all_pos).shape)
+        all_q = np.array(all_q)
+        
+        all_pos = all_pos[:, :: 2, :]
+        all_q = all_q[:, :: 2, :]
+
+        data = {"pos": all_pos, "q": all_q, "filenames": all_names}
+        return data
 
 class GenerateDataset(Dataset):
     def __init__(
@@ -116,7 +262,7 @@ class GenerateDataset(Dataset):
 def slice_audio(audio_file, length):
     # stride, length in seconds
     FPS = 30
-    audio = np.load(audio_file)
+    audio = np.load(audio_file)[:600]
     file_name = os.path.splitext(os.path.basename(audio_file))[0]
     start_idx = 0
     idx = 0
@@ -127,7 +273,7 @@ def slice_audio(audio_file, length):
             audio_slice = audio[start_idx : start_idx + window]
         else:
             missing_length = window - (len(audio) - start_idx)
-            missing_audio_slice = np.zeros((missing_length, 4800), dtype=np.float32)
+            missing_audio_slice = np.zeros((missing_length, 35), dtype=np.float32)
             audio_slice = np.concatenate((audio[start_idx:], missing_audio_slice))
 
         audio_slices.append(audio_slice)
@@ -190,90 +336,12 @@ def get_dataset_loader(args, batch_size):
 
     return loader, dataset.normalizer
 
-
-def change_music_shape(batch_music):
-    # batch_size, num_features = batch_music.shape
-
-    # # Reshape 'music' tensor to (batch_size, 1, num_features, 1)
-    # reshaped_music_tensor = batch_music.view(batch_size, 1, num_features, 1)
-
-    # # Update the original variable with the reshaped 'music' tensor
-    # return reshaped_music_tensor
-    return batch_music.unsqueeze(0)
-
-
-def create_model_kwargs(batch_index, batch, scale):
-    
-    model_kwargs_0 = {}
-    model_kwargs_0["y"] = {}
-    if args.inter_frames > 0:
-        model_kwargs_0["y"]["lengths"] = [
-            len + args.inter_frames // 2 for len in batch["length"]
-        ]
-    else:
-        model_kwargs_0["y"]["lengths"] = batch["length"]
-
-    # change shape of music
-    batch_music = batch["music"].unsqueeze(0)
-    print(f"music shape before: {batch_music.shape}")
-    # batch_music_0_reshape = change_music_shape(batch["music"][0][batch_index - 1])
-    # print(f'music shape after: {batch_music_0_reshape.shape}')
-    model_kwargs_0["y"]["music"] = (
-        batch["music"].unsqueeze(0).to("cuda:0" if torch.cuda.is_available() else "cpu")
-    )
-    model_kwargs_0["y"]["mask"] = (
-        lengths_to_mask(model_kwargs_0["y"]["lengths"], dist_util.dev())
-        .unsqueeze(1)
-        .unsqueeze(2)
-    )
-
-    model_kwargs_1 = {}
-    model_kwargs_1["y"] = {}
-
-    if args.inter_frames > 0:
-        model_kwargs_1["y"]["lengths"] = [
-            len + args.inter_frames // 2 for len in batch["length"]
-        ]
-    else:
-        model_kwargs_1["y"]["lengths"] = [
-            args.inpainting_frames + len for len in batch["length"]
-        ]
-    model_kwargs_1["y"]["music"] = (
-        batch["music"].unsqueeze(0).to("cuda:0" if torch.cuda.is_available() else "cpu")
-    )
-    model_kwargs_1["y"]["mask"] = (
-        lengths_to_mask(model_kwargs_1["y"]["lengths"], dist_util.dev())
-        .unsqueeze(1)
-        .unsqueeze(2)
-    )
-    # add CFG scale to batch
-    if scale != 1.0:
-        model_kwargs_0["y"]["scale"] = (
-            torch.ones(
-                len(model_kwargs_0["y"]["lengths"]),
-                device="cuda:0" if torch.cuda.is_available() else "cpu",
-            )
-            * scale
-        )
-        model_kwargs_1["y"]["scale"] = (
-            torch.ones(
-                len(model_kwargs_1["y"]["lengths"]),
-                device="cuda:0" if torch.cuda.is_available() else "cpu",
-            )
-            * scale
-        )
-    with open(f"./output_preview/model_kwargs/fn_{i}.txt", "w") as file:
-        file.write(f"model 0:\n{model_kwargs_0}\n")
-        file.write(f"model 1:\n{model_kwargs_1}\n")
-
-    return model_kwargs_0, model_kwargs_1
-
-
 if __name__ == "__main__":
     args = generate_args()
     fixseed(args.seed)
     # TODO: fix the hardcode
-    music_dir_len = len(os.listdir(args.music_dir))
+    
+    music_dir_len = len(glob.glob(os.path.join(args.music_dir, "*.wav")))
     print(f"music dir len {music_dir_len}")
     # if music_dir_len > 32:
     #     args.batch_size = 32  # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
@@ -325,6 +393,61 @@ if __name__ == "__main__":
 
     #!: mỗi batch = 1 bài hát. vd có 2 bài => origin loader gồm 2 batch, mỗi batch sẽ chứa feature được sliced ra từ bài hát load vào
     dataloader, _ = get_dataset_loader(args, batch_size=args.batch_size)
+
+    origin_dataset = OriginDataset(
+        data_path=os.path.join(args.music_dir, "motions"), normalizer=None
+    )
+    origin_loader = DataLoader(
+        origin_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
+        pin_memory=True,
+        drop_last=True,
+        collate_fn=collate_pairs_and_text
+    )
+    
+    for batch in origin_loader:
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        njoints = 24
+        smpl = SMPLSkeleton(device=device)
+        
+        motion, filenames = batch["motion_feats"], batch["filename"]
+        motion = torch.Tensor(motion).to(device)
+        
+        # if normalizer is not None:
+        #     motion = normalizer.unnormalize(motion)
+        
+        b, s, c = motion.shape
+        
+        sample_contact, motion = torch.split(
+        motion, (4, motion.shape[2] - 4), dim=2)
+        pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+        q = motion[:, :, 3:].reshape(b, s, njoints, 6)
+        # go 6d to ax
+        q = ax_from_6v(q).to(motion.device)
+        
+        # full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
+        
+        # print("full pose: ", full_poses.shape)
+        
+        for q_, pos_, filename in zip(q, pos, filenames):
+            
+            # if out_dir is not None:
+            full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
+            outname = f'{args.inference_dir}/long_seq_gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+            out_path = os.path.join(outname)
+            # Create the directory if it doesn't exist
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            with open(out_path, "wb") as file_pickle:
+                pickle.dump(
+                    {
+                        "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                        "smpl_trans": pos_.squeeze(0).cpu().numpy(),
+                        "full_pose": full_pose,
+                    },
+                    file_pickle,
+                )
 
     num_actions = 1
 
@@ -391,15 +514,6 @@ if __name__ == "__main__":
                 ):
                     print("if num samples limit")
                     break
-
-                with open("./output.txt", "w") as file:
-                    print(f"write read file")
-                    file.write(f"batch:\n{batch}\n")
-                    file.write(f"{i}")
-                    # file.write(f"\nmusic:\n{batch_music}\n")
-                    # file.write(f"\nmusic length: {len(batch_music[0])}\n")
-                    file.write(f"music shape: {batch_music.shape}")
-                    file.write(f"filename: {batch_filename}")
                     
                 bs, music_dim = batch_music.shape
                 device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -441,8 +555,8 @@ if __name__ == "__main__":
                     
                     print(f"shape check:\n\tsample 0: {sample_0.shape}\n\tsample 1: {sample_1.shape}")
                     
-                    music_0 = model_kwargs['y']['music'][idx, -45 * 4800:].unsqueeze(0)
-                    music_1 = model_kwargs['y']['music'][idx + 1, :45 * 4800].unsqueeze(0)
+                    music_0 = model_kwargs['y']['music'][idx, -45 * 35:].unsqueeze(0)
+                    music_1 = model_kwargs['y']['music'][idx + 1, :45 * 35].unsqueeze(0)
                     
                     print(f"shape check:\n\tmusic 0: {music_0.shape}\n\tmusic 1: {music_1.shape}")
                 
