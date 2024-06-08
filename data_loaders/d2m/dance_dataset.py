@@ -107,7 +107,7 @@ class FineDanceDataset(Dataset):
         #   |    |- wavs
 
         motion_path = os.path.join(split_data_path, "motions_sliced")
-        sound_path = os.path.join(split_data_path, f"jukebox_feats_sliced")
+        sound_path = os.path.join(split_data_path, f"music_npy_sliced")
         # sort motions and sounds
         motions = sorted(glob.glob(os.path.join(motion_path, "*.pkl")))
         features = sorted(glob.glob(os.path.join(sound_path, "*.npy")))
@@ -230,7 +230,7 @@ class AISTPPDataset(Dataset):
         #   |    |- wavs
 
         motion_path = os.path.join(split_data_path, "motions_sliced")
-        sound_path = os.path.join(split_data_path, f"jukebox_feats_sliced")
+        sound_path = os.path.join(split_data_path, f"music_npy_sliced")
         # sort motions and sounds
         motions = sorted(glob.glob(os.path.join(motion_path, "*.pkl")))
         features = sorted(glob.glob(os.path.join(sound_path, "*.npy")))
