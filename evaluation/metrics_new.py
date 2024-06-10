@@ -205,7 +205,7 @@ def calc_and_save_feats(root):
         # joint3d = process_dataset(pos, q).squeeze().reshape(-1, 72).numpy()
         # print(joint3d.shape)
         
-        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)['full_pose'][:,:].reshape([-1, 72])
+        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)['full_pose'][:600,:].reshape([-1, 72])
         # print(extract_manual_features(joint3d.reshape(-1, 24, 3)))
         roott = joint3d[:1, :3]  # the root Tx72 (Tx(24x3))
         # print(roott)
