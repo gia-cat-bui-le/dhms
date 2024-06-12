@@ -95,7 +95,7 @@ def extract(fpath, skip_completed=True, dest_dir="aist_baseline_feats"):
 
 
 def extract_folder(src, dest):
-    fpaths = Path(src).glob("*")
+    fpaths = Path(src).glob("*.wav")
     fpaths = sorted(list(fpaths))
     extract_ = partial(extract, skip_completed=False, dest_dir=dest)
     for fpath in tqdm(fpaths):
