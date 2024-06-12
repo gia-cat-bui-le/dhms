@@ -195,9 +195,10 @@ class OriginDataset(Dataset):
         
         for motion in motions:
             data = pickle.load(open(motion, "rb"))
-            pos = data["smpl_trans"][:1200]
-            q = data["smpl_poses"][:1200]
-            scale = data["smpl_scaling"][0]
+            print(torch.Tensor(data["q"]).shape)
+            pos = data["pos"][:420]
+            q = data["q"][:420]
+            scale = data["scale"][0]
             pos /= scale
             
             all_pos.append(pos)
@@ -434,8 +435,9 @@ if __name__ == "__main__":
         for q_, pos_, filename in zip(q, pos, filenames):
             
             # if out_dir is not None:
+            print("GT shape: ", (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0))).squeeze(0).shape)
             full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
-            outname = f'{args.inference_dir}/long_seq_gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+            outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
             out_path = os.path.join(outname)
             # Create the directory if it doesn't exist
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -705,12 +707,17 @@ if __name__ == "__main__":
                         assert full_pose.shape[1] == 55
                     
                     filename = batch_filename
-                    outname = f'{args.inference_dir}/long_seq/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                    outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                     out_path = os.path.join("./", outname)
                     print(out_path)
                     # Create the directory if it doesn't exist
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     # print(out_path)
+                    
+                    print("Generate shape before trim: ", full_pose.squeeze(0).shape)
+                    full_pose = full_pose[:210]
+                    print("Generate shape after trim: ", full_pose.squeeze(0).shape)
+                    
                     with open(out_path, "wb") as file_pickle:
                         pickle.dump(
                             {
