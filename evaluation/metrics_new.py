@@ -162,7 +162,8 @@ def calc_and_save_feats(root):
         if os.path.isdir(os.path.join(root, pkl)):
             continue
             
-        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)['full_pose'][:180,:].reshape([180, -1])
+        joint3d = np.load(os.path.join(root, pkl), allow_pickle=True)['full_pose'][:,:].reshape([-1, 72])
+        print(joint3d.shape)
         # print(extract_manual_features(joint3d.reshape(-1, 24, 3)))
         roott = joint3d[:1, :3]  # the root Tx72 (Tx(24x3))
         # print(roott)

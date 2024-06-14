@@ -91,24 +91,22 @@ class OriginDataset(Dataset):
     def __init__(
         self,
         data_path: str,
+        num_feats: list,
         feature_type: str = "baseline",
         normalizer: Any = None,
     ):
         self.data_path = data_path
-        # print(self.data_path)
-
+        self.num_feats = num_feats
         self.feature_type = feature_type
-
         self.normalizer = normalizer
 
         # load raw data
         print("Loading dataset...")
         data = self.load_data()  # Call this last
-        
-        pose_input = self.process_dataset(data["pos"], data["q"])
 
         self.data = {
-            "pose": pose_input,
+            "pos": data["pos"], 
+            "q": data["q"],
             "filenames": data["filenames"],
         }
         
@@ -121,8 +119,12 @@ class OriginDataset(Dataset):
         # FK skeleton
         smpl = SMPLSkeleton()
         # to Tensor
-        root_pos = torch.Tensor(root_pos)
-        local_q = torch.Tensor(local_q)
+        root_pos = torch.Tensor(root_pos).unsqueeze(0)
+        local_q = torch.Tensor(local_q).unsqueeze(0)
+        
+        root_pos = root_pos[:, :: 2, :]
+        local_q = local_q[:, :: 2, :]
+        
         # to ax
         bs, sq, c = local_q.shape
         # print(local_q.shape)
@@ -158,16 +160,6 @@ class OriginDataset(Dataset):
         l = [contacts, root_pos, local_q]
         global_pose_vec_input = vectorize_many(l).float().detach()
 
-        # normalize the data. Both train and test need the same normalizer.
-        # if self.train:
-        #     self.normalizer = Normalizer(global_pose_vec_input)
-        # else:
-        #     pass
-        #     # print(self.normalizer)
-        #     assert self.normalizer is not None
-        # if self.normalizer is not None:
-        #     global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
-
         assert not torch.isnan(global_pose_vec_input).any()
 
         print(f"Dataset Motion Features Dim: {global_pose_vec_input.shape}")
@@ -176,10 +168,14 @@ class OriginDataset(Dataset):
 
     def __getitem__(self, idx):
         
+        print("numfeats: ", self.num_feats[idx])
+        
+        pose_input = self.process_dataset(self.data["pos"][idx][:2*self.num_feats[idx]], self.data["q"][idx][:2*self.num_feats[idx]])
+        
         filename_ = self.data["filenames"][idx]
         
         return {
-            "pose": self.data['pose'][idx],
+            "pose": pose_input,
             "filename": filename_
         }
 
@@ -195,21 +191,15 @@ class OriginDataset(Dataset):
         
         for motion in motions:
             data = pickle.load(open(motion, "rb"))
-            pos = data["smpl_trans"][:1200]
-            q = data["smpl_poses"][:1200]
-            scale = data["smpl_scaling"][0]
+            print(torch.Tensor(data["q"]).shape)
+            pos = data["pos"]
+            q = data["q"]
+            scale = data["scale"][0]
             pos /= scale
             
             all_pos.append(pos)
             all_q.append(q)
             all_names.append(motion)
-        
-        all_pos = np.array(all_pos)  # N x seq x 3
-        print(torch.from_numpy(all_pos).shape)
-        all_q = np.array(all_q)
-        
-        all_pos = all_pos[:, :: 2, :]
-        all_q = all_q[:, :: 2, :]
 
         data = {"pos": all_pos, "q": all_q, "filenames": all_names}
         return data
@@ -218,19 +208,21 @@ class GenerateDataset(Dataset):
     def __init__(
         self,
         data_path: str,
-        filename: str,
+        file_name,
         feature_type: str = "baseline",
         normalizer: Any = None,
     ):
         self.data_path = data_path
-        self.filename = filename
+        # print(self.data_path)
 
         self.feature_type = feature_type
+        self.file_name = file_name
 
         self.normalizer = normalizer
 
+        # load raw data
         print("Loading dataset...")
-        data = self.load_data(filename)  # Call this last
+        data = self.load_data()  # Call this last
 
         self.data = data
         self.length = len(data["filenames"])
@@ -240,8 +232,9 @@ class GenerateDataset(Dataset):
 
     def __getitem__(self, idx):
         filename_ = self.data["filenames"][idx]
-        feature = torch.from_numpy(np.load(filename_)).to(torch.float32)
+        
         num_feats, feature_slice = slice_audio(filename_, 3.0)
+        
         feature_slice = torch.from_numpy(feature_slice)
 
         data_length = 90
@@ -254,7 +247,8 @@ class GenerateDataset(Dataset):
         # open data path
         sound_path = os.path.join(self.data_path, "feature")
         # sort motions and sounds
-        features = [os.path.join(sound_path, f"{filename}.npy")]
+        # features = sorted(glob.glob(os.path.join(sound_path, "*.npy")))
+        features = [str(self.file_name)]
         data = {"filenames": features}
         return data
 
@@ -268,13 +262,14 @@ def slice_audio(audio_file, length):
     idx = 0
     window = int(length * FPS)
     audio_slices = []
-    while start_idx < len(audio):
-        if start_idx + window <= len(audio):
-            audio_slice = audio[start_idx : start_idx + window]
-        else:
-            missing_length = window - (len(audio) - start_idx)
-            missing_audio_slice = np.zeros((missing_length, 4800), dtype=np.float32)
-            audio_slice = np.concatenate((audio[start_idx:], missing_audio_slice))
+    while start_idx + window <= len(audio):
+        audio_slice = audio[start_idx : start_idx + window]
+        # if start_idx + window <= len(audio):
+        #     audio_slice = audio[start_idx : start_idx + window]
+        # else:
+        #     missing_length = window - (len(audio) - start_idx)
+        #     missing_audio_slice = np.zeros((missing_length, 4800), dtype=np.float32)
+        #     audio_slice = np.concatenate((audio[start_idx:], missing_audio_slice))
 
         audio_slices.append(audio_slice)
         start_idx += window
@@ -309,17 +304,17 @@ def parse_resume_step_from_filename(filename):
         return 0
 
 
-def get_dataset(args):
+def get_dataset(args, file_name):
     DATA = GenerateDataset
 
     step = parse_resume_step_from_filename(args.model_path)
-    dataset = DATA(data_path=os.path.join(args.music_dir), normalizer=None)
+    dataset = DATA(data_path=os.path.join(args.music_dir), file_name=file_name, normalizer=None)
 
     return dataset
 
 
-def get_dataset_loader(args, batch_size):
-    dataset = get_dataset(args)
+def get_dataset_loader(args, file_name, batch_size):
+    dataset = get_dataset(args, file_name)
     num_cpus = multiprocessing.cpu_count()
 
     print(f"batchsize: {batch_size}")
@@ -347,6 +342,7 @@ if __name__ == "__main__":
     #     args.batch_size = 32  # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
     # else:
     #     args.batch_size = 4
+    args.batch_size = music_dir_len
     name = os.path.basename(os.path.dirname(args.music_dir))
     niter = os.path.basename(args.model_path).replace("model", "").replace(".pt", "")
     log_file = os.path.join(
@@ -366,8 +362,8 @@ if __name__ == "__main__":
 
     ########################################################################
     # LOAD SMPL
-
-    smpl = SMPLSkeleton(device="cpu")
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    smpl = SMPLSkeleton(device=device)
 
     ########################################################################
 
@@ -385,104 +381,13 @@ if __name__ == "__main__":
     #################### DATA LOADERS ###########################
 
     # extract feature from each music file
-    baseline_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
+    #! code for jukebox
+    # baseline_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
 
     logger.log("creating data loader...")
     split = False
 
     #!: mỗi batch = 1 bài hát. vd có 2 bài => origin loader gồm 2 batch, mỗi batch sẽ chứa feature được sliced ra từ bài hát load vào
-
-    origin_dataset = OriginDataset(
-        data_path=os.path.join(args.music_dir, "motions"), normalizer=None
-    )
-    origin_loader = DataLoader(
-        origin_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
-        pin_memory=True,
-        drop_last=True,
-        collate_fn=collate_pairs_and_text
-    )
-    
-    for batch in origin_loader:
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        njoints = 24
-        smpl = SMPLSkeleton(device=device)
-        
-        motion, filenames = batch["motion_feats"], batch["filename"]
-        motion = torch.Tensor(motion).to(device)
-        
-        # if normalizer is not None:
-        #     motion = normalizer.unnormalize(motion)
-        
-        b, s, c = motion.shape
-        
-        sample_contact, motion = torch.split(
-        motion, (4, motion.shape[2] - 4), dim=2)
-        pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-        q = motion[:, :, 3:].reshape(b, s, njoints, 6)
-        # go 6d to ax
-        q = ax_from_6v(q).to(motion.device)
-        
-        # full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
-        
-        # print("full pose: ", full_poses.shape)
-        
-        for q_, pos_, filename in zip(q, pos, filenames):
-            
-            # if out_dir is not None:
-            full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
-            outname = f'{args.inference_dir}/long_seq_gt/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
-            out_path = os.path.join(outname)
-            # Create the directory if it doesn't exist
-            os.makedirs(os.path.dirname(out_path), exist_ok=True)
-            with open(out_path, "wb") as file_pickle:
-                pickle.dump(
-                    {
-                        "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-                        "smpl_trans": pos_.squeeze(0).cpu().numpy(),
-                        "full_pose": full_pose,
-                    },
-                    file_pickle,
-                )
-
-    num_actions = 1
-
-    logger.log("Creating model and diffusion...")
-    model, diffusion = create_model_and_diffusion(args, dataloader)
-
-    logger.log(f"Loading checkpoints from [{args.model_path}]...")
-    state_dict = torch.load(args.model_path, map_location="cpu")
-    load_model_wo_clip(model, state_dict)
-
-    if args.guidance_param != 1:
-        model = ClassifierFreeSampleModel(
-            model
-        )  # wrapping model with the classifier-free sampler
-
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    model.to(device)
-    model.eval()  # disable random masking
-
-    #! generate ở đây nè bùm bùm
-
-    generated_motion = []
-    mm_generated_motions = []
-    clip_denoised = False  #! hardcoded (from repo)
-    if args.refine:
-        sample_fn_refine = diffusion.p_sample_loop
-
-    wav_dir = "custom_input/feature"
-    wavs = sorted(glob.glob(f"{wav_dir}/*.npy"))
-    wav_out = wav_dir + "_sliced"
-    print(f"diffusion: {diffusion}")
-    composition = args.composition
-    use_ddim = False  # hardcode
-
-    sample_fn = diffusion.p_sample_loop
-
-    print(f"composition: {composition}, sample fn: {sample_fn}")
     
     if args.dataset == "aistpp":
         nfeats = 151
@@ -492,13 +397,49 @@ if __name__ == "__main__":
         nfeats = 139
         njoints = 22
         smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
+
+    scale = 1
+    
+    file_names = sorted(list(Path(os.path.join(args.music_dir, "feature")).glob("*.npy")))
+    
+    
+    generate_len = []
+    
+    for file_name in file_names:
         
-    music_files = sorted(glob.glob(os.path.join(os.path.join(args.music_dir), "*.npy")))
+        dataloader, _ = get_dataset_loader(args, file_name, batch_size=1)
+        
+        num_actions = 1
 
-    for music_files in music_files:
-        dataloader, _ = get_dataset_loader(args, batch_size=1)
+        logger.log("Creating model and diffusion...")
+        model, diffusion = create_model_and_diffusion(args, dataloader)
 
-        scale = 1
+        logger.log(f"Loading checkpoints from [{args.model_path}]...")
+        state_dict = torch.load(args.model_path, map_location="cpu")
+        load_model_wo_clip(model, state_dict)
+
+        if args.guidance_param != 1:
+            model = ClassifierFreeSampleModel(
+                model
+            )  # wrapping model with the classifier-free sampler
+
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        model.to(device)
+        model.eval()  # disable random masking
+
+        generated_motion = []
+        mm_generated_motions = []
+        clip_denoised = False  #! hardcoded (from repo)
+        if args.refine:
+            sample_fn_refine = diffusion.p_sample_loop
+
+        print(f"diffusion: {diffusion}")
+        composition = args.composition
+        use_ddim = False  # hardcode
+
+        sample_fn = diffusion.p_sample_loop
+
+        print(f"composition: {composition}, sample fn: {sample_fn}")
 
         with torch.no_grad():
             for _, batch in tqdm(enumerate(dataloader)):
@@ -582,16 +523,15 @@ if __name__ == "__main__":
                             model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
                                                                     device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                         
-                        if args.inpainting_frames > 0:
-                            total_hist_frame = args.inpainting_frames + 15
-                            hist_lst = [feats[:,:,:90] for feats in sample_0]
-                            hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
-                            
-                            fut_lst = [feats[:,:,:90] for feats in sample_1]
-                            fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
+                        total_hist_frame = args.inpainting_frames + 15
+                        hist_lst = [feats[:,:,:90] for feats in sample_0]
+                        hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
+                        
+                        fut_lst = [feats[:,:,:90] for feats in sample_1]
+                        fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
 
-                            model_kwargs_2['y']['hframes'] = hframes
-                            model_kwargs_2['y']['fut_frames'] = fut_frames
+                        model_kwargs_2['y']['hframes'] = hframes
+                        model_kwargs_2['y']['fut_frames'] = fut_frames
                             
                         model_kwargs_2['y']['inpainting_mask'] = torch.ones_like(input_motions, dtype=torch.float,
                                                                     device=input_motions.device)  # True means use gt motion
@@ -706,12 +646,17 @@ if __name__ == "__main__":
                             assert full_pose.shape[1] == 55
                         
                         filename = batch_filename
-                        outname = f'{args.inference_dir}/long_seq/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join("./", outname)
                         print(out_path)
                         # Create the directory if it doesn't exist
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
                         # print(out_path)
+                        generate_len.append(full_pose.squeeze().shape[0])
+                        print("Generate shape before trim: ", full_pose.squeeze().shape)
+                        # full_pose = full_pose[:210]
+                        # print("Generate shape after trim: ", full_pose.squeeze().shape)
+                        
                         with open(out_path, "wb") as file_pickle:
                             pickle.dump(
                                 {
@@ -722,3 +667,53 @@ if __name__ == "__main__":
                                 file_pickle,
                             )
                             
+    # origin_dataset = OriginDataset(
+    #     data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len, normalizer=None
+    # )
+    # origin_loader = DataLoader(
+    #     origin_dataset,
+    #     batch_size=1,
+    #     shuffle=False,
+    #     num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
+    #     pin_memory=True,
+    #     drop_last=True,
+    #     collate_fn=collate_pairs_and_text
+    # )
+    
+    # print(len(origin_loader))
+    
+    # for batch in origin_loader:
+    #     njoints = 24
+    #     smpl = SMPLSkeleton(device=device)
+        
+    #     motion, filenames = batch["motion_feats"][0], batch["filename"][0]
+    #     motion = torch.Tensor(motion).to(device)
+        
+    #     print(motion.shape)
+    #     b, s, c = motion.shape
+        
+    #     sample_contact, motion = torch.split(
+    #     motion, (4, motion.shape[2] - 4), dim=2)
+    #     pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+    #     q = motion[:, :, 3:].reshape(b, s, njoints, 6)
+    #     # go 6d to ax
+    #     q = ax_from_6v(q).to(motion.device)
+        
+    #     for q_, pos_ in zip(q, pos):
+            
+    #         # if out_dir is not None:
+    #         print("GT shape: ", (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0))).squeeze(0).shape)
+    #         full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
+    #         outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
+    #         out_path = os.path.join(outname)
+    #         # Create the directory if it doesn't exist
+    #         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    #         with open(out_path, "wb") as file_pickle:
+    #             pickle.dump(
+    #                 {
+    #                     "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+    #                     "smpl_trans": pos_.squeeze(0).cpu().numpy(),
+    #                     "full_pose": full_pose,
+    #                 },
+    #                 file_pickle,
+    #             )
