@@ -350,6 +350,8 @@ if __name__ == "__main__":
         "log_out",
         "inference_{}_{}".format(name, niter),
     )
+    
+    print(f"[Guidance param]: {args.guidance_param}")
 
     if args.guidance_param != 1.0:
         log_file += f"_gscale{args.guidance_param}"
@@ -398,7 +400,7 @@ if __name__ == "__main__":
         njoints = 22
         smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
 
-    scale = 1
+    scale = args.guidance_param
     
     file_names = sorted(list(Path(os.path.join(args.music_dir, "feature")).glob("*.npy")))
     
