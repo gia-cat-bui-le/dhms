@@ -507,7 +507,8 @@ if __name__ == "__main__":
                         num_rows = 1
                         motion = torch.cat(( sample_0[:, :, :, -45 :], sample_1[:, :, :, : 45]), -1)
                         assert motion.shape == (1, nfeats, 1, 90)
-                        input_motions = motion.repeat((num_rows, 1, 1, 1))
+                        input_motions = motion
+                        
                         
                         max_frames = input_motions.shape[-1]
                         assert max_frames == input_motions.shape[-1]
@@ -515,6 +516,7 @@ if __name__ == "__main__":
                         
                         model_kwargs_2 = {}
                         model_kwargs_2['y'] = {}
+                        model_kwargs_2['y']['inpainted_motion'] = input_motions
 
                         model_kwargs_2['y']['lengths'] = [90 for len in range(1)]
                         model_kwargs_2['y']['music'] = torch.cat((music_0, music_1), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
