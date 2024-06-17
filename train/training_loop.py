@@ -16,13 +16,9 @@ from diffusion.fp16_util import MixedPrecisionTrainer
 from diffusion.resample import LossAwareSampler, UniformSampler
 from tqdm import tqdm
 from diffusion.resample import create_named_schedule_sampler
-from data_loaders.humanml.networks.evaluator_wrapper import EvaluatorMDMWrapper
-# from eval import eval_humanml, eval_humanact12_uestc
-from data_loaders.get_data import get_dataset_loader
 
 from teach.data.tools import lengths_to_mask    
 from inference import evaluation
-from utils.parser_util import add_evaluation_options
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
 # 20-21 within the first ~1K steps of training.
