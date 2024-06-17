@@ -239,15 +239,15 @@ class InputProcess(nn.Module):
         # print("INPUT PROCESS: ", bs, njoints, nfeats, nframes)
         x = x.permute((3, 0, 1, 2)).reshape(nframes, bs, njoints*nfeats)
 
-        #! Global Trajectory
-        x_root = x[:, :, 4:7]
+        # #! Global Trajectory
+        # x_root = x[:, :, 4:7]
         
-        x = self.poseEmbedding(x)  # [seqlen, bs, d]
+        # x = self.poseEmbedding(x)  # [seqlen, bs, d]
         
-        x_lambda = self.trajectEmbedding_1(x_root)
-        x_beta = self.trajectEmbedding_2(x_root)
+        # x_lambda = self.trajectEmbedding_1(x_root)
+        # x_beta = self.trajectEmbedding_2(x_root)
         
-        x = featurewise_affine(x, (x_lambda, x_beta))
+        # x = featurewise_affine(x, (x_lambda, x_beta))
         
         return x
 
