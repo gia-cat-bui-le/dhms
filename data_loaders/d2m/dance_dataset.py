@@ -13,7 +13,7 @@ from pytorch3d.transforms import (RotateAxisAngle, axis_angle_to_quaternion,
                                   quaternion_to_axis_angle)
 from torch.utils.data import Dataset
 
-from data_loaders.d2m.preprocess import Normalizer, vectorize_many
+from data_loaders.d2m.preprocess import vectorize_many
 from data_loaders.d2m.quaternion import ax_to_6v
 from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton, do_smplxfk, ax_to_6v, ax_from_6v
 from vis import SMPLSkeleton
@@ -22,138 +22,12 @@ floor_height = 0
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
-class FineDanceDataset(Dataset):
-    def __init__(
-        self,
-        data_path: str,
-        train: bool,
-        feature_type: str = "baseline",
-        normalizer: Any = None,
-        data_len: int = -1,
-        include_contacts: bool = True,
-        force_reload: bool = False,
-        hist_frames: int = 5
-    ):
-        self.dataname = "finedance"
-        self.data_path = data_path
-        # print(self.data_path)
-        self.raw_fps = 30
-        self.data_fps = 30
-        assert self.data_fps <= self.raw_fps
-        self.data_stride = self.raw_fps // self.data_fps
-
-        self.train = train
-        self.name = "Train" if self.train else "Test"
-        self.feature_type = feature_type
-
-        self.normalizer = normalizer
-        self.data_len = data_len
-        
-        self.hist_frames = hist_frames
-        
-        data = self.load_aistpp()  # Call this last
-
-        self.data = {
-            "pose_0": data["full_pose_0"][:, :, :139],
-            "pose_1": data["full_pose_1"][:, :, :139],
-            # "pose_0_with_transition": pose_input_0_with_transition,
-            # "pose_1_with_transition": pose_input_1_with_transition,
-            "length_0": data['length_0'],
-            "length_1": data['length_1'],
-            "length_transition": data['length_transition'],
-            "filenames": data["filenames"],
-        }
-        # print("full pose: ", torch.Tensor(self.data["pose_0"]).shape, torch.Tensor(self.data["pose_1"]).shape)
-        assert len(data["full_pose_0"]) == len(data["filenames"])
-        self.length = len(data["full_pose_0"])
-        
-        # print(f'DATA SHAPE: \n\tPose: {self.data["pose_0"].shape}\n\tMusic: {len(self.data["filenames"])}')
-
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self, idx):
-        filename_ = self.data["filenames"][idx]
-        feature = torch.from_numpy(np.load(filename_))
-        feature_0 = feature[: self.data['length_0']].float()
-        feature_1 = feature[self.data['length_0'] :].float()
-        seq_0, d_0 = feature_0.shape
-        seq_1, d_1 = feature_1.shape
-        return {
-            "pose_0": torch.from_numpy(self.data['pose_0'][idx]).float(),
-            "pose_1": torch.from_numpy(self.data['pose_1'][idx]).float(),
-            "length_0": self.data['length_0'],
-            "length_1": self.data['length_1'],
-            "length_transition": self.data['length_transition'],
-            "music_0": feature_0.reshape(seq_0 * d_0),
-            "music_1": feature_1.reshape(seq_1 * d_1),
-            "filename": filename_
-        }
-
-    def load_aistpp(self):
-        # open data path
-        split_data_path = os.path.join(
-            self.data_path, "train" if self.train else "test"
-        )
-
-        # Structure:
-        # data
-        #   |- train
-        #   |    |- motion_sliced
-        #   |    |- wav_sliced
-        #   |    |- baseline_features
-        #   |    |- jukebox_features
-        #   |    |- motions
-        #   |    |- wavs
-
-        motion_path = os.path.join(split_data_path, "motions_sliced")
-        sound_path = os.path.join(split_data_path, f"jukebox_feats_sliced")
-        # sort motions and sounds
-        motions = sorted(glob.glob(os.path.join(motion_path, "*.pkl")))
-        features = sorted(glob.glob(os.path.join(sound_path, "*.npy")))
-        
-        # stack the motions and features together
-        all_names = []
-        all_full_pose_0 = []
-        all_full_pose_1 = []
-        assert len(motions) == len(features)
-        for motion, feature in zip(motions, features):
-            # make sure name is matching
-            m_name = os.path.splitext(os.path.basename(motion))[0]
-            f_name = os.path.splitext(os.path.basename(feature))[0]
-            assert m_name == f_name, str((motion, feature))
-            # load motion
-            
-            data = pickle.load(open(motion, "rb"))
-            full_pose_0 = data["full_pose_0"]
-            full_pose_1 = data["full_pose_1"]
-            
-            all_full_pose_0.append(full_pose_0)
-            all_full_pose_1.append(full_pose_1)
-            
-            all_names.append(feature)
-
-        all_full_pose_0 = np.array(all_full_pose_0)
-        all_full_pose_1 = np.array(all_full_pose_1)
-        # downsample the motions to the data fps
-        all_full_pose_0 = all_full_pose_0[:, :: self.data_stride, :]
-        all_full_pose_1 = all_full_pose_1[:, :: self.data_stride, :]
-        
-        data = {"full_pose_0": all_full_pose_0,
-                "full_pose_1": all_full_pose_1,
-                "length_0": data['length_0'],
-                "length_1": data['length_1'],
-                "length_transition": data['length_transition'],
-                "filenames": all_names}
-        return data
-
 class AISTPPDataset(Dataset):
     def __init__(
         self,
         data_path: str,
         train: bool,
         feature_type: str = "baseline",
-        normalizer: Any = None,
         data_len: int = -1,
         include_contacts: bool = True,
         force_reload: bool = False,
@@ -171,7 +45,6 @@ class AISTPPDataset(Dataset):
         self.name = "Train" if self.train else "Test"
         self.feature_type = feature_type
 
-        self.normalizer = normalizer
         self.data_len = data_len
         
         self.hist_frames = hist_frames
@@ -186,7 +59,6 @@ class AISTPPDataset(Dataset):
             "pose_1": pose_input_1,
             "length_0": data['length_0'],
             "length_1": data['length_1'],
-            "length_transition": data['length_transition'],
             "filenames": data["filenames"],
         }
         assert len(pose_input_0) == len(data["filenames"])
@@ -207,7 +79,6 @@ class AISTPPDataset(Dataset):
             "pose_1": self.data['pose_1'][idx],
             "length_0": self.data['length_0'],
             "length_1": self.data['length_1'],
-            "length_transition": self.data['length_transition'],
             "music_0": feature_0.reshape(seq_0 * d_0),
             "music_1": feature_1.reshape(seq_1 * d_1),
             "filename": filename_
@@ -274,7 +145,6 @@ class AISTPPDataset(Dataset):
                 "pos_1": all_pos1, "q_1": all_q1,
                 "length_0": data['length_0'],
                 "length_1": data['length_1'],
-                "length_transition": data['length_transition'],
                 "filenames": all_names}
         return data
 
@@ -318,14 +188,6 @@ class AISTPPDataset(Dataset):
         # now, flatten everything into: batch x sequence x [...]
         l = [contacts, root_pos, local_q]
         global_pose_vec_input = vectorize_many(l).float().detach()
-
-        # normalize the data. Both train and test need the same normalizer.
-        # if self.train:
-        #     self.normalizer = Normalizer(global_pose_vec_input)
-        # else:
-        #     # print(self.normalizer)
-        #     assert self.normalizer is not None
-        # global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
 
         assert not torch.isnan(global_pose_vec_input).any()
         data_name = "Train" if self.train else "Test"

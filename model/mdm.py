@@ -8,9 +8,6 @@ from teach.data.tools import lengths_to_mask
 from vis import SMPLSkeleton
 from einops import rearrange, reduce, repeat
 
-from model.x_transformers.x_transformers import ContinuousTransformerWrapper, Encoder
-from .rotary_embedding_torch import RotaryEmbedding
-
 def featurewise_affine(x, scale_shift):
     scale, shift = scale_shift
     return (scale + 1) * x + shift
@@ -72,16 +69,6 @@ class MDM(nn.Module):
 
         self.motion_mask = kargs['motion_mask']
         self.hist_frames = kargs['hist_frames']
-        
-        use_rotary = True
-        
-        if use_rotary:
-            self.rotary = RotaryEmbedding(dim=latent_dim)
-        else:
-            self.abs_pos_encoding = PositionalEncoding(
-                latent_dim, dropout, batch_first=True
-            )
-        
         
         if self.hist_frames > 0:
             # self.hist_frames = 5

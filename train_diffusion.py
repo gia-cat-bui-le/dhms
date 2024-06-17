@@ -11,7 +11,6 @@ from utils import dist_util
 from train.training_loop import TrainLoop
 from data_loaders.get_data import get_dataset_loader
 from utils.model_util import create_model_and_diffusion
-from train.train_platforms import ClearmlPlatform, TensorboardPlatform, NoPlatform  # required for the eval operation
 
 def main():
     args = train_args()
@@ -40,7 +39,7 @@ def main():
     print("creating data loader...")
     #TODO: check if we need num_frames in dataloader (cut each sequence into a fixed number of frames.
     # params can be set at parser_util.py
-    data, normalizer = get_dataset_loader(args, name=args.dataset, batch_size=args.batch_size, split=True)
+    data = get_dataset_loader(args, name=args.dataset, batch_size=args.batch_size, split=True)
     
     import numpy as np 
 
@@ -51,7 +50,7 @@ def main():
 
     # print('Total params: %.2fM' % (sum(p.numel() for p in model.parameters_wo_clip()) / 1000000.0))
     print("Training...")
-    loop = TrainLoop(args, train_platform, model, diffusion, data, normalizer)
+    loop = TrainLoop(args, train_platform, model, diffusion, data)
     loop.run_loop()
     train_platform.close()
 

@@ -63,17 +63,7 @@ def add_base_options(parser):
     group.add_argument("--seed", default=10, type=int, help="For fixing random seed.")
     group.add_argument("--batch_size", default=128, type=int, help="Batch size during training.")
     group.add_argument("--tiny", default=False, type=bool, help="If True, use only part of data")
-    group.add_argument(
-        "--refine",
-        action="store_true",
-        help="refine",
-    )
-    group.add_argument("--composition", default=False, type=bool, help="composition")
-    group.add_argument("--inter_frames", default=0, type=int, help="inter_frames")
-    group.add_argument("--infer_get", default=False, type=int, help="infer_get")
     group.add_argument("--inpainting_frames", default=30, type=int, help="inpainting_frames")
-    group.add_argument("--refine_scale", default=1.0, type=float, help="inpainting_frames")
-    group.add_argument("--max_len", default=90, type=int, help="inpainting_frames")
 
 def add_diffusion_options(parser):
     group = parser.add_argument_group('diffusion')
@@ -86,17 +76,6 @@ def add_diffusion_options(parser):
 
 def add_model_options(parser):
     group = parser.add_argument_group('model')
-    #! here
-    # # =================== FlowMDM specific arguments ===================
-    # group.add_argument("--bpe_training_ratio", default=0.5, type=float,
-    #                    help="Ratio of usage for absolute positional embeddings (APE) during training versus relative ones (RPE).")
-    # group.add_argument("--bpe_denoising_step", default=100, type=int,
-    #                    help="Denoising step where transitioning from absolute to relative positional embeddings (APE -> RPE) at inference --i.e.--> schedule of Blended Positional Embeddings (BPE). 0 for all RPE, -1 or >= than 'diffusion_steps' for all APE")
-    # group.add_argument("--rpe_horizon", default=30, type=int,
-    #                    help="Window size, or horizon (H), for the local/relative attention")
-    # group.add_argument("--use_chunked_att", action='store_true',
-    #                    help="If True, it uses chunked windowed local/relative attention like in LongFormer.")
-    # =================== MDM related arguments  ===================
     group.add_argument("--max_seq_att", default=1024, type=int,
                        help="Max window size for attention")
     group.add_argument("--layers", default=8, type=int,
@@ -120,7 +99,6 @@ def add_model_options(parser):
     group.add_argument("--lambda_rcxyz", default=1.0, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
     group.add_argument("--lambda_fc", default=10.942, type=float, help="Foot contact loss.")
-    group.add_argument("--lambda_cycle", default=1.0, type=float, help="Foot contact loss.")
     # group.add_argument("--unconstrained", action='store_true',
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "
     #                         "Currently tested on HumanAct12 only.")
@@ -133,8 +111,6 @@ def add_model_options(parser):
         action="store_true",
         help="use noise shuffling or not",
     )
-
-    # group.add_argument("--refine", action='store_true',)
 
 def add_data_options(parser):
     group = parser.add_argument_group('dataset')
@@ -155,8 +131,6 @@ def add_training_options(parser):
                        help="Path to save checkpoints and results.")
     group.add_argument("--overwrite", action='store_true',
                        help="If True, will enable to use an already existing save_dir.")
-    group.add_argument("--train_platform_type", default='NoPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform'], type=str,
-                       help="Choose platform to log results. NoPlatform means no logging.")
     group.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
     group.add_argument("--weight_decay", default=0, type=float, help="Optimizer weight decay.")
     group.add_argument("--lr_anneal_steps", default=200000, type=int, help="Number of learning rate anneal steps.")
@@ -206,9 +180,6 @@ def add_generate_options(parser):
     group = parser.add_argument_group('generate')
     group.add_argument("--motion_length", default=5.0, type=float,
                        help="The length of the sampled motion [in seconds]. ")
-    # group.add_argument("--feature_type", default="baseline", type=str)
-    # group.add_argument("--train_dataset", default="aistpp", type=str,
-    #                    help="The dataset used for training. ")
     group.add_argument("--use_cached_features", action="store_true",
         help="Use precomputed features instead of music folder",
     )
@@ -229,23 +200,6 @@ def add_generate_options(parser):
         action="store_true",
         help="Save the jukebox features for later reuse",
     )
-    
-
-def add_edit_options(parser):
-    group = parser.add_argument_group('edit')
-    group.add_argument("--edit_mode", default='in_between', choices=['in_between', 'upper_body'], type=str,
-                       help="Defines which parts of the input motion will be edited.\n"
-                            "(1) in_between - suffix and prefix motion taken from input motion, "
-                            "middle motion is generated.\n"
-                            "(2) upper_body - lower body joints taken from input motion, "
-                            "upper body is generated.")
-    group.add_argument("--text_condition", default='', type=str,
-                       help="Editing will be conditioned on this text prompt. "
-                            "If empty, will perform unconditioned editing.")
-    group.add_argument("--prefix_end", default=0.25, type=float,
-                       help="For in_between editing - Defines the end of input prefix (ratio from all frames).")
-    group.add_argument("--suffix_start", default=0.75, type=float,
-                       help="For in_between editing - Defines the start of input suffix (ratio from all frames).")
 
 def add_evaluation_options(parser):
     group = parser.add_argument_group('eval')
@@ -304,16 +258,6 @@ def generate_args():
     add_sampling_options(parser)
     add_generate_options(parser)
     return parse_and_load_from_model(parser)
-
-
-def edit_args():
-    parser = ArgumentParser()
-    # args specified by the user: (all other will be loaded from the model)
-    add_base_options(parser)
-    add_sampling_options(parser)
-    add_edit_options(parser)
-    return parse_and_load_from_model(parser)
-
 
 def evaluation_parser():
     parser = ArgumentParser()

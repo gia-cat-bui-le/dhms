@@ -1,14 +1,5 @@
 from utils.parser_util import evaluation_parser, generate_args
 from utils.fixseed import fixseed
-from datetime import datetime
-from data_loaders.humanml.motion_loaders.model_motion_loaders import (
-    get_mdm_loader,
-    get_motion_loader,
-)
-from data_loaders.humanml.utils.metrics import *
-from collections import OrderedDict
-from data_loaders.humanml.scripts.motion_process import *
-from data_loaders.humanml.utils.utils import *
 from utils.model_util import create_model_and_diffusion, load_model_wo_clip
 
 from diffusion import logger
@@ -35,7 +26,7 @@ from data_loaders.d2m.audio_extraction.baseline_features import (
     extract_folder as baseline_extract,
 )
 
-import scipy
+from tqdm import tqdm
 from scipy.io import wavfile
 
 import glob
@@ -48,7 +39,11 @@ from typing import Any
 from teach.data.tools import lengths_to_mask
 import random
 from pytorch3d.transforms import axis_angle_to_quaternion, quaternion_to_axis_angle
-from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
+from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp, ax_to_6v
+
+import torch
+import os
+import numpy as np
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 from pytorch3d.transforms import (
@@ -57,16 +52,10 @@ from pytorch3d.transforms import (
     quaternion_multiply,
     quaternion_to_axis_angle,
 )
-from data_loaders.d2m.finedance.render_joints.smplfk import (
-    SMPLX_Skeleton,
-    do_smplxfk,
-    ax_to_6v,
-    ax_from_6v,
-)
 from diffusion.gaussian_diffusion import GaussianDiffusion
 from copy import deepcopy
 from utils.model_util import create_gaussian_diffusion
-from data_loaders.d2m.preprocess import Normalizer, vectorize_many
+from data_loaders.d2m.preprocess import vectorize_many
 from typing import List, Dict
 
 def collate_tensors(batch):
@@ -93,12 +82,10 @@ class OriginDataset(Dataset):
         data_path: str,
         num_feats: list,
         feature_type: str = "baseline",
-        normalizer: Any = None,
     ):
         self.data_path = data_path
         self.num_feats = num_feats
         self.feature_type = feature_type
-        self.normalizer = normalizer
 
         # load raw data
         print("Loading dataset...")
@@ -210,15 +197,12 @@ class GenerateDataset(Dataset):
         data_path: str,
         file_name,
         feature_type: str = "baseline",
-        normalizer: Any = None,
     ):
         self.data_path = data_path
         # print(self.data_path)
 
         self.feature_type = feature_type
         self.file_name = file_name
-
-        self.normalizer = normalizer
 
         # load raw data
         print("Loading dataset...")
@@ -306,9 +290,7 @@ def parse_resume_step_from_filename(filename):
 
 def get_dataset(args, file_name):
     DATA = GenerateDataset
-
-    step = parse_resume_step_from_filename(args.model_path)
-    dataset = DATA(data_path=os.path.join(args.music_dir), file_name=file_name, normalizer=None)
+    dataset = DATA(data_path=os.path.join(args.music_dir), file_name=file_name)
 
     return dataset
 
@@ -329,7 +311,7 @@ def get_dataset_loader(args, file_name, batch_size):
         # collate_fn=collate
     )
 
-    return loader, dataset.normalizer
+    return loader
 
 if __name__ == "__main__":
     args = generate_args()
@@ -338,10 +320,6 @@ if __name__ == "__main__":
     
     music_dir_len = len(glob.glob(os.path.join(args.music_dir, "*.wav")))
     print(f"music dir len {music_dir_len}")
-    # if music_dir_len > 32:
-    #     args.batch_size = 32  # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
-    # else:
-    #     args.batch_size = 4
     args.batch_size = music_dir_len
     name = os.path.basename(os.path.dirname(args.music_dir))
     niter = os.path.basename(args.model_path).replace("model", "").replace(".pt", "")
@@ -356,9 +334,6 @@ if __name__ == "__main__":
     if args.guidance_param != 1.0:
         log_file += f"_gscale{args.guidance_param}"
     log_file += f"_inpaint{args.inpainting_frames}"
-    if args.refine:
-        log_file += f"_refine{args.refine_scale}"
-    log_file += f"_comp{args.inter_frames}"
     log_file += ".log"
     print(f"Will save to log file [{log_file}]")
 
@@ -388,18 +363,12 @@ if __name__ == "__main__":
 
     logger.log("creating data loader...")
     split = False
-
-    #!: mỗi batch = 1 bài hát. vd có 2 bài => origin loader gồm 2 batch, mỗi batch sẽ chứa feature được sliced ra từ bài hát load vào
     
     if args.dataset == "aistpp":
         nfeats = 151
         njoints = 24
         smpl = SMPLSkeleton(device=device)
-    elif args.dataset == "finedance":
-        nfeats = 139
-        njoints = 22
-        smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
-
+    
     scale = args.guidance_param
     
     file_names = sorted(list(Path(os.path.join(args.music_dir, "feature")).glob("*.npy")))
@@ -409,7 +378,7 @@ if __name__ == "__main__":
     
     for file_name in file_names:
         
-        dataloader, _ = get_dataset_loader(args, file_name, batch_size=1)
+        dataloader = get_dataset_loader(args, file_name, batch_size=1)
         
         num_actions = 1
 
@@ -432,16 +401,10 @@ if __name__ == "__main__":
         generated_motion = []
         mm_generated_motions = []
         clip_denoised = False  #! hardcoded (from repo)
-        if args.refine:
-            sample_fn_refine = diffusion.p_sample_loop
-
-        print(f"diffusion: {diffusion}")
-        composition = args.composition
+            
         use_ddim = False  # hardcode
 
         sample_fn = diffusion.p_sample_loop
-
-        print(f"composition: {composition}, sample fn: {sample_fn}")
 
         with torch.no_grad():
             for _, batch in tqdm(enumerate(dataloader)):
@@ -529,13 +492,13 @@ if __name__ == "__main__":
                             model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
                                                                     device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                         
-                        total_hist_frame = args.inpainting_frames + 15
-                        print("in painting frames: ", args.inpainting_frames)
+                        total_hist_frame = 45
+                        condition_frame = 45 - args.inpainting_frames
                         hist_lst = [feats[:,:,-90:] for feats in sample_0]
-                        hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
+                        hframes = torch.stack([x[:,:,-total_hist_frame : -condition_frame] for x in hist_lst])
                         
                         fut_lst = [feats[:,:,:90] for feats in sample_1]
-                        fut_frames = torch.stack([x[:,:,15:total_hist_frame] for x in fut_lst])
+                        fut_frames = torch.stack([x[:,:,condition_frame:total_hist_frame] for x in fut_lst])
 
                         model_kwargs_2['y']['hframes'] = hframes
                         model_kwargs_2['y']['fut_frames'] = fut_frames
@@ -543,10 +506,10 @@ if __name__ == "__main__":
                         model_kwargs_2['y']['inpainting_mask'] = torch.ones_like(input_motions, dtype=torch.float,
                                                                     device=input_motions.device)  # True means use gt motion
                         for i, length in enumerate(model_kwargs_2['y']['lengths']):
-                            start_idx, end_idx = 30, 60
+                            start_idx, end_idx = args.inpainting_frames, 90 - args.inpainting_frames
                             gt_frames_per_sample[i] = list(range(0, start_idx)) + list(range(end_idx, max_frames))
                             model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx: end_idx] = False  # do inpainting in those frames
-                            mask_slope = 15
+                            mask_slope = args.inpainting_frames // 2
                             for f in range(mask_slope):
                                 if start_idx-f < 0:
                                     continue
@@ -716,7 +679,7 @@ if __name__ == "__main__":
                                 file_pickle,
                             )
     origin_dataset = OriginDataset(
-        data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len, normalizer=None
+        data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
     )
     origin_loader = DataLoader(
         origin_dataset,

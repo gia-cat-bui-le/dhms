@@ -13,8 +13,6 @@ def create_dataset(opt):
     path_folder = ''
     if opt.dataset_name == "aistpp":
         path_folder = os.path.join(opt.datapath, 'aistpp_dataset/')
-    elif opt.dataset_name == 'finedance':
-        path_folder = os.path.join(opt.datapath, 'finedance/')
     # split the data according to the splits files
     print("Creating train / test split")
     split_data(path_folder, opt.dataset_name)
@@ -42,12 +40,6 @@ def create_dataset(opt):
         slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", f"{path_folder}/train/wavs", 0.5, slice_len, inpainting_frame, motion_len)
         print("Slicing test data")
         slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", f"{path_folder}/test/wavs", 0.5, slice_len, inpainting_frame, motion_len)
-    else:
-        print("Slicing train data")
-        slice_finedance(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", f"{path_folder}/train/wavs", 1.5, slice_len, inpainting_frame, motion_len)
-        print("Slicing test data")
-        slice_finedance(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", f"{path_folder}/test/wavs", 1.5, slice_len, inpainting_frame, motion_len)
-    
 
 def parse_opt():
     parser = argparse.ArgumentParser()
@@ -55,7 +47,7 @@ def parse_opt():
         "--dataset_name",
         type=str,
         default="aistpp",
-        choices=['aistpp', 'finedance'],
+        choices=['aistpp'],
         help="name of dataset",
     )
     parser.add_argument(

@@ -1,13 +1,8 @@
 from utils.parser_util import evaluation_parser
 from utils.fixseed import fixseed
 from datetime import datetime
-from data_loaders.humanml.motion_loaders.model_motion_loaders import get_mdm_loader, get_motion_loader
-from data_loaders.humanml.utils.metrics import *
-from data_loaders.humanml.networks.evaluator_wrapper import EvaluatorMDMWrapper, EvaluatorCCDWrapper
-from collections import OrderedDict
-from data_loaders.humanml.scripts.motion_process import *
-from data_loaders.humanml.utils.utils import *
 from utils.model_util import create_model_and_diffusion, load_model_wo_clip
+from data_loaders.humanml.motion_loaders.model_motion_loaders import get_mdm_loader
 
 from diffusion import logger
 from utils import dist_util
@@ -22,16 +17,21 @@ from scipy.ndimage import gaussian_filter as G
 from scipy.signal import argrelextrema
 from scipy import linalg
 
+import numpy as np
+import torch
+import os
+
 import pickle
 from pathlib import Path
 
 from evaluation.features.kinetic import extract_kinetic_features
 from evaluation.features.manual_new import extract_manual_features
 
+import torch
+
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
-from evaluation.metrics_finedance import quantized_metrics as quantized_metrics_finedance, calc_and_save_feats as calc_and_save_feats_finedance
 
 def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -96,27 +96,14 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
             pred_root = [f'{args.inference_dir}/inference']
             
             # print('Calculating and saving features')
-            if args.dataset == "finedance":
-                calc_and_save_feats_finedance(gt_root)
-            else:
-                calc_and_save_feats(gt_root)
+            calc_and_save_feats(gt_root)
             
             
             for pred_root in pred_root:
                 print(pred_root, file=f, flush=True)
-                if args.dataset == "finedance":
-                    calc_and_save_feats_finedance(pred_root)
+                calc_and_save_feats(pred_root)
 
-                    print(quantized_metrics_finedance(pred_root, gt_root), file=f, flush=True)
-                else:
-                    calc_and_save_feats(pred_root)
-
-                    print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
-            
-            # calc_and_save_feats(pred_root)
-            
-            # # print('Calculating metrics')
-            # print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
+                print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
 
         print(f'!!! DONE !!!')
         print(f'!!! DONE !!!', file=f, flush=True)
@@ -136,7 +123,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
 
     logger.log("creating data loader...")
     split = False
-    origin_loader, normalizer = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=split)
+    origin_loader = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=split)
     
     # gt_loader = get_dataset_loader(name=args.dataset, eval_batch_size=args.eval_batch_size, split=split, hml_mode='eval')
     # num_actions = gen_loader.dataset.num_actions
@@ -157,7 +144,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
     eval_motion_loaders = {
         'vald': lambda: get_mdm_loader(
             args, model, diffusion, args.eval_batch_size,
-            origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param, normalizer=normalizer
+            origin_loader, mm_num_samples, mm_num_repeats, num_samples_limit, args.guidance_param
         )
     }
 
@@ -174,9 +161,6 @@ if __name__ == '__main__':
     if args.guidance_param != 1.:
         log_file += f'_gscale{args.guidance_param}'
     log_file += f'_inpaint{args.inpainting_frames}'
-    if args.refine:
-        log_file += f'_refine{args.refine_scale}'
-    log_file += f'_comp{args.inter_frames}'
     log_file += f'_{args.eval_mode}'
     log_file += '.log'
     # print(f'Will save to log file [{log_file}]')
