@@ -1,6 +1,5 @@
 from torch.utils.data import DataLoader
-from data_loaders.tensors import collate as all_collate
-from data_loaders.tensors import collate_pairs_and_text, collate_contrastive
+from data_loaders.tensors import collate_pairs_and_text
 
 import multiprocessing
 
