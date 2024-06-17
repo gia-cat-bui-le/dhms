@@ -242,7 +242,7 @@ class InputProcess(nn.Module):
         # #! Global Trajectory
         # x_root = x[:, :, 4:7]
         
-        # x = self.poseEmbedding(x)  # [seqlen, bs, d]
+        x = self.poseEmbedding(x)  # [seqlen, bs, d]
         
         # x_lambda = self.trajectEmbedding_1(x_root)
         # x_beta = self.trajectEmbedding_2(x_root)
