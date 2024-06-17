@@ -557,7 +557,6 @@ if __name__ == "__main__":
                         assert s % 2 == 0
                         half = s // 2
                         assert half == 45
-                        print("Long mode")
                         # if long mode, stitch position using linear interp
 
                         fade_out = torch.ones((1, s, 1)).to(pos.device)
@@ -639,7 +638,6 @@ if __name__ == "__main__":
                             )
                     
                     else:
-                        print("Short mode")
                         full_pos = pos.squeeze().unsqueeze(0)
                         full_q = q.squeeze().unsqueeze(0)
                         

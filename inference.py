@@ -55,10 +55,6 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
         # go 6d to ax
         q = ax_from_6v(q).to(motion.device)
         
-        # full_poses = (smpl.forward(q, pos).squeeze(0).detach().cpu().numpy())
-        
-        # print("full pose: ", full_poses.shape)
-        
         for q_, pos_, filename in zip(q, pos, filenames):
             if out_dir is not None:
                 full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
@@ -75,8 +71,6 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                         },
                         file_pickle,
                     )
-        
-        # print(batch["length_0"], batch["length_1"])
     
     with open(log_file, 'a') as f:
         for replication in range(replication_times):
@@ -165,10 +159,7 @@ if __name__ == '__main__':
     log_file += '.log'
     # print(f'Will save to log file [{log_file}]')
     
-    if args.dataset == "aistpp":
-        args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
-    elif args.dataset == "finedance":
-        args.data_dir = os.path.join(args.data_dir, "finedance")
+    args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
     
     if args.eval_mode == 'debug':
         num_samples_limit = None  # None means no limit (eval over all dataset)

@@ -281,7 +281,6 @@ class CompCCDGeneratedDataset(Dataset):
                                 
                             sample.append(full_pose)
                         else:
-                            print("Short mode")
                             full_pos = pos.squeeze().unsqueeze(0)
                             full_q = q.squeeze().unsqueeze(0)
                             
