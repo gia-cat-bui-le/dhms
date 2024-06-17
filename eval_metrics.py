@@ -8,17 +8,17 @@ from evaluation.features.kinetic import extract_kinetic_features
 from evaluation.features.manual_new import extract_manual_features
 from vis import SMPLSkeleton
 
-log_file = "evaluate_result\sinmdm-footrefine-no-val\\result.log"
+log_file = "evaluate_result\dhms\sinmdm-footrefine-val-18-1.5\\result.log"
         
 if __name__ == '__main__':
 
     #TODO: fix the path
-    gt_root = 'evaluate_result\sinmdm-footrefine-no-val\gt'
+    gt_root = 'evaluate_result\dhms\sinmdm-footrefine-val-18-1.5\gt_normed'
     
     calc_and_save_feats(gt_root)
 
     pred_roots = [
-        'evaluate_result\sinmdm-footrefine-no-val\inference'
+        'evaluate_result\dhms\sinmdm-footrefine-val-18-1.5\inference_normed'
     ]
     
     with open(log_file, 'a') as f:

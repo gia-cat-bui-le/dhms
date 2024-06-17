@@ -59,10 +59,7 @@ class CompCCDGeneratedDataset(Dataset):
 
                 model_kwargs_0 = {}
                 model_kwargs_0['y'] = {}
-                if args.inter_frames > 0:
-                    model_kwargs_0['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_0']]
-                else:
-                    model_kwargs_0['y']['lengths'] = batch['length_0']
+                model_kwargs_0['y']['lengths'] = batch['length_0']
                 model_kwargs_0['y']['music'] = batch['music_0'].to("cuda:0" if torch.cuda.is_available() else "cpu")
                 model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
@@ -70,10 +67,7 @@ class CompCCDGeneratedDataset(Dataset):
                 model_kwargs_1 = {}
                 model_kwargs_1['y'] = {}
 
-                if args.inter_frames > 0:
-                    model_kwargs_1['y']['lengths'] = [len + args.inter_frames // 2 for len in batch['length_1']]
-                else:
-                    model_kwargs_1['y']['lengths'] = batch['length_1']
+                model_kwargs_1['y']['lengths'] = batch['length_1']
                 model_kwargs_1['y']['music'] = batch['music_1'].to("cuda:0" if torch.cuda.is_available() else "cpu")
                 model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)

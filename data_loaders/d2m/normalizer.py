@@ -127,8 +127,8 @@ def create_noramlizer():
     print(data_li_ori[0,:20])
     
 def unnomarlize():
-    generate_dir = "evaluate_result\sinmdm-footrefine\inference"
-    out_dir = "evaluate_result\sinmdm-footrefine\inference_normed"
+    generate_dir = "evaluate_result\dhms\sinmdm-footrefine-val-18-1.5\inference"
+    out_dir = "evaluate_result\dhms\sinmdm-footrefine-val-18-1.5\inference_normed"
     
     reNorm = torch.load('data_loaders/d2m/aistpp_dataset/AIST_Normalizer.pth')
     

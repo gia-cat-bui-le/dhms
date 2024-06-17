@@ -98,7 +98,7 @@ def calc_ba_score(root):
         joint3d = joint3d.reshape(joint3d.shape[0], 24*3)
 
         dance_beats, length = calc_db(joint3d, pkl)        
-        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0] + '.wav'), joint3d.shape[0])
+        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0][:-7] + '.wav'), joint3d.shape[0])
 
         ba_scores.append(BA(music_beats, dance_beats))
         
