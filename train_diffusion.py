@@ -47,9 +47,8 @@ def main():
 
     # print('Total params: %.2fM' % (sum(p.numel() for p in model.parameters_wo_clip()) / 1000000.0))
     print("Training...")
-    loop = TrainLoop(args, train_platform, model, diffusion, data)
+    loop = TrainLoop(args, model, diffusion, data)
     loop.run_loop()
-    train_platform.close()
 
 if __name__ == "__main__":
     main()
