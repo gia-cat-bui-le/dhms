@@ -23,10 +23,7 @@ class CompCCDGeneratedDataset(Dataset):
         # print(dataloader)
         self.dataset = self.dataloader.dataset
         assert mm_num_samples < len(self.dataloader.dataset)
-        clip_denoised = False  # FIXME - hardcoded
-        # self.max_motion_length = max_motion_length
-        # if args.hist_frames > 0:
-        #     sample_fn = diffusion.p_sample_loop_multi
+        clip_denoised = False  # FIXME - hardcoded=
 
         real_num_batches = len(self.dataloader)
         if num_samples_limit is not None:

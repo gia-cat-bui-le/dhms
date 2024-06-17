@@ -29,9 +29,6 @@ class AISTPPDataset(Dataset):
         train: bool,
         feature_type: str = "baseline",
         data_len: int = -1,
-        include_contacts: bool = True,
-        force_reload: bool = False,
-        hist_frames: int = 5
     ):
         self.dataname = "aistpp"
         self.data_path = data_path
@@ -46,8 +43,6 @@ class AISTPPDataset(Dataset):
         self.feature_type = feature_type
 
         self.data_len = data_len
-        
-        self.hist_frames = hist_frames
         data = self.load_aistpp()  # Call this last
 
         # process data, convert to 6dof etc

@@ -68,9 +68,9 @@ class MDM(nn.Module):
         self.emb_trans_dec = emb_trans_dec
 
         self.motion_mask = kargs['motion_mask']
-        self.hist_frames = kargs['hist_frames']
+        self.inpainting_frames = kargs['inpainting_frames']
         
-        if self.hist_frames > 0:
+        if self.inpainting_frames > 0:
             # self.hist_frames = 5
             self.seperation_token = nn.Parameter(torch.randn(latent_dim))
             self.skel_embedding = nn.Linear(self.njoints, self.latent_dim)
@@ -169,7 +169,7 @@ class MDM(nn.Module):
                 else:
                     output = self.seqTransEncoder(xseq)[1:]
             else:
-                token_mask = torch.ones((bs, 2 + 2*self.hist_frames), dtype=bool, device=x.device)
+                token_mask = torch.ones((bs, 2 + 2*self.inpainting_frames), dtype=bool, device=x.device)
                 aug_mask = torch.cat((token_mask, mask), 1)
                 sep_token = torch.tile(self.seperation_token, (bs,)).reshape(bs, -1).unsqueeze(0)
                 hframes = y['hframes'].squeeze(2).permute(2, 0, 1) #TODO find out the diff 
@@ -180,7 +180,7 @@ class MDM(nn.Module):
                 xseq = torch.cat((emb, hframes_emb, fut_frames_emb, sep_token, x), axis=0)
                 # TODO add attention mask
                 xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + 2*self.hist_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + 2*self.inpainting_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         

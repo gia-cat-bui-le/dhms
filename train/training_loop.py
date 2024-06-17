@@ -82,7 +82,6 @@ class TrainLoop:
         self.use_ddp = False
         self.ddp_model = self.model
 
-        self.hist_frames = args.hist_frames
         self.inpainting_frames = args.inpainting_frames
         
         self.shuffle_noise = True if args.shuffle_noise else False
@@ -221,7 +220,6 @@ class TrainLoop:
                 dataset=self.data.dataset,
             )
             if last_batch or not self.use_ddp:
-                # hist_frames [b 5 dim]
                 loss_0, hist = compute_losses_0() 
             else:
                 with self.ddp_model.no_sync():
@@ -283,7 +281,6 @@ class TrainLoop:
                 dataset=self.data.dataset
             )
             if last_batch or not self.use_ddp:
-                # hist_frames [b 5 dim]
                 loss_cycle, _ = compute_losses_cycle() 
             else:
                 with self.ddp_model.no_sync():
