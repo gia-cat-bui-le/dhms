@@ -317,7 +317,7 @@ class GaussianDiffusion():
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(
-        self, model, x, t, clip_denoised=True, denoised_fn=None, model_kwargs=None
+        self, model, x, t, clip_denoised=True, denoised_fn=None, model_kwargs=None, guidance_weight=1.0
     ):
         """
         Apply the model to get p(x_{t-1} | x_t), as well as a prediction of
@@ -348,15 +348,13 @@ class GaussianDiffusion():
         # guidance clipping
         
         num_steps = 1000
-        guidance_weight = model_kwargs['y']['scale'][0]
         
-        if t[0] > 0.8 * num_steps:
+        if t[0] > 0.9 * num_steps:
             weight = min(guidance_weight, 0)
         elif t[0] < 0.1 * num_steps:
             weight = min(guidance_weight, 1)
         else:
             weight = guidance_weight
-            
         model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
                                             device="cuda:0" if torch.cuda.is_available() else "cpu") * weight
         
@@ -561,6 +559,7 @@ class GaussianDiffusion():
         cond_fn=None,
         model_kwargs=None,
         const_noise=False,
+        guidance_weight=1.0
     ):
         """
         Sample x_{t-1} from the model at the given timestep.
@@ -586,6 +585,7 @@ class GaussianDiffusion():
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
             model_kwargs=model_kwargs,
+            guidance_weight=guidance_weight
         )
         noise = th.randn_like(x)
         # print('const_noise', const_noise)
@@ -667,6 +667,7 @@ class GaussianDiffusion():
         cond_fn_with_grad=False,
         dump_steps=None,
         const_noise=False,
+        guidance_weight=1.0
     ):
         """
         Generate samples from the model.
@@ -707,6 +708,7 @@ class GaussianDiffusion():
             randomize_class=randomize_class,
             cond_fn_with_grad=cond_fn_with_grad,
             const_noise=const_noise,
+            guidance_weight=guidance_weight
         )):
             if dump_steps is not None and i in dump_steps:
                 dump.append(deepcopy(sample["sample"]))
@@ -731,6 +733,7 @@ class GaussianDiffusion():
         randomize_class=False,
         cond_fn_with_grad=False,
         const_noise=False,
+        guidance_weight=1.0
     ):
         """
         Generate samples from the model and yield intermediate samples from
@@ -780,6 +783,7 @@ class GaussianDiffusion():
                     cond_fn=cond_fn,
                     model_kwargs=model_kwargs,
                     const_noise=const_noise,
+                    guidance_weight=guidance_weight
                 )
                 yield out
                 img = out["sample"]
