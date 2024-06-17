@@ -159,7 +159,7 @@ def add_training_options(parser):
                        help="Choose platform to log results. NoPlatform means no logging.")
     group.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
     group.add_argument("--weight_decay", default=0.01, type=float, help="Optimizer weight decay.")
-    group.add_argument("--lr_anneal_steps", default=300000, type=int, help="Number of learning rate anneal steps.")
+    group.add_argument("--lr_anneal_steps", default=200000, type=int, help="Number of learning rate anneal steps.")
     group.add_argument("--eval_batch_size", default=32, type=int,
                        help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
                             "T2m precision calculation is based on fixed batch size 32.")
