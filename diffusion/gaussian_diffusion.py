@@ -8,6 +8,7 @@ Docstrings have been added, as well as DDIM sampling and a new collection of bet
 
 import enum
 import math
+import torch
 
 import numpy as np
 import torch
@@ -343,6 +344,22 @@ class GaussianDiffusion():
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
+        
+        # guidance clipping
+        
+        num_steps = 1000
+        guidance_weight = model_kwargs['y']['scale'][0]
+        
+        if t[0] > 0.8 * num_steps:
+            weight = min(guidance_weight, 0)
+        elif t[0] < 0.1 * num_steps:
+            weight = min(guidance_weight, 1)
+        else:
+            weight = guidance_weight
+            
+        model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
+                                            device="cuda:0" if torch.cuda.is_available() else "cpu") * weight
+        
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
 
         if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
