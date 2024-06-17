@@ -15,9 +15,6 @@ from utils.model_util import create_model_and_diffusion
 def main():
     args = train_args()
     fixseed(args.seed)
-    train_platform_type = eval(args.train_platform_type)
-    train_platform = train_platform_type(args.save_dir)
-    train_platform.report_args(args, name='Args')
 
     if args.save_dir is None:
         raise FileNotFoundError('save_dir was not specified.')
