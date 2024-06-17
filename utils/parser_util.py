@@ -188,7 +188,7 @@ def add_generate_options(parser):
     group.add_argument(
         "--music_dir",
         type=str,
-        default="./custom_input_val",
+        default="./custom_input",
         help="folder containing input music",
     )
     group.add_argument(
