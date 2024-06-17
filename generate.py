@@ -490,8 +490,10 @@ if __name__ == "__main__":
                         # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                     )
                     
+                    print(sample.shape)
+                    
                     motion_final = []
-                    motion_final.append(sample[0].squeeze().unsqueeze(dim=0).permute(0, 2, 1))
+                    motion_final.append(sample[0].squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, :45, :])
                     
                     for idx in range(bs - 1):
                         sample_0 = sample[idx].unsqueeze(0)
@@ -528,7 +530,8 @@ if __name__ == "__main__":
                                                                     device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
                         
                         total_hist_frame = args.inpainting_frames + 15
-                        hist_lst = [feats[:,:,:90] for feats in sample_0]
+                        print("in painting frames: ", args.inpainting_frames)
+                        hist_lst = [feats[:,:,-90:] for feats in sample_0]
                         hframes = torch.stack([x[:,:,-total_hist_frame : -15] for x in hist_lst])
                         
                         fut_lst = [feats[:,:,:90] for feats in sample_1]
@@ -543,7 +546,7 @@ if __name__ == "__main__":
                             start_idx, end_idx = 30, 60
                             gt_frames_per_sample[i] = list(range(0, start_idx)) + list(range(end_idx, max_frames))
                             model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx: end_idx] = False  # do inpainting in those frames
-                            mask_slope = 10
+                            mask_slope = 15
                             for f in range(mask_slope):
                                 if start_idx-f < 0:
                                     continue
@@ -569,9 +572,9 @@ if __name__ == "__main__":
                         assert sample_0.shape == sample_1.shape == sample_2.shape == (1, nfeats, 1, 90)
                         
                         motion_final.append(sample_2.squeeze().unsqueeze(dim=0).permute(0, 2, 1))
-                        motion_final.append(sample_1.squeeze().unsqueeze(dim=0).permute(0, 2, 1))
-                        
-                    motion_result = torch.cat(motion_final, dim=0)
+                        # motion_final.append(sample_1.squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, -45:, :])
+                    motion_final.append(sample[-1].squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, -45:, :])
+                    motion_result = torch.cat(motion_final, dim=1)
                     if motion_result.shape[2] == nfeats:
                         sample_contact, motion_result = torch.split(
                             motion_result, (4, motion_result.shape[2] - 4), dim=2
@@ -587,10 +590,11 @@ if __name__ == "__main__":
                     q = ax_from_6v(q).to(device)
 
                     b, s, c1, c2 = q.shape
-                    assert s % 2 == 0
-                    half = s // 2
-                    assert half == 45
                     if b > 1:
+                        assert s % 2 == 0
+                        half = s // 2
+                        assert half == 45
+                        print("Long mode")
                         # if long mode, stitch position using linear interp
 
                         fade_out = torch.ones((1, s, 1)).to(pos.device)
@@ -670,54 +674,94 @@ if __name__ == "__main__":
                                 },
                                 file_pickle,
                             )
-                            
-    # origin_dataset = OriginDataset(
-    #     data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len, normalizer=None
-    # )
-    # origin_loader = DataLoader(
-    #     origin_dataset,
-    #     batch_size=1,
-    #     shuffle=False,
-    #     num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
-    #     pin_memory=True,
-    #     drop_last=True,
-    #     collate_fn=collate_pairs_and_text
-    # )
+                    
+                    else:
+                        print("Short mode")
+                        full_pos = pos.squeeze().unsqueeze(0)
+                        full_q = q.squeeze().unsqueeze(0)
+                        
+                        # assert full_pos.shape == (1, 180, 3)
+                        # assert full_q.shape == (1, 180, njoints, 3)
+                        
+                        full_pose = (
+                            smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
+                        )  # b, s, 24, 3
+                        
+                        if njoints == 24:
+                            # assert full_pose.shape == (180, njoints, 3)
+                            assert full_pose.shape[1] == njoints
+                        else:
+                            # assert full_pose.shape == (180, 55, 3)
+                            assert full_pose.shape[1] == 55
+                        
+                        filename = batch_filename
+                        outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        out_path = os.path.join("./", outname)
+                        print(out_path)
+                        # Create the directory if it doesn't exist
+                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                        # print(out_path)
+                        generate_len.append(full_pose.squeeze().shape[0])
+                        print("Generate shape before trim: ", full_pose.squeeze().shape)
+                        # full_pose = full_pose[:210]
+                        # print("Generate shape after trim: ", full_pose.squeeze().shape)
+                        
+                        with open(out_path, "wb") as file_pickle:
+                            pickle.dump(
+                                {
+                                    "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                                    "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+                                    "full_pose": full_pose.squeeze(),
+                                },
+                                file_pickle,
+                            )
+    origin_dataset = OriginDataset(
+        data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len, normalizer=None
+    )
+    origin_loader = DataLoader(
+        origin_dataset,
+        batch_size=1,
+        shuffle=False,
+        num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
+        pin_memory=True,
+        drop_last=True,
+        collate_fn=collate_pairs_and_text
+    )
     
-    # print(len(origin_loader))
+    print(len(origin_loader))
     
-    # for batch in origin_loader:
-    #     njoints = 24
-    #     smpl = SMPLSkeleton(device=device)
+    for batch in origin_loader:
+        njoints = 24
+        smpl = SMPLSkeleton(device=device)
         
-    #     motion, filenames = batch["motion_feats"][0], batch["filename"][0]
-    #     motion = torch.Tensor(motion).to(device)
+        motion, filenames = batch["motion_feats"][0], batch["filename"][0]
+        motion = torch.Tensor(motion).to(device)
         
-    #     print(motion.shape)
-    #     b, s, c = motion.shape
+        print(motion.shape)
+        b, s, c = motion.shape
         
-    #     sample_contact, motion = torch.split(
-    #     motion, (4, motion.shape[2] - 4), dim=2)
-    #     pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-    #     q = motion[:, :, 3:].reshape(b, s, njoints, 6)
-    #     # go 6d to ax
-    #     q = ax_from_6v(q).to(motion.device)
+        sample_contact, motion = torch.split(
+        motion, (4, motion.shape[2] - 4), dim=2)
+        pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+        q = motion[:, :, 3:].reshape(b, s, njoints, 6)
+        # go 6d to ax
+        q = ax_from_6v(q).to(motion.device)
         
-    #     for q_, pos_ in zip(q, pos):
+        for q_, pos_ in zip(q, pos):
             
-    #         # if out_dir is not None:
-    #         print("GT shape: ", (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0))).squeeze(0).shape)
-    #         full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
-    #         outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
-    #         out_path = os.path.join(outname)
-    #         # Create the directory if it doesn't exist
-    #         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    #         with open(out_path, "wb") as file_pickle:
-    #             pickle.dump(
-    #                 {
-    #                     "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-    #                     "smpl_trans": pos_.squeeze(0).cpu().numpy(),
-    #                     "full_pose": full_pose,
-    #                 },
-    #                 file_pickle,
-    #             )
+            # if out_dir is not None:
+            print("GT shape: ", (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0))).squeeze(0).shape)
+            full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
+            outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
+            out_path = os.path.join(outname)
+            # Create the directory if it doesn't exist
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            with open(out_path, "wb") as file_pickle:
+                pickle.dump(
+                    {
+                        "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                        "smpl_trans": pos_.squeeze(0).cpu().numpy(),
+                        "full_pose": full_pose,
+                    },
+                    file_pickle,
+                )
