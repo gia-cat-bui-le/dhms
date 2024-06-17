@@ -15,9 +15,6 @@ import torch as th
 from copy import deepcopy
 from diffusion.nn import mean_flat, sum_flat
 from diffusion.losses import normal_kl, discretized_gaussian_log_likelihood
-from data_loaders.humanml.scripts import motion_process
-
-from utils.seq_process import sync_fn, extract_fn, get_canavas
 
 import torch.nn.functional as F
 
