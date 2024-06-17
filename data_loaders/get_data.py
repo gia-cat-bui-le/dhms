@@ -36,13 +36,11 @@ def get_dataset(args, name, split=True):
         dataset = DATA(
         data_path=args.data_dir,
         train=split,
-        force_reload=args.force_reload,
     )
     else:
         dataset = DATA(
             data_path=args.data_dir,
             train=split,
-            force_reload=args.force_reload,
         )
     return dataset
 

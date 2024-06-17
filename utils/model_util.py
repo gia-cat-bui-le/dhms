@@ -57,7 +57,7 @@ def get_model_args(args, data):
             'dropout': 0.1, 'activation': F.gelu, 'data_rep': data_rep, 'cond_mode': cond_mode,
             'action_emb': action_emb, 'arch': args.arch,
             'emb_trans_dec': args.emb_trans_dec, 'dataset': args.dataset,
-            'hist_frames': args.hist_frames, 'motion_mask': args.motion_mask, 'music_dim': feature_dim,
+            'inpainting_frames': args.inpainting_frames, 'motion_mask': args.motion_mask, 'music_dim': feature_dim,
             'cond_drop_prob': cond_drop_prob,
             #! here
             # # FlowMDM

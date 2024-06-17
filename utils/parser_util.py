@@ -102,7 +102,6 @@ def add_model_options(parser):
     # group.add_argument("--unconstrained", action='store_true',
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "
     #                         "Currently tested on HumanAct12 only.")
-    group.add_argument("--hist_frames", default=30, type=int, help="hist_frames")
     group.add_argument("--motion_mask", default=True, type=bool, help="if mask")
     
     
@@ -118,9 +117,6 @@ def add_data_options(parser):
                        help="Dataset name (choose from list).")
     group.add_argument("--data_dir", default="/home/ltnghia02/data", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
-    group.add_argument(
-        "--force_reload", action="store_true", help="force reloads the datasets"
-    )
     group.add_argument("--inference_dir", default="/home/ltnghia02/data/evaluation", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
     
