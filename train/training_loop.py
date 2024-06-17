@@ -25,10 +25,9 @@ from inference import evaluation
 INITIAL_LOG_LOSS_SCALE = 20.0
 
 class TrainLoop:
-    def __init__(self, args, train_platform, model, diffusion, data):
+    def __init__(self, args, model, diffusion, data):
         self.args = args
         self.dataset = args.dataset
-        self.train_platform = train_platform
         self.model = model
         self.diffusion = diffusion
         self.cond_mode = model.cond_mode
@@ -142,8 +141,6 @@ class TrainLoop:
 
                         if k in ['step', 'samples'] or '_q' in k:
                             continue
-                        else:
-                            self.train_platform.report_scalar(name=k, value=v, iteration=self.step, group_name='Loss')
 
                 if self.step % self.save_interval == 0:
                     self.save()
