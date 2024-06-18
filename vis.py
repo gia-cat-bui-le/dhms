@@ -166,8 +166,8 @@ def rotate_poses_yz_to_negz_y(poses):
     # Define the rotation matrix for 90-degree counterclockwise rotation around the x-axis
     rotation_matrix = np.array([
         [1, 0, 0],
-        [0, 0, 1],
-        [0, -1, 0],
+        [0, 0, -1],
+        [0, 1, 0],
     ])
     
     # Apply the rotation to each pose
@@ -421,7 +421,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    folder_path = "evaluate_result\\bailando_result\\bailando_custom\\vis\pkl\ep000050"  # Change this to the path of your folder
+    folder_path = "result\FACT\keypoints3d"  # Change this to the path of your folder
     file_pattern = "*.npy"
     file_list = glob.glob(folder_path + "/" + file_pattern)
 
@@ -429,7 +429,9 @@ if __name__ == '__main__':
         # with open(file_name, 'rb') as f:
         #     data = pickle.load(f)
             
-        data = np.load(file_name, allow_pickle=True).item()['pred_position'][:1200,:].reshape(-1, 24, 3)
+        data = np.load(file_name, allow_pickle=True)[::2,:]
+        
+        # .reshape(-1, 24, 3)
         
         print(torch.Tensor(data).shape)
 
@@ -437,7 +439,7 @@ if __name__ == '__main__':
         # poses = data['full_pose']
         poses = data
         
-        render_out = "evaluate_result\\bailando_result\\bailando_custom\\vis\pkl\ep000050\\renders"
+        render_out = "result\FACT\keypoints3d\\renders"
         epoch = 0
         name = file_name
         sound = False

@@ -126,15 +126,15 @@ def _read_motion_from_pkl_file(pkl_filename):
     """Read motion from a pkl file."""
     try:
         with open(pkl_filename, "rb") as f:
-            data = pickle.load(f)
+            data = np.load(f, allow_pickle=True).item()
     except EOFError as e:
         message = "Aboring reading file %s due to: %s" % (pkl_filename, str(e))
         logging.warning(message)
         raise ValueError(message)
 
-    if "smpl_poses" in data:
-        axis_angles = np.reshape(data["smpl_poses"], [-1, 24, 3])
-        if data["smpl_trans"] is None:
+    if "pred_position" in data:
+        axis_angles = np.reshape(data["pred_position"], [-1, 24, 3])
+        if "smpl_trans" not in data:
             trans = np.zeros((axis_angles.shape[0], 3), dtype=np.float32)
         else:
             trans = np.reshape(data["smpl_trans"], [-1, 3])
