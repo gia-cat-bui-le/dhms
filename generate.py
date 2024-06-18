@@ -510,7 +510,7 @@ if __name__ == "__main__":
                             start_idx, end_idx = args.inpainting_frames, 90 - args.inpainting_frames
                             gt_frames_per_sample[i] = list(range(0, start_idx)) + list(range(end_idx, max_frames))
                             model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx: end_idx] = False  # do inpainting in those frames
-                            mask_slope = args.inpainting_frames // 2
+                            mask_slope = 10
                             for f in range(mask_slope):
                                 if start_idx-f < 0:
                                     continue
