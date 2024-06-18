@@ -187,9 +187,6 @@ def skeleton_render_3D(
 ):
     if render:
         # Swap y and z axes in poses
-        
-        poses = rotate_poses_yz_to_negz_y(poses)
-        
         # generate the pose with FK
         Path(out).mkdir(parents=True, exist_ok=True)
         num_steps = poses.shape[0]
@@ -276,10 +273,11 @@ def skeleton_render_3D(
     else:
         if render:
             # actually save the gif
+            print("save the gif")
             path = os.path.normpath(name)
             pathparts = path.split(os.sep)
             gifname = os.path.join(out, f"{pathparts[-1][:-4]}.gif")
-            anim.save(gifname, savefig_kwargs={"transparent": True, "facecolor": "none"},)
+            anim.save(gifname, writer='imagemagick', savefig_kwargs={"transparent": True, "facecolor": "none"},)
     plt.close()
 
 def skeleton_render(
@@ -421,23 +419,21 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    folder_path = "evaluate_result\\bailando_result\\bailando_custom\\vis\pkl\ep000050"  # Change this to the path of your folder
-    file_pattern = "*.npy"
+    folder_path = "evaluate_result\dhms-test-custom\interpolate\inference"  # Change this to the path of your folder
+    file_pattern = "*.pkl"
     file_list = glob.glob(folder_path + "/" + file_pattern)
 
     for file_name in file_list:
-        # with open(file_name, 'rb') as f:
-        #     data = pickle.load(f)
+        with open(file_name, 'rb') as f:
+            data = pickle.load(f)
             
-        data = np.load(file_name, allow_pickle=True).item()['pred_position'][:1200,:].reshape(-1, 24, 3)
-        
-        print(torch.Tensor(data).shape)
+        # data = np.load(file_name, allow_pickle=True).item()['pred_position'][:1200,:].reshape(-1, 24, 3)
 
         # Access the field named "full_pose" from the loaded data
-        # poses = data['full_pose']
-        poses = data
+        poses = data['full_pose'].reshape(-1, 24, 3)[:1200]
+        # poses = data
         
-        render_out = "evaluate_result\\bailando_result\\bailando_custom\\vis\pkl\ep000050\\renders"
+        render_out = "evaluate_result\dhms-test-custom\interpolate\inference\\renders"
         epoch = 0
         name = file_name
         sound = False
@@ -449,7 +445,7 @@ if __name__ == '__main__':
                     out=render_out,
                     name=name,
                     sound=sound,
-                    stitch=True,
+                    stitch=False,
                     sound_folder=sound_folder,
                     render=render
                 )
