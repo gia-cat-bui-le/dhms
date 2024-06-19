@@ -150,7 +150,7 @@ def plot_single_pose(num, poses, lines, ax, axrange, scat, contact):
 
     if num == 0:
         axrange = (axrange, axrange, axrange)
-        xcenter, ycenter, zcenter = 0, 0, 0
+        xcenter, ycenter, zcenter = 0, 0, 1.5
         stepx, stepy, stepz = axrange[0] / 3, axrange[1] / 3, axrange[2] / 3
 
         x_min, x_max = xcenter - stepx, xcenter + stepx
@@ -166,8 +166,8 @@ def rotate_poses_yz_to_negz_y(poses):
     # Define the rotation matrix for 90-degree counterclockwise rotation around the x-axis
     rotation_matrix = np.array([
         [1, 0, 0],
-        [0, 0, 1],
-        [0, -1, 0],
+        [0, 0, -1],
+        [0, 1, 0],
     ])
     
     # Apply the rotation to each pose
@@ -187,6 +187,7 @@ def skeleton_render_3D(
 ):
     if render:
         # Swap y and z axes in poses
+        # poses=rotate_poses_yz_to_negz_y(poses=poses)
         # generate the pose with FK
         Path(out).mkdir(parents=True, exist_ok=True)
         num_steps = poses.shape[0]
@@ -419,7 +420,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    folder_path = "evaluate_result\dhms-test-custom\interpolate\inference"  # Change this to the path of your folder
+    folder_path = "evaluate_result\dhms-test-custom\\2.0/inference_normed"  # Change this to the path of your folder
     file_pattern = "*.pkl"
     file_list = glob.glob(folder_path + "/" + file_pattern)
 
@@ -427,13 +428,14 @@ if __name__ == '__main__':
         with open(file_name, 'rb') as f:
             data = pickle.load(f)
             
-        # data = np.load(file_name, allow_pickle=True).item()['pred_position'][:1200,:].reshape(-1, 24, 3)
+        # data = np.load(file_name, allow_pickle=True)['pred_position'][:1200,:][::2, :].reshape(-1, 24, 3)
+        # data = np.load(file_name, allow_pickle=True)[120:1200,:][::2, :].reshape(-1, 24, 3)
 
         # Access the field named "full_pose" from the loaded data
-        poses = data['full_pose'].reshape(-1, 24, 3)[:1200]
+        poses = data['full_pose'].reshape(-1, 24, 3)
         # poses = data
         
-        render_out = "evaluate_result\dhms-test-custom\interpolate\inference\\renders"
+        render_out = "evaluate_result\dhms-test-custom\\2.0/\\renders"
         epoch = 0
         name = file_name
         sound = False
