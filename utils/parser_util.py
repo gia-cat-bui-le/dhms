@@ -86,7 +86,7 @@ def add_model_options(parser):
                        help="Transformer/GRU width.")
     
     group.add_argument("--feature_type", default="baseline", type=str)
-    group.add_argument("--cond_drop_prob", default=0.1, type=float,
+    group.add_argument("--cond_drop_prob", default=0.25, type=float,
                         help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
     group.add_argument("--arch", default='inpainting',
@@ -129,7 +129,7 @@ def add_training_options(parser):
                        help="If True, will enable to use an already existing save_dir.")
     group.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
     group.add_argument("--weight_decay", default=0, type=float, help="Optimizer weight decay.")
-    group.add_argument("--lr_anneal_steps", default=200000, type=int, help="Number of learning rate anneal steps.")
+    group.add_argument("--lr_anneal_steps", default=500000, type=int, help="Number of learning rate anneal steps.")
     group.add_argument("--eval_batch_size", default=32, type=int,
                        help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
                             "T2m precision calculation is based on fixed batch size 32.")
@@ -145,7 +145,7 @@ def add_training_options(parser):
                        help="Log losses each N steps")
     group.add_argument("--save_interval", default=10_000, type=int,
                        help="Save checkpoints and run evaluation each N steps")
-    group.add_argument("--num_steps", default=600_000, type=int,
+    group.add_argument("--num_steps", default=500_000, type=int,
                        help="Training will stop after the specified number of steps.")
     group.add_argument("--epochs", default=2000, type=int,
                        help="Training will stop after the specified number of epochs.")
