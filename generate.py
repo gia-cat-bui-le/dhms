@@ -507,10 +507,10 @@ if __name__ == "__main__":
                         model_kwargs_2['y']['inpainting_mask'] = torch.ones_like(input_motions, dtype=torch.float,
                                                                     device=input_motions.device)  # True means use gt motion
                         for i, length in enumerate(model_kwargs_2['y']['lengths']):
-                            start_idx, end_idx = args.inpainting_frames, 90 - args.inpainting_frames
+                            start_idx, end_idx = 15, 90 - 15
                             gt_frames_per_sample[i] = list(range(0, start_idx)) + list(range(end_idx, max_frames))
                             model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx: end_idx] = False  # do inpainting in those frames
-                            mask_slope = 10
+                            mask_slope = 15
                             for f in range(mask_slope):
                                 if start_idx-f < 0:
                                     continue
