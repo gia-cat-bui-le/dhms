@@ -31,6 +31,8 @@ def combine_gifs(gif1_path, gif2_path, output_path):
     # Save the combined frames as a new GIF
     combined_frames[0].save(output_path, save_all=True, append_images=combined_frames[1:], loop=0, duration=gif1.info['duration'])
 
+from tqdm import tqdm
+
 def combine_gifs_from_folders(my_folder, other_folders, output_folder):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -45,14 +47,18 @@ def combine_gifs_from_folders(my_folder, other_folders, output_folder):
         if not os.path.exists(combined_folder_path):
             os.makedirs(combined_folder_path)
 
-        for i, my_gif in enumerate(my_gifs):
-            for j, other_gif in enumerate(other_gifs):
-                output_gif_path = os.path.join(combined_folder_path, f'combined_{i+1}_{j+1}.gif')
-                combine_gifs(my_gif, other_gif, output_gif_path)
+        for i, my_gif in tqdm(enumerate(my_gifs)):
+            output_gif_path = os.path.join(combined_folder_path, f'combined_{i+1}.gif')
+            combine_gifs(my_gif, other_gifs[i], output_gif_path)
 
 # Example usage
-my_folder = 'visualize_result\DHMS\guidance-2.5'
-other_folders = ['visualize_result\Bailando', 'visualize_result\FACT', 'visualize_result\EDGE']
+my_folders = ['visualize_result\DHMS\guidance-2.5',
+              'visualize_result\DHMS\guidance-2.0',
+              'visualize_result\DHMS\guidance-1.5',
+              'visualize_result\DHMS\guidance-1.0',
+              ]
+other_folders = ['visualize_result\GT']
 output_folder = 'visualize_result\combine_result\guidance-2.5'
 
-combine_gifs_from_folders(my_folder, other_folders, output_folder)
+for my_folder in my_folders:
+    combine_gifs_from_folders(my_folder, other_folders, output_folder)
