@@ -151,3 +151,4 @@ data_loaders/d2m/aistpp_dataset.zip
 *.gif
 *.png
 *.mp4
+*.csv
