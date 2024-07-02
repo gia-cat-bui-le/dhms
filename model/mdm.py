@@ -58,7 +58,7 @@ class MDM(nn.Module):
         self.cond_mask_prob = self.cond_drop_prob
         
         self.max_seq_att = kargs.get('max_seq_att', 1024)
-        self.input_process = InputProcess(self.data_rep, self.input_feats+self.gru_emb_dim, self.latent_dim)
+        self.input_process = InputProcess(self.data_rep, self.input_feats, self.latent_dim)
         self.process_cond_input = [nn.Linear(2*self.latent_dim, self.latent_dim) for _ in range(self.num_layers)]
         
         self.sequence_pos_encoder = PositionalEncoding(self.latent_dim, self.dropout)
