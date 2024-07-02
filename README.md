@@ -1,51 +1,50 @@
 # README
 
-This repository contains official code for our research paper "Synthesizing Long-Term Human Motions with Diffusion Models via Coherent Sampling" (https://dl.acm.org/doi/10.1145/3581783.3611887).
+This repository contains official code for our research paper "Rethinking Sampling Strategies for Long-Term Dance Generation with Diffusion Model" (https://dl.acm.org/doi/10.1145/3581783.3611887).
 
 ## Environment setup
-To set up the environment, we provide an `requirements.txt` file that you can use with pip:
+
+Our environment is similar to [EDGE](https://github.com/Stanford-TML/EDGE). You may check them for more details.
+
+we also provide an `requirements.txt` file that you can use with pip:
 ```
 pip install -r requirements.txt
 ```
 ## Data preparation
-Due to licensing restrictions, we are unable to provide pre-processed data directly. However, you can refer to [TEACH](https://github.com/athn-nik/teach#data) for specific data processing methods.
 
-Eventually, you should have a folder `data` with such a structure:
-```
-data
-|-- babel
-|   `-- babel_v2.1
-|       `...
-|   `-- babel-smplh-30fps-male 
-|       `...
-|
-|-- smpl_models
-|   `-- smplh
-|       `--SMPLH_MALE.pkl
-```
+Please visit Google Driver to download the AIST++ dataset and put it in the `data_loaders\\d2m\\` folder.
 
-Besides, you should download the folder `deps` in [TEACH](https://github.com/athn-nik/teach/tree/main/deps) to this project.
+Process AIST++ dataset using:
+
+```
+cd data_loaders\d2m\
+python create_dataset.py --extract-baseline --extract-jukebox --datapath [DATA_DIR]
+```
 
 ## Pre-trained weights
-We provide the pretrained models here: [pretrained models](https://drive.google.com/drive/folders/1Lrj5FEt7bFFiv_VnfoDFoQgZzfF4X6RJ?usp=sharing). The 'pretrained.zip' file contains the pretrained model and training configurations used to report metrics in our paper, while 'MotionCLIP.zip' contains the model used for evaluation. You can put the pretrained model and training configuration file under `./save/pcmdm` and put the `MotipnClip.ckpt` under `./motionclip_save`.
+We provide the pretrained models here: [pretrained models](https://drive.google.com/drive/folders/1Lrj5FEt7bFFiv_VnfoDFoQgZzfF4X6RJ?usp=sharing). The 'pretrained.zip' file contains the pretrained model and training configurations used to report metrics in our paper. You can put the pretrained model and training configuration file under `[CHECKPOINT_DIR]`.
 
-## Running the code
-You can use the following three commands to obtain the results for the last three rows of the experimental results table in our paper:
-```
-# No special sampling
-python eval.py --model_path ./save/pcmdm/model000600000.pt --guidance_param 2 --inpainting_frames 0
+## Training
+Once the AIST++ dataset is downloaded and processed, run the training script:
 
-# Past inpainting sampling
-python eval.py --model_path ./save/pcmdm/model000600000.pt --guidance_param 2 --inpainting_frames 2
-
-# Compositional transition sampling
-python eval.py --model_path ./save/pcmdm/model000600000.pt --guidance_param 2 --composition True --inter_frames 2
 ```
 
-Besides, if you want to train a model from scratch, you can use this comman:
 ```
-python train_diffusion.py --save_dir ./save/pcmdm --dataset babel --hist_frames 5 
+
+## Generating Dance
+
+You can test the model on custom music by downloading them as .wav files into a directory, e.g. `custom_music/` and running:
+
+```
+```
+You can also test the pretrained model with test set by putting the musics from test set in to custom music directory and run the same.
+
+## Evaluation
+
+You can use the following command to obtain the result reported in our paper:
+```
+
 ```
 
 ## Acknowledgments
-Our code is based on [TEACH](https://github.com/athn-nik/teach) and [MDM](https://github.com/GuyTevet/motion-diffusion-model). Thanks for their greate work!
+Our code is based on [PCMDM](https://github.com/yangzhao1230/newPCMDM) and [EDGE](https://github.com/Stanford-TML/EDGE). Thanks for their greate work!

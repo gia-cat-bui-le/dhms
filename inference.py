@@ -10,7 +10,6 @@ from data_loaders.get_data import get_dataset_loader
 from model.cfg_sampler import ClassifierFreeSampleModel
 
 from vis import SMPLSkeleton
-from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
 from data_loaders.d2m.quaternion import ax_from_6v
 
 from scipy.ndimage import gaussian_filter as G
@@ -34,7 +33,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
 
 def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = "cuda:0" if args.cuda else "cpu"
     njoints = 24
     smpl = SMPLSkeleton(device=device)
         
@@ -75,43 +74,30 @@ def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, repli
                 motion_loader = motion_loader_getter()
                 motion_loaders[motion_loader_name] = motion_loader
 
-            # print(f'==================== Replication {replication} ====================')
             print(f'==================== Replication {replication} ====================', file=f, flush=True)
-            # print(f'Time: {datetime.now()}')
             print(f'Time: {datetime.now()}', file=f, flush=True)
-            
-            # generating(motion_loaders, out_dir)
             
             gt_root = f'{args.inference_dir}/gt'
             pred_root = [f'{args.inference_dir}/inference']
             
-            # print('Calculating and saving features')
             calc_and_save_feats(gt_root)
-            
             
             for pred_root in pred_root:
                 print(pred_root, file=f, flush=True)
                 calc_and_save_feats(pred_root)
-
                 print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
 
         print(f'!!! DONE !!!')
         print(f'!!! DONE !!!', file=f, flush=True)
 
-def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times, during_train=False):
-    
-    #TODO: fix the hardcode
-    # args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
-    print(f'Eval batch size [{args.eval_batch_size}]')
-
-    args.eval_batch_size = 73
+def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times):
+    print("[eval_batch_size]: ", args.eval_batch_size)
 
     dist_util.setup_dist(args.device)
     logger.configure()
 
     logger.log("creating data loader...")
-    split = False
-    origin_loader = get_dataset_loader(args, batch_size=args.eval_batch_size, split=split)
+    origin_loader = get_dataset_loader(args, batch_size=args.eval_batch_size, train=False)
 
     logger.log("Creating model and diffusion...")
     model, diffusion = create_model_and_diffusion(args, origin_loader)
@@ -122,7 +108,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
 
     if args.guidance_param != 1:
         model = ClassifierFreeSampleModel(model)   # wrapping model with the classifier-free sampler
-    model.to("cuda:0" if torch.cuda.is_available() else "cpu")
+    model.to("cuda:0" if args.cuda else "cpu")
     model.eval()  # disable random masking
 
     eval_motion_loaders = {
@@ -146,9 +132,6 @@ if __name__ == '__main__':
         log_file += f'_gscale{args.guidance_param}'
     log_file += f'_inpaint{args.inpainting_frames}'
     log_file += '.log'
-    # print(f'Will save to log file [{log_file}]')
-    
-    args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
     
     num_samples_limit = None  # None means no limit (eval over all dataset)
     run_mm = False

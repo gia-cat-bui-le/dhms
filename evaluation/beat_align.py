@@ -61,16 +61,6 @@ def get_music_beat_fromwav(fpath, length):
     )
     return beat_idxs
 
-def get_music_beat_from_finedance(fpath, length):
-    data = np.load(fpath)[:length]
-    beat_idxs = data[-1]
-
-    beats = beats.astype(bool)
-    beat_axis = np.arange(len(beats))
-    beat_axis = beat_axis[beats]
-  
-    return beat_idxs
-
 def calc_db(keypoints, name=''):
     keypoints = np.array(keypoints).reshape(-1, 24, 3)
     kinetic_vel = np.mean(np.sqrt(np.sum((keypoints[1:] - keypoints[:-1]) ** 2, axis=2)), axis=1)

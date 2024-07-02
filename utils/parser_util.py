@@ -62,7 +62,6 @@ def add_base_options(parser):
     group.add_argument("--device", default=0, type=int, help="Device id to use.")
     group.add_argument("--seed", default=10, type=int, help="For fixing random seed.")
     group.add_argument("--batch_size", default=128, type=int, help="Batch size during training.")
-    group.add_argument("--tiny", default=False, type=bool, help="If True, use only part of data")
     group.add_argument("--inpainting_frames", default=30, type=int, help="inpainting_frames")
 
 def add_diffusion_options(parser):
@@ -97,21 +96,13 @@ def add_model_options(parser):
     #                    help="Model is trained unconditionally. That is, it is constrained by neither text nor action. "
     #                         "Currently tested on HumanAct12 only.")
     group.add_argument("--motion_mask", default=True, type=bool, help="if mask")
-    
-    
-    group.add_argument(
-        "--shuffle_noise",
-        action="store_true",
-        help="use noise shuffling or not",
-    )
 
 def add_data_options(parser):
     group = parser.add_argument_group('dataset')
-    group.add_argument("--data_dir", default="/home/ltnghia02/data", type=str,
+    group.add_argument("--data_dir", default="/home/ltnghia02/data/aistpp_dataset", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
     group.add_argument("--inference_dir", default="/home/ltnghia02/data/evaluation", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
-    
 
 def add_training_options(parser):
     group = parser.add_argument_group('training')
@@ -122,15 +113,13 @@ def add_training_options(parser):
     group.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
     group.add_argument("--weight_decay", default=0.0001, type=float, help="Optimizer weight decay.")
     group.add_argument("--lr_anneal_steps", default=200000, type=int, help="Number of learning rate anneal steps.")
-    group.add_argument("--eval_batch_size", default=32, type=int,
+    group.add_argument("--eval_batch_size", default=73, type=int,
                        help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
                             "T2m precision calculation is based on fixed batch size 32.")
     group.add_argument("--eval_during_training", action='store_true',
                        help="If True, will run evaluation during training.")
     group.add_argument("--eval_rep_times", default=3, type=int,
                        help="Number of repetitions for evaluation loop during training.")
-    group.add_argument("--eval_num_samples", default=1_000, type=int,
-                       help="If -1, will use all samples in the specified split.")
     group.add_argument("--log_interval", default=1_000, type=int,
                        help="Log losses each N steps")
     group.add_argument("--save_interval", default=10_000, type=int,
@@ -193,9 +182,6 @@ def add_evaluation_options(parser):
                        help="Path to model####.pt file to be sampled.")
     group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
-    group.add_argument("--eval_batch_size", default=32, type=int,
-                       help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
-                            "T2m precision calculation is based on fixed batch size 32.")
     group.add_argument(
         "--out_dir",
         type=str,

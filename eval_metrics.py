@@ -1,6 +1,5 @@
 from evaluation.metrics_new import *
 from evaluation.beat_align import *
-from evaluation.pfc import *
 from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
 import torch 
 from scipy.spatial.transform import Rotation as R
@@ -29,5 +28,3 @@ if __name__ == '__main__':
             print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
             print("Beat Accuracy", file=f, flush=True)
             print(calc_ba_score(pred_root), file=f, flush=True)
-            print("PFC", file=f, flush=True)
-            print(calc_physical_score(pred_root), file=f, flush=True)

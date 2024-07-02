@@ -31,7 +31,6 @@ from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
 from vis import SMPLSkeleton
-from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton
 
 from model.utils import extract, make_beta_schedule
 
@@ -235,7 +234,6 @@ class GaussianDiffusion():
         self.smpl = SMPLSkeleton(device=self.device)
         
     def masked_l2(self, a, b, mask):
-        # print("GOTO: masked l2")
         # assuming a.shape == b.shape == bs, J, Jdim, seqlen
         # assuming mask.shape == bs, 1, 1, seqlen
         # print(a.shape, b.shape, mask.shape)
@@ -243,11 +241,7 @@ class GaussianDiffusion():
         loss = sum_flat(loss * mask.float())  # gives \sigma_euclidean over unmasked elements
         n_entries = a.shape[1] * a.shape[2]
         non_zero_elements = sum_flat(mask) * n_entries
-        # print('mask', mask.shape)
-        # print('non_zero_elements', non_zero_elements)
-        # print('loss', loss)
         mse_loss_val = loss / non_zero_elements
-        # print('mse_loss_val', mse_loss_val)
         return mse_loss_val
 
 
@@ -341,19 +335,6 @@ class GaussianDiffusion():
         B, C = x.shape[:2]
         assert t.shape == (B,)
         
-        # guidance clipping
-        
-        # num_steps = 1000
-        
-        # if t[0] > 0.9 * num_steps:
-        #     weight = min(guidance_weight, 0)
-        # elif t[0] < 0.1 * num_steps:
-        #     weight = min(guidance_weight, 1)
-        # else:
-        #     weight = guidance_weight
-        # model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
-        #                                     device="cuda:0" if torch.cuda.is_available() else "cpu") * weight
-        
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
 
         if 'inpainting_mask' in model_kwargs['y'].keys() and 'inpainted_motion' in model_kwargs['y'].keys():
@@ -361,9 +342,6 @@ class GaussianDiffusion():
             assert self.model_mean_type == ModelMeanType.START_X, 'This feature supports only X_start pred for mow!'
             assert model_output.shape == inpainting_mask.shape == inpainted_motion.shape
             model_output = (model_output * (1-inpainting_mask)) + (inpainted_motion * inpainting_mask)
-            # print('model_output', model_output.shape, model_output)
-            # print('inpainting_mask', inpainting_mask.shape, inpainting_mask[0,0,0,:])
-            # print('inpainted_motion', inpainted_motion.shape, inpainted_motion)
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
             assert model_output.shape == (B, C * 2, *x.shape[2:])
@@ -393,11 +371,6 @@ class GaussianDiffusion():
                     self.posterior_log_variance_clipped,
                 ),
             }[self.model_var_type]
-            # print('model_variance', model_variance)
-            # print('model_log_variance',model_log_variance)
-            # print('self.posterior_variance', self.posterior_variance)
-            # print('self.posterior_log_variance_clipped', self.posterior_log_variance_clipped)
-            # print('self.model_var_type', self.model_var_type)
 
 
             model_variance = _extract_into_tensor(model_variance, t, x.shape)
@@ -407,7 +380,6 @@ class GaussianDiffusion():
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                # print('clip_denoised', clip_denoised)
                 return x.clamp(-1, 1)
             return x
 
@@ -584,7 +556,6 @@ class GaussianDiffusion():
             guidance_weight=guidance_weight
         )
         noise = th.randn_like(x)
-        # print('const_noise', const_noise)
         if const_noise:
             noise = noise[[0]].repeat(x.shape[0], 1, 1, 1)
 
@@ -1427,171 +1398,6 @@ class GaussianDiffusion():
             raise NotImplementedError(self.loss_type)
 
         return terms, model_output
-
-    def fc_loss_rot_repr(self, gt_xyz, pred_xyz, mask):
-        def to_np_cpu(x):
-            return x.detach().cpu().numpy()
-        """
-        pose_xyz: SMPL batch tensor of shape: [BatchSize, 24, 3, Frames]
-        """
-        # 'L_Ankle',  # 7, 'R_Ankle',  # 8 , 'L_Foot',  # 10, 'R_Foot',  # 11
-
-        l_ankle_idx, r_ankle_idx = 7, 8
-        l_foot_idx, r_foot_idx = 10, 11
-        """ Contact calculated by 'Kfir Method' Commented code)"""
-        # contact_signal = torch.zeros((pose_xyz.shape[0], pose_xyz.shape[3], 2), device=pose_xyz.device) # [BatchSize, Frames, 2]
-        # left_xyz = 0.5 * (pose_xyz[:, l_ankle_idx, :, :] + pose_xyz[:, l_foot_idx, :, :]) # [BatchSize, 3, Frames]
-        # right_xyz = 0.5 * (pose_xyz[:, r_ankle_idx, :, :] + pose_xyz[:, r_foot_idx, :, :])
-        # left_z, right_z = left_xyz[:, 2, :], right_xyz[:, 2, :] # [BatchSize, Frames]
-        # left_velocity = torch.linalg.norm(left_xyz[:, :, 2:] - left_xyz[:, :, :-2], axis=1)  # [BatchSize, Frames]
-        # right_velocity = torch.linalg.norm(left_xyz[:, :, 2:] - left_xyz[:, :, :-2], axis=1)
-        #
-        # left_z_mask = left_z <= torch.mean(torch.sort(left_z)[0][:, :left_z.shape[1] // 5], axis=-1)
-        # left_z_mask = torch.stack([left_z_mask, left_z_mask], dim=-1) # [BatchSize, Frames, 2]
-        # left_z_mask[:, :, 1] = False  # Blank right side
-        # contact_signal[left_z_mask] = 0.4
-        #
-        # right_z_mask = right_z <= torch.mean(torch.sort(right_z)[0][:, :right_z.shape[1] // 5], axis=-1)
-        # right_z_mask = torch.stack([right_z_mask, right_z_mask], dim=-1) # [BatchSize, Frames, 2]
-        # right_z_mask[:, :, 0] = False  # Blank left side
-        # contact_signal[right_z_mask] = 0.4
-        # contact_signal[left_z <= (torch.mean(torch.sort(left_z)[:left_z.shape[0] // 5]) + 20), 0] = 1
-        # contact_signal[right_z <= (torch.mean(torch.sort(right_z)[:right_z.shape[0] // 5]) + 20), 1] = 1
-
-        # plt.plot(to_np_cpu(left_z[0]), label='left_z')
-        # plt.plot(to_np_cpu(left_velocity[0]), label='left_velocity')
-        # plt.plot(to_np_cpu(contact_signal[0, :, 0]), label='left_fc')
-        # plt.grid()
-        # plt.legend()
-        # plt.show()
-        # plt.plot(to_np_cpu(right_z[0]), label='right_z')
-        # plt.plot(to_np_cpu(right_velocity[0]), label='right_velocity')
-        # plt.plot(to_np_cpu(contact_signal[0, :, 1]), label='right_fc')
-        # plt.grid()
-        # plt.legend()
-        # plt.show()
-
-        gt_joint_xyz = gt_xyz[:, [l_ankle_idx, l_foot_idx, r_ankle_idx, r_foot_idx], :, :]  # [BatchSize, 4, 3, Frames]
-        gt_joint_vel = torch.linalg.norm(gt_joint_xyz[:, :, :, 1:] - gt_joint_xyz[:, :, :, :-1], axis=2)  # [BatchSize, 4, Frames]
-        fc_mask = (gt_joint_vel <= 0.01)
-        pred_joint_xyz = pred_xyz[:, [l_ankle_idx, l_foot_idx, r_ankle_idx, r_foot_idx], :, :]  # [BatchSize, 4, 3, Frames]
-        pred_joint_vel = torch.linalg.norm(pred_joint_xyz[:, :, :, 1:] - pred_joint_xyz[:, :, :, :-1], axis=2)  # [BatchSize, 4, Frames]
-        pred_joint_vel[~fc_mask] = 0  # Blank non-contact velocities frames. [BS,4,FRAMES]
-        pred_joint_vel = torch.unsqueeze(pred_joint_vel, dim=2)
-
-        """DEBUG CODE"""
-        # print(f'mask: {mask.shape}')
-        # print(f'pred_joint_vel: {pred_joint_vel.shape}')
-        # plt.title(f'Joint: {joint_idx}')
-        # plt.plot(to_np_cpu(gt_joint_vel[0]), label='velocity')
-        # plt.plot(to_np_cpu(fc_mask[0]), label='fc')
-        # plt.grid()
-        # plt.legend()
-        # plt.show()
-        return self.masked_l2(pred_joint_vel, torch.zeros(pred_joint_vel.shape, device=pred_joint_vel.device),
-                              mask[:, :, :, 1:])
-    # todo - NOT USED YET, JUST COMMITING TO NOT DELETE THIS AND KEEP INITIAL IMPLEMENTATION, NOT DONE!
-    def foot_contact_loss_humanml3d(self, target, model_output):
-        # root_rot_velocity (B, seq_len, 1)
-        # root_linear_velocity (B, seq_len, 2)
-        # root_y (B, seq_len, 1)
-        # ric_data (B, seq_len, (joint_num - 1)*3) , XYZ
-        # rot_data (B, seq_len, (joint_num - 1)*6) , 6D
-        # local_velocity (B, seq_len, joint_num*3) , XYZ
-        # foot contact (B, seq_len, 4) ,
-
-        target_fc = target[:, -4:, :, :]
-        root_rot_velocity = target[:, :1, :, :]
-        root_linear_velocity = target[:, 1:3, :, :]
-        root_y = target[:, 3:4, :, :]
-        ric_data = target[:, 4:67, :, :]  # 4+(3*21)=67
-        rot_data = target[:, 67:193, :, :]  # 67+(6*21)=193
-        local_velocity = target[:, 193:259, :, :]  # 193+(3*22)=259
-        contact = target[:, 259:, :, :]  # 193+(3*22)=259
-        contact_mask_gt = contact > 0.5  # contact mask order for indexes are fid_l [7, 10], fid_r [8, 11]
-        vel_lf_7 = local_velocity[:, 7 * 3:8 * 3, :, :]
-        vel_rf_8 = local_velocity[:, 8 * 3:9 * 3, :, :]
-        vel_lf_10 = local_velocity[:, 10 * 3:11 * 3, :, :]
-        vel_rf_11 = local_velocity[:, 11 * 3:12 * 3, :, :]
-
-        calc_vel_lf_7 = ric_data[:, 6 * 3:7 * 3, :, 1:] - ric_data[:, 6 * 3:7 * 3, :, :-1]
-        calc_vel_rf_8 = ric_data[:, 7 * 3:8 * 3, :, 1:] - ric_data[:, 7 * 3:8 * 3, :, :-1]
-        calc_vel_lf_10 = ric_data[:, 9 * 3:10 * 3, :, 1:] - ric_data[:, 9 * 3:10 * 3, :, :-1]
-        calc_vel_rf_11 = ric_data[:, 10 * 3:11 * 3, :, 1:] - ric_data[:, 10 * 3:11 * 3, :, :-1]
-
-        # vel_foots = torch.stack([vel_lf_7, vel_lf_10, vel_rf_8, vel_rf_11], dim=1)
-        for chosen_vel_foot_calc, chosen_vel_foot, joint_idx, contact_mask_idx in zip(
-                [calc_vel_lf_7, calc_vel_rf_8, calc_vel_lf_10, calc_vel_rf_11],
-                [vel_lf_7, vel_lf_10, vel_rf_8, vel_rf_11],
-                [7, 10, 8, 11],
-                [0, 1, 2, 3]):
-            tmp_mask_gt = contact_mask_gt[:, contact_mask_idx, :, :].cpu().detach().numpy().reshape(-1).astype(int)
-            chosen_vel_norm = np.linalg.norm(chosen_vel_foot.cpu().detach().numpy().reshape((3, -1)), axis=0)
-            chosen_vel_calc_norm = np.linalg.norm(chosen_vel_foot_calc.cpu().detach().numpy().reshape((3, -1)),
-                                                  axis=0)
-
-            print(tmp_mask_gt.shape)
-            print(chosen_vel_foot.shape)
-            print(chosen_vel_calc_norm.shape)
-            import matplotlib.pyplot as plt
-            plt.plot(tmp_mask_gt, label='FC mask')
-            plt.plot(chosen_vel_norm, label='Vel. XYZ norm (from vector)')
-            plt.plot(chosen_vel_calc_norm, label='Vel. XYZ norm (calculated diff XYZ)')
-
-            plt.title(f'FC idx {contact_mask_idx}, Joint Index {joint_idx}')
-            plt.legend()
-            plt.show()
-        # print(vel_foots.shape)
-        return 0
-    # todo - NOT USED YET, JUST COMMITING TO NOT DELETE THIS AND KEEP INITIAL IMPLEMENTATION, NOT DONE!
-    def velocity_consistency_loss_humanml3d(self, target, model_output):
-        # root_rot_velocity (B, seq_len, 1)
-        # root_linear_velocity (B, seq_len, 2)
-        # root_y (B, seq_len, 1)
-        # ric_data (B, seq_len, (joint_num - 1)*3) , XYZ
-        # rot_data (B, seq_len, (joint_num - 1)*6) , 6D
-        # local_velocity (B, seq_len, joint_num*3) , XYZ
-        # foot contact (B, seq_len, 4) ,
-
-        target_fc = target[:, -4:, :, :]
-        root_rot_velocity = target[:, :1, :, :]
-        root_linear_velocity = target[:, 1:3, :, :]
-        root_y = target[:, 3:4, :, :]
-        ric_data = target[:, 4:67, :, :]  # 4+(3*21)=67
-        rot_data = target[:, 67:193, :, :]  # 67+(6*21)=193
-        local_velocity = target[:, 193:259, :, :]  # 193+(3*22)=259
-        contact = target[:, 259:, :, :]  # 193+(3*22)=259
-
-        calc_vel_from_xyz = ric_data[:, :, :, 1:] - ric_data[:, :, :, :-1]
-        velocity_from_vector = local_velocity[:, 3:, :, 1:]  # Slicing out root
-        r_rot_quat, r_pos = motion_process.recover_root_rot_pos(target.permute(0, 2, 3, 1).type(th.FloatTensor))
-        print(f'r_rot_quat: {r_rot_quat.shape}')
-        print(f'calc_vel_from_xyz: {calc_vel_from_xyz.shape}')
-        calc_vel_from_xyz = calc_vel_from_xyz.permute(0, 2, 3, 1)
-        calc_vel_from_xyz = calc_vel_from_xyz.reshape((1, 1, -1, 21, 3)).type(th.FloatTensor)
-        r_rot_quat_adapted = r_rot_quat[..., :-1, None, :].repeat((1,1,1,21,1)).to(calc_vel_from_xyz.device)
-        print(f'calc_vel_from_xyz: {calc_vel_from_xyz.shape} , {calc_vel_from_xyz.device}')
-        print(f'r_rot_quat_adapted: {r_rot_quat_adapted.shape}, {r_rot_quat_adapted.device}')
-
-        calc_vel_from_xyz = motion_process.qrot(r_rot_quat_adapted, calc_vel_from_xyz)
-        calc_vel_from_xyz = calc_vel_from_xyz.reshape((1, 1, -1, 21 * 3))
-        calc_vel_from_xyz = calc_vel_from_xyz.permute(0, 3, 1, 2)
-        print(f'calc_vel_from_xyz: {calc_vel_from_xyz.shape} , {calc_vel_from_xyz.device}')
-
-        import matplotlib.pyplot as plt
-        for i in range(21):
-            plt.plot(np.linalg.norm(calc_vel_from_xyz[:,i*3:(i+1)*3,:,:].cpu().detach().numpy().reshape((3, -1)), axis=0), label='Calc Vel')
-            plt.plot(np.linalg.norm(velocity_from_vector[:,i*3:(i+1)*3,:,:].cpu().detach().numpy().reshape((3, -1)), axis=0), label='Vector Vel')
-            plt.title(f'Joint idx: {i}')
-            plt.legend()
-            plt.show()
-        print(calc_vel_from_xyz.shape)
-        print(velocity_from_vector.shape)
-        diff = calc_vel_from_xyz-velocity_from_vector
-        print(np.linalg.norm(diff.cpu().detach().numpy().reshape((63, -1)), axis=0))
-
-        return 0
-
 
     def _prior_bpd(self, x_start):
         """

@@ -25,24 +25,18 @@ def main():
     args_path = os.path.join(args.save_dir, 'args.json')
     with open(args_path, 'w') as fw:
         json.dump(vars(args), fw, indent=4, sort_keys=True)
-        
-    args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
 
     dist_util.setup_dist(args.device)
 
     print("creating data loader...")
-    #TODO: check if we need num_frames in dataloader (cut each sequence into a fixed number of frames.
-    # params can be set at parser_util.py
-    data = get_dataset_loader(args, batch_size=args.batch_size, split=True)
+    data = get_dataset_loader(args, batch_size=args.batch_size, train=True)
     
     import numpy as np 
 
     print("creating model and diffusion...")
     model, diffusion = create_model_and_diffusion(args, data)
     model.to(dist_util.dev())
-    # model.rot2xyz.smpl_model.eval()
 
-    # print('Total params: %.2fM' % (sum(p.numel() for p in model.parameters_wo_clip()) / 1000000.0))
     print("Training...")
     loop = TrainLoop(args, model, diffusion, data)
     loop.run_loop()

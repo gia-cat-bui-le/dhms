@@ -114,7 +114,6 @@ class OriginDataset(Dataset):
         
         # to ax
         bs, sq, c = local_q.shape
-        # print(local_q.shape)
         local_q = local_q.reshape((bs, sq, -1, 3))
 
         # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
@@ -155,8 +154,6 @@ class OriginDataset(Dataset):
 
     def __getitem__(self, idx):
         
-        print("numfeats: ", self.num_feats[idx])
-        
         pose_input = self.process_dataset(self.data["pos"][idx][:2*self.num_feats[idx]], self.data["q"][idx][:2*self.num_feats[idx]])
         
         filename_ = self.data["filenames"][idx]
@@ -178,7 +175,6 @@ class OriginDataset(Dataset):
         
         for motion in motions:
             data = pickle.load(open(motion, "rb"))
-            print(torch.Tensor(data["q"]).shape)
             pos = data["pos"]
             q = data["q"]
             scale = data["scale"][0]
@@ -199,8 +195,6 @@ class GenerateDataset(Dataset):
         feature_type: str = "baseline",
     ):
         self.data_path = data_path
-        # print(self.data_path)
-
         self.feature_type = feature_type
         self.file_name = file_name
 
@@ -221,11 +215,8 @@ class GenerateDataset(Dataset):
         
         feature_slice = torch.from_numpy(feature_slice)
 
-        data_length = 90
-
-        print("FEATURE SHAPE: ", feature_slice.shape)
         bs, seq, d = feature_slice.shape
-        return {"length": data_length, "music": feature_slice.reshape(bs, seq * d), "filename": filename_}
+        return {"length": 90, "music": feature_slice.reshape(bs, seq * d), "filename": filename_}
 
     def load_data(self):
         # open data path
@@ -299,8 +290,6 @@ def get_dataset_loader(args, file_name, batch_size):
     dataset = get_dataset(args, file_name)
     num_cpus = multiprocessing.cpu_count()
 
-    print(f"batchsize: {batch_size}")
-
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -319,7 +308,6 @@ if __name__ == "__main__":
     # TODO: fix the hardcode
     
     music_dir_len = len(glob.glob(os.path.join(args.music_dir, "*.wav")))
-    print(f"music dir len {music_dir_len}")
     args.batch_size = music_dir_len
     name = os.path.basename(os.path.dirname(args.music_dir))
     niter = os.path.basename(args.model_path).replace("model", "").replace(".pt", "")
@@ -331,15 +319,9 @@ if __name__ == "__main__":
     
     print(f"[Guidance param]: {args.guidance_param}")
 
-    if args.guidance_param != 1.0:
-        log_file += f"_gscale{args.guidance_param}"
-    log_file += f"_inpaint{args.inpainting_frames}"
-    log_file += ".log"
-    print(f"Will save to log file [{log_file}]")
-
     ########################################################################
     # LOAD SMPL
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = "cuda:0" if args.cuda else "cpu"
     smpl = SMPLSkeleton(device=device)
 
     ########################################################################
@@ -359,10 +341,12 @@ if __name__ == "__main__":
 
     # extract feature from each music file
     #! code for jukebox
-    # baseline_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
+    if args.baseline == "baseline":
+        baseline_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
+    else:
+        jukebox_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
 
     logger.log("creating data loader...")
-    split = False
     
     nfeats = 151
     njoints = 24
@@ -371,7 +355,6 @@ if __name__ == "__main__":
     scale = args.guidance_param
     
     file_names = sorted(list(Path(os.path.join(args.music_dir, "feature")).glob("*.npy")))
-    
     
     generate_len = []
     
@@ -392,8 +375,7 @@ if __name__ == "__main__":
             model = ClassifierFreeSampleModel(
                 model
             )  # wrapping model with the classifier-free sampler
-
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            
         model.to(device)
         model.eval()  # disable random masking
 
@@ -407,33 +389,29 @@ if __name__ == "__main__":
 
         with torch.no_grad():
             for _, batch in tqdm(enumerate(dataloader)):
-                print("filename len: ", len(batch["filename"]))
                 for i in range(len(batch["filename"])):
                     batch_music = batch["music"][i]
                     batch_filename = batch["filename"][i]
                     batch_length = batch["length"][i]
                     
-                    print(f"batch shape: {batch_music.shape}")
                     if (
                         num_samples_limit is not None
                         and len(generated_motion) >= num_samples_limit
                     ):
-                        print("if num samples limit")
                         break
                         
                     bs, music_dim = batch_music.shape
-                    device = "cuda:0" if torch.cuda.is_available() else "cpu"
                     
                     model_kwargs = {}
                     model_kwargs['y'] = {}
                     model_kwargs['y']['lengths'] = [90 for len in range(bs)]
-                    model_kwargs['y']['music'] = batch_music.to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs['y']['music'] = batch_music.to(dist_util.dev())
                     model_kwargs['y']['mask'] = lengths_to_mask(model_kwargs['y']['lengths'], 
                                         dist_util.dev()).unsqueeze(1).unsqueeze(2)
                     
                     if scale != 1.:
                         model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
-                                                                device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
+                                                                device=dist_util.dev()) * scale
                         
                     mm_num_now = len(mm_generated_motions) // dataloader.batch_size
                     is_mm = False
@@ -453,8 +431,6 @@ if __name__ == "__main__":
                         # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                     )
                     
-                    print(sample.shape)
-                    
                     motion_final = []
                     motion_final.append(sample[0].squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, :45, :])
                     
@@ -462,12 +438,8 @@ if __name__ == "__main__":
                         sample_0 = sample[idx].unsqueeze(0)
                         sample_1 = sample[idx + 1].unsqueeze(0)
                         
-                        print(f"shape check:\n\tsample 0: {sample_0.shape}\n\tsample 1: {sample_1.shape}")
-                        
                         music_0 = model_kwargs['y']['music'][idx, -45 * 4800:].unsqueeze(0)
                         music_1 = model_kwargs['y']['music'][idx + 1, :45 * 4800].unsqueeze(0)
-                        
-                        print(f"shape check:\n\tmusic 0: {music_0.shape}\n\tmusic 1: {music_1.shape}")
                     
                         num_rows = 1
                         motion = torch.cat(( sample_0[:, :, :, -45 :], sample_1[:, :, :, : 45]), -1)
@@ -484,13 +456,13 @@ if __name__ == "__main__":
                         model_kwargs_2['y']['inpainted_motion'] = input_motions
 
                         model_kwargs_2['y']['lengths'] = [90 for len in range(1)]
-                        model_kwargs_2['y']['music'] = torch.cat((music_0, music_1), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
+                        model_kwargs_2['y']['music'] = torch.cat((music_0, music_1), dim=1).to(dist_util.dev())
                         model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_2['y']['lengths'], 
                                             dist_util.dev()).unsqueeze(1).unsqueeze(2)
                         # add CFG scale to batch
                         if scale != 1.:
                             model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
-                                                                    device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
+                                                                    device=dist_util.dev()) * scale
                         
                         total_hist_frame = 45
                         condition_frame = 45 - args.inpainting_frames
@@ -619,14 +591,9 @@ if __name__ == "__main__":
                         filename = batch_filename
                         outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join("./", outname)
-                        print(out_path)
                         # Create the directory if it doesn't exist
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        # print(out_path)
                         generate_len.append(full_pose.squeeze().shape[0])
-                        print("Generate shape before trim: ", full_pose.squeeze().shape)
-                        # full_pose = full_pose[:210]
-                        # print("Generate shape after trim: ", full_pose.squeeze().shape)
                         
                         with open(out_path, "wb") as file_pickle:
                             pickle.dump(
@@ -642,31 +609,19 @@ if __name__ == "__main__":
                         full_pos = pos.squeeze().unsqueeze(0)
                         full_q = q.squeeze().unsqueeze(0)
                         
-                        # assert full_pos.shape == (1, 180, 3)
-                        # assert full_q.shape == (1, 180, njoints, 3)
-                        
                         full_pose = (
                             smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
                         )  # b, s, 24, 3
                         
-                        if njoints == 24:
-                            # assert full_pose.shape == (180, njoints, 3)
-                            assert full_pose.shape[1] == njoints
-                        else:
-                            # assert full_pose.shape == (180, 55, 3)
-                            assert full_pose.shape[1] == 55
+                        assert full_pose.shape[1] == njoints
                         
                         filename = batch_filename
                         outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join("./", outname)
-                        print(out_path)
+                        print("Save at: ", out_path)
                         # Create the directory if it doesn't exist
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        # print(out_path)
                         generate_len.append(full_pose.squeeze().shape[0])
-                        print("Generate shape before trim: ", full_pose.squeeze().shape)
-                        # full_pose = full_pose[:210]
-                        # print("Generate shape after trim: ", full_pose.squeeze().shape)
                         
                         with open(out_path, "wb") as file_pickle:
                             pickle.dump(
@@ -690,8 +645,6 @@ if __name__ == "__main__":
     #     collate_fn=collate_pairs_and_text
     # )
     
-    # print(len(origin_loader))
-    
     # for batch in origin_loader:
     #     njoints = 24
     #     smpl = SMPLSkeleton(device=device)
@@ -699,7 +652,6 @@ if __name__ == "__main__":
     #     motion, filenames = batch["motion_feats"][0], batch["filename"][0]
     #     motion = torch.Tensor(motion).to(device)
         
-    #     print(motion.shape)
     #     b, s, c = motion.shape
         
     #     sample_contact, motion = torch.split(
@@ -712,7 +664,6 @@ if __name__ == "__main__":
     #     for q_, pos_ in zip(q, pos):
             
     #         # if out_dir is not None:
-    #         print("GT shape: ", (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0))).squeeze(0).shape)
     #         full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
     #         outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
     #         out_path = os.path.join(outname)

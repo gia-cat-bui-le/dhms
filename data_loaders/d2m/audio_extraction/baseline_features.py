@@ -42,7 +42,6 @@ def extract(fpath, skip_completed=True, dest_dir="aist_baseline_feats"):
     os.makedirs(dest_dir, exist_ok=True)
     audio_name = Path(fpath).stem
     save_path = os.path.join(dest_dir, audio_name + ".npy")
-    # print(save_path)
 
     if os.path.exists(save_path) and skip_completed:
         return
@@ -82,15 +81,7 @@ def extract(fpath, skip_completed=True, dest_dir="aist_baseline_feats"):
         axis=-1,
     )
 
-    # # chop to ensure exact shape
-    # # print(audio_feature.shape)
-    # # print(5 * FPS * 2)
-    # audio_feature = audio_feature[:5 * FPS]
-    # # print(audio_feature.shape)
-    # assert (audio_feature.shape[0] - 5 * FPS) == 0, f"expected output to be ~5s, but was {audio_feature.shape[0] / FPS}"
-
     np.save(save_path, audio_feature)
-    # print(audio_feature.shape)
     return audio_feature, save_path
 
 

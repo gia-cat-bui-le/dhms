@@ -28,7 +28,6 @@ def process_dataset(root_pos, local_q):
     local_q = torch.Tensor(local_q).unsqueeze(0)
     # to ax
     bs, sq, c = local_q.shape
-    # print(local_q.shape)
     local_q = local_q.reshape((bs, sq, -1, 3))
 
     # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
@@ -166,7 +165,6 @@ def unnomarlize():
         )  # b, s, 24, 3
         
         outname = f'{out_dir}/{"".join(os.path.splitext(os.path.basename(motion))[0])}_normed.pkl'
-        # print(outname)
         
         out_path = os.path.join(outname)
         # Create the directory if it doesn't exist

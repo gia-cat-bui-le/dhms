@@ -13,7 +13,6 @@ def get_mdm_loader(args, model, diffusion, batch_size, ground_truth_loader, mm_n
     opt = {
         'name': 'test',  # FIXME
     }
-    print('Generating %s ...' % opt['name'])
     dataset = CompCCDGeneratedDataset(args, model, diffusion, ground_truth_loader, mm_num_samples, mm_num_repeats, num_samples_limit, scale)
 
     motion_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn, drop_last=True, num_workers=4)

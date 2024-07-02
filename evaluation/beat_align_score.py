@@ -35,8 +35,6 @@ def get_mb(key, length=None):
         # ax.xaxis.grid(color='deeppink', linestyle='--', linewidth=1.5, which='minor')
         # ax.xaxis.grid(True, which='minor')
 
-
-        # print(len(beats))
         return beat_axis
 
 
@@ -82,7 +80,6 @@ def calc_ba_score(root):
     ba_scores = []
 
     for pkl in os.listdir(root):
-        # print(pkl)
         if os.path.isdir(os.path.join(root, pkl)):
             continue
         joint3d = np.load(os.path.join(root, pkl), allow_pickle=True).item()['pred_position'][:, :]

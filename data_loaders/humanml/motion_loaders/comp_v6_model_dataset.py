@@ -20,7 +20,6 @@ class CompCCDGeneratedDataset(Dataset):
     def __init__(self, args, model, diffusion, dataloader, mm_num_samples, mm_num_repeats, num_samples_limit, scale=1.):
         self.dataloader = dataloader
         # dataloader = self.dataloader
-        # print(dataloader)
         self.dataset = self.dataloader.dataset
         assert mm_num_samples < len(self.dataloader.dataset)
         clip_denoised = False  # FIXME - hardcoded=
@@ -36,17 +35,14 @@ class CompCCDGeneratedDataset(Dataset):
             mm_idxs = np.sort(mm_idxs)
         else:
             mm_idxs = []
-        # print('mm_idxs', mm_idxs)
         
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda:0" if args.cuda else "cpu"
 
         model.eval()
         
         nfeats = 151
         njoints = 24
-        self.smpl = SMPLSkeleton(device=device)
-        
-        # print(len(dataloader))
+        self.smpl = SMPLSkeleton(device=self.device)
 
         with torch.no_grad():
             # args.inpainting_frames = 0
@@ -59,7 +55,7 @@ class CompCCDGeneratedDataset(Dataset):
                 model_kwargs_0 = {}
                 model_kwargs_0['y'] = {}
                 model_kwargs_0['y']['lengths'] = batch['length_0']
-                model_kwargs_0['y']['music'] = batch['music_0'].to("cuda:0" if torch.cuda.is_available() else "cpu")
+                model_kwargs_0['y']['music'] = batch['music_0'].to(self.device)
                 model_kwargs_0['y']['mask'] = lengths_to_mask(model_kwargs_0['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
 
@@ -67,15 +63,15 @@ class CompCCDGeneratedDataset(Dataset):
                 model_kwargs_1['y'] = {}
 
                 model_kwargs_1['y']['lengths'] = batch['length_1']
-                model_kwargs_1['y']['music'] = batch['music_1'].to("cuda:0" if torch.cuda.is_available() else "cpu")
+                model_kwargs_1['y']['music'] = batch['music_1'].to(self.device)
                 model_kwargs_1['y']['mask'] = lengths_to_mask(model_kwargs_1['y']['lengths'], 
                                     dist_util.dev()).unsqueeze(1).unsqueeze(2)
                 # add CFG scale to batch
                 if scale != 1.:
                     model_kwargs_0['y']['scale'] = torch.ones(len(model_kwargs_0['y']['lengths']),
-                                                            device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
+                                                            device=self.device) * scale
                     model_kwargs_1['y']['scale'] = torch.ones(len(model_kwargs_1['y']['lengths']),
-                                                            device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
+                                                            device=self.device) * scale
 
                 mm_num_now = len(mm_generated_motions) // dataloader.batch_size
                 is_mm = False
@@ -124,13 +120,13 @@ class CompCCDGeneratedDataset(Dataset):
                     model_kwargs_2['y'] = {}
 
                     model_kwargs_2['y']['lengths'] = [90 for len in batch['length_0']]
-                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['y']['music'][:, -45 * 4800:], model_kwargs_1['y']['music'][:, :45 * 4800]), dim=1).to("cuda:0" if torch.cuda.is_available() else "cpu")
+                    model_kwargs_2['y']['music'] = torch.cat((model_kwargs_0['y']['music'][:, -45 * 4800:], model_kwargs_1['y']['music'][:, :45 * 4800]), dim=1).to(self.device)
                     model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_2['y']['lengths'], 
                                         dist_util.dev()).unsqueeze(1).unsqueeze(2)
                     # add CFG scale to batch
                     if scale != 1.:
                         model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
-                                                                device="cuda:0" if torch.cuda.is_available() else "cpu") * scale
+                                                                device=self.device) * scale
                     
                     if args.inpainting_frames > 0:
                         total_hist_frame = 45
@@ -196,10 +192,10 @@ class CompCCDGeneratedDataset(Dataset):
                             sample_contact = None
                         # do the FK all at once
                         b, s, c = motion_result.shape
-                        pos = motion_result[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                        pos = motion_result[:, :, :3].to(self.device)  # np.zeros((sample.shape[0], 3))
                         q = motion_result[:, :, 3:].reshape(b, s, njoints, 6)
                         # go 6d to ax
-                        q = ax_from_6v(q).to(device)
+                        q = ax_from_6v(q).to(self.device)
 
                         b, s, c1, c2 = q.shape
                         if b > 1:
@@ -267,7 +263,6 @@ class CompCCDGeneratedDataset(Dataset):
                             out_path = os.path.join("./", outname)
                             # Create the directory if it doesn't exist
                             os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                            # print(out_path)
                             with open(out_path, "wb") as file_pickle:
                                 pickle.dump(
                                     {
@@ -300,7 +295,6 @@ class CompCCDGeneratedDataset(Dataset):
                             out_path = os.path.join("./", outname)
                             # Create the directory if it doesn't exist
                             os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                            # print(out_path)
                             with open(out_path, "wb") as file_pickle:
                                 pickle.dump(
                                     {

@@ -25,29 +25,21 @@ def parse_resume_step_from_filename(filename):
     except ValueError:
         return 0
 
-def get_dataset(args, split=True):
+def get_dataset(args, train=True):
     DATA = get_dataset_class()
-    
-    if split is False:
-        
-        dataset = DATA(
+    dataset = DATA(
         data_path=args.data_dir,
-        train=split,
+        train=train,
     )
-    else:
-        dataset = DATA(
-            data_path=args.data_dir,
-            train=split,
-        )
     return dataset
 
-def get_dataset_loader(args, batch_size, split=True):
-    dataset = get_dataset(args, split)
+def get_dataset_loader(args, batch_size, train=True):
+    dataset = get_dataset(args, train)
     num_cpus = multiprocessing.cpu_count()
     
     collate = get_collate_fn()
     
-    if split:
+    if train:
         loader = DataLoader(
             dataset,
             batch_size=batch_size,

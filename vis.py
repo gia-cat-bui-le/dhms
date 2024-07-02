@@ -240,8 +240,6 @@ def skeleton_render_3D(
 
         # stitch wavs
         if stitch:
-            print(type(name))
-            print(name)
             assert type(name) == list  # must be a list of names to do stitching
             name_ = [os.path.splitext(x)[0] + ".wav" for x in name]
             audio, sr = lr.load(name_[0], sr=None)
@@ -274,7 +272,6 @@ def skeleton_render_3D(
     else:
         if render:
             # actually save the gif
-            print("save the gif")
             path = os.path.normpath(name)
             pathparts = path.split(os.sep)
             gifname = os.path.join(out, f"{pathparts[-1][:-4]}.gif")

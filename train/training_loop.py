@@ -70,7 +70,7 @@ class TrainLoop:
             # Model was resumed, either due to a restart or a checkpoint
             # being specified at the command line.
 
-        self.device = torch.device("cuda")
+        self.device = "cuda:0" if args.cuda else "cpu"
         if torch.cuda.is_available() and dist_util.dev() != 'cpu':
             self.device = torch.device(dist_util.dev())
 
@@ -82,8 +82,6 @@ class TrainLoop:
         self.ddp_model = self.model
 
         self.inpainting_frames = args.inpainting_frames
-        
-        self.shuffle_noise = True if args.shuffle_noise else False
         
         self.noise_frame = 10
         self.noise_stride = 5

@@ -92,9 +92,6 @@ def extract_feature(motion, filename):
     print(out_path)
     # Create the directory if it doesn't exist
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    # print(out_path)
-    # full_pose = full_pose[:210]
-    # print("Generate shape after trim: ", full_pose.squeeze().shape)
     
     with open(out_path, "wb") as file_pickle:
         pickle.dump(

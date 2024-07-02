@@ -15,7 +15,6 @@ from torch.utils.data import Dataset
 
 from data_loaders.d2m.preprocess import vectorize_many
 from data_loaders.d2m.quaternion import ax_to_6v
-from data_loaders.d2m.finedance.render_joints.smplfk import SMPLX_Skeleton, do_smplxfk, ax_to_6v, ax_from_6v
 from vis import SMPLSkeleton
 
 floor_height = 0
@@ -32,7 +31,6 @@ class AISTPPDataset(Dataset):
     ):
         self.dataname = "aistpp"
         self.data_path = data_path
-        # print(self.data_path)
         self.raw_fps = 60
         self.data_fps = 30
         assert self.data_fps <= self.raw_fps
@@ -109,7 +107,6 @@ class AISTPPDataset(Dataset):
         all_names = []
         assert len(motions) == len(features)
         for motion, feature in zip(motions, features):
-            # print(motion)
             # make sure name is matching
             m_name = os.path.splitext(os.path.basename(motion))[0]
             f_name = os.path.splitext(os.path.basename(feature))[0]
@@ -151,7 +148,6 @@ class AISTPPDataset(Dataset):
         local_q = torch.Tensor(local_q)
         # to ax
         bs, sq, c = local_q.shape
-        # print(local_q.shape)
         local_q = local_q.reshape((bs, sq, -1, 3))
 
         # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
