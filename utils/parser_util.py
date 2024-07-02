@@ -89,12 +89,6 @@ def add_model_options(parser):
     group.add_argument("--cond_drop_prob", default=0.25, type=float,
                         help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
-    group.add_argument("--arch", default='inpainting',
-                       choices=['trans_enc', 'trans_dec', 'gru', 'past_cond', 'inpainting'], type=str,
-                       help="Architecture types as reported in the paper.")
-    group.add_argument("--emb_trans_dec", default=False, type=bool,
-                       help="For trans_dec architecture only, if true, will inject condition as a class token"
-                            " (in addition to cross-attention).")
     group.add_argument("--lambda_mse", default=0.636, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_rcxyz", default=1.0, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_vel", default=2.964, type=float, help="Joint velocity loss.")
@@ -113,8 +107,6 @@ def add_model_options(parser):
 
 def add_data_options(parser):
     group = parser.add_argument_group('dataset')
-    group.add_argument("--dataset", default='aistpp', choices=['aistpp', 'finedance'], type=str,
-                       help="Dataset name (choose from list).")
     group.add_argument("--data_dir", default="/home/ltnghia02/data", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
     group.add_argument("--inference_dir", default="/home/ltnghia02/data/evaluation", type=str,
@@ -128,13 +120,11 @@ def add_training_options(parser):
     group.add_argument("--overwrite", action='store_true',
                        help="If True, will enable to use an already existing save_dir.")
     group.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
-    group.add_argument("--weight_decay", default=0, type=float, help="Optimizer weight decay.")
-    group.add_argument("--lr_anneal_steps", default=500000, type=int, help="Number of learning rate anneal steps.")
+    group.add_argument("--weight_decay", default=0.0001, type=float, help="Optimizer weight decay.")
+    group.add_argument("--lr_anneal_steps", default=200000, type=int, help="Number of learning rate anneal steps.")
     group.add_argument("--eval_batch_size", default=32, type=int,
                        help="Batch size during evaluation loop. Do not change this unless you know what you are doing. "
                             "T2m precision calculation is based on fixed batch size 32.")
-    group.add_argument("--eval_split", default='test', choices=['val', 'test'], type=str,
-                       help="Which split to evaluate on during training.")
     group.add_argument("--eval_during_training", action='store_true',
                        help="If True, will run evaluation during training.")
     group.add_argument("--eval_rep_times", default=3, type=int,
@@ -201,11 +191,6 @@ def add_evaluation_options(parser):
     group = parser.add_argument_group('eval')
     group.add_argument("--model_path", required=True, type=str, default='./',
                        help="Path to model####.pt file to be sampled.")
-    group.add_argument("--eval_mode", default='debug', choices=['wo_mm', 'mm_short', 'debug', 'full'], type=str,
-                       help="wo_mm (t2m only) - 20 repetitions without multi-modality metric; "
-                            "mm_short (t2m only) - 5 repetitions with multi-modality metric; "
-                            "debug - short run, less accurate results."
-                            "full (a2m only) - 20 repetitions.")
     group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
     group.add_argument("--eval_batch_size", default=32, type=int,
@@ -224,11 +209,6 @@ def add_evaluation_during_training_options(parser):
                        help="Path to model####.pt file to be sampled.")
     group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
-    group.add_argument("--eval_mode", default='debug', choices=['wo_mm', 'mm_short', 'debug', 'full'], type=str,
-                       help="wo_mm (t2m only) - 20 repetitions without multi-modality metric; "
-                            "mm_short (t2m only) - 5 repetitions with multi-modality metric; "
-                            "debug - short run, less accurate results."
-                            "full (a2m only) - 20 repetitions.")
     group.add_argument(
         "--out_dir",
         type=str,

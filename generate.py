@@ -364,10 +364,9 @@ if __name__ == "__main__":
     logger.log("creating data loader...")
     split = False
     
-    if args.dataset == "aistpp":
-        nfeats = 151
-        njoints = 24
-        smpl = SMPLSkeleton(device=device)
+    nfeats = 151
+    njoints = 24
+    smpl = SMPLSkeleton(device=device)
     
     scale = args.guidance_param
     

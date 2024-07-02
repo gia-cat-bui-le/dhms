@@ -26,17 +26,14 @@ def main():
     with open(args_path, 'w') as fw:
         json.dump(vars(args), fw, indent=4, sort_keys=True)
         
-    if args.dataset == "aistpp":
-        args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
-    elif args.dataset == "finedance":
-        args.data_dir = os.path.join(args.data_dir, "finedance")
+    args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
 
     dist_util.setup_dist(args.device)
 
     print("creating data loader...")
     #TODO: check if we need num_frames in dataloader (cut each sequence into a fixed number of frames.
     # params can be set at parser_util.py
-    data = get_dataset_loader(args, name=args.dataset, batch_size=args.batch_size, split=True)
+    data = get_dataset_loader(args, batch_size=args.batch_size, split=True)
     
     import numpy as np 
 

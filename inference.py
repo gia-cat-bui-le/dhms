@@ -35,12 +35,8 @@ from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
 
 def inference(args, eval_motion_loaders, origin_loader, out_dir, log_file, replication_times, diversity_times, mm_num_times, run_mm=False):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    if args.dataset == "aistpp":
-        njoints = 24
-        smpl = SMPLSkeleton(device=device)
-    elif args.dataset == "finedance":
-        njoints = 22
-        smpl = SMPLX_Skeleton(device=device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
+    njoints = 24
+    smpl = SMPLSkeleton(device=device)
         
     for batch in origin_loader:
         motion_0, motion_1_with_transition, filenames = batch["motion_feats_0"], batch["motion_feats_1"], batch["filename"]
@@ -106,8 +102,6 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
     
     #TODO: fix the hardcode
     # args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
-
-    print(f'Eval mode [{args.eval_mode}]')
     print(f'Eval batch size [{args.eval_batch_size}]')
 
     args.eval_batch_size = 73
@@ -117,11 +111,7 @@ def evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num
 
     logger.log("creating data loader...")
     split = False
-    origin_loader = get_dataset_loader(args, name=args.dataset, batch_size=args.eval_batch_size, split=split)
-    
-    # gt_loader = get_dataset_loader(name=args.dataset, eval_batch_size=args.eval_batch_size, split=split, hml_mode='eval')
-    # num_actions = gen_loader.dataset.num_actions
-    num_actions = 1
+    origin_loader = get_dataset_loader(args, batch_size=args.eval_batch_size, split=split)
 
     logger.log("Creating model and diffusion...")
     model, diffusion = create_model_and_diffusion(args, origin_loader)
@@ -155,38 +145,18 @@ if __name__ == '__main__':
     if args.guidance_param != 1.:
         log_file += f'_gscale{args.guidance_param}'
     log_file += f'_inpaint{args.inpainting_frames}'
-    log_file += f'_{args.eval_mode}'
     log_file += '.log'
     # print(f'Will save to log file [{log_file}]')
     
     args.data_dir = os.path.join(args.data_dir, "aistpp_dataset")
     
-    if args.eval_mode == 'debug':
-        num_samples_limit = None  # None means no limit (eval over all dataset)
-        run_mm = False
-        mm_num_samples = 0
-        mm_num_repeats = 0
-        mm_num_times = 0
-        diversity_times = 300
-        replication_times = 1  # about 3 Hrs
-    elif args.eval_mode == 'wo_mm':
-        num_samples_limit = 1000
-        run_mm = False
-        mm_num_samples = 0
-        mm_num_repeats = 0
-        mm_num_times = 0
-        diversity_times = 300
-        replication_times = 10# about 12 Hrs
-    elif args.eval_mode == 'mm_short':
-        num_samples_limit = 1000
-        run_mm = True
-        mm_num_samples = 100
-        mm_num_repeats = 30
-        mm_num_times = 10
-        diversity_times = 300
-        replication_times = 5  # about 15 Hrs
-    else:
-        raise ValueError()
+    num_samples_limit = None  # None means no limit (eval over all dataset)
+    run_mm = False
+    mm_num_samples = 0
+    mm_num_repeats = 0
+    mm_num_times = 0
+    diversity_times = 300
+    replication_times = 1  # about 3 Hrs
     
     evaluation(args, log_file, num_samples_limit, run_mm, mm_num_samples, mm_num_repeats, mm_num_times, diversity_times, replication_times)
     

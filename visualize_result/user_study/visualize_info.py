@@ -3,7 +3,7 @@ import seaborn as sns
 import pandas as pd
 
 # Load the CSV file
-csv_file_path = r'visualize_result\\user_study\\In-the-wild.csv'
+csv_file_path = r'visualize_result\\user_study\\test-set.csv'
 df = pd.read_csv(csv_file_path, header=None)
 
 # Extract the relevant columns and set column names
@@ -42,7 +42,7 @@ for idx, ax in enumerate(axes.flat):
         text.set_color("navy")
 
     for autotext in autotexts:
-        autotext.set_fontsize(12)
+        autotext.set_fontsize(10)
         autotext.set_color("black")
 
 # Add super title to the figure

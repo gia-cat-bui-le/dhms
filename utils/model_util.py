@@ -11,7 +11,6 @@ def load_model_wo_clip(model, state_dict):
 
 
 def create_model_and_diffusion(args, data):
-    # data.dataset  = 'babel'
     model = MDM(**get_model_args(args, data))
     diffusion = create_gaussian_diffusion(args)
     return model, diffusion
@@ -27,26 +26,8 @@ def get_model_args(args, data):
     # SMPL defaults
     data_rep = 'rot6d'
 
-    if args.dataset == 'humanml':
-        data_rep = 'hml_vec'
-        njoints = 263
-        nfeats = 1
-    elif args.dataset == 'kit':
-        data_rep = 'hml_vec'
-        njoints = 251
-        nfeats = 1
-    elif args.dataset == 'babel':
-        data_rep = 'hml_vec'
-        njoints = 135
-        nfeats = 1
-    
-    if args.dataset == "aistpp":
-        njoints = 151
-        nfeats = 1
-    elif args.dataset == "finedance":
-        #TODO: add this for finedance
-        njoints = 139
-        nfeats = 1
+    njoints = 151
+    nfeats = 1
     
     feature_dim = 4800
     cond_drop_prob = args.cond_drop_prob
@@ -55,8 +36,7 @@ def get_model_args(args, data):
             'translation': True, 'pose_rep': data_rep, 'glob': True, 'glob_rot': True,
             'latent_dim': args.latent_dim, 'ff_size': 1024, 'num_layers': args.layers, 'num_heads': 4,
             'dropout': 0.1, 'activation': F.gelu, 'data_rep': data_rep, 'cond_mode': cond_mode,
-            'action_emb': action_emb, 'arch': args.arch,
-            'emb_trans_dec': args.emb_trans_dec, 'dataset': args.dataset,
+            'action_emb': action_emb,
             'inpainting_frames': args.inpainting_frames, 'motion_mask': args.motion_mask, 'music_dim': feature_dim,
             'cond_drop_prob': cond_drop_prob,
             #! here
@@ -70,8 +50,6 @@ def get_model_args(args, data):
             }
 
 def create_gaussian_diffusion(args):
-    # default params
-    dataset_name = args.dataset
     predict_xstart = True  # we always predict x_start (a.k.a. x0), that's our deal!
     steps = 1000
     scale_beta = 1.  # no scaling
@@ -106,5 +84,4 @@ def create_gaussian_diffusion(args):
         lambda_vel=args.lambda_vel,
         lambda_rcxyz=args.lambda_rcxyz,
         lambda_fc=args.lambda_fc,
-        dataset_name=dataset_name,
     )

@@ -15,8 +15,8 @@ def featurewise_affine(x, scale_shift):
 class MDM(nn.Module):
     def __init__(self, modeltype, njoints, nfeats, translation, pose_rep, glob, glob_rot,
                  latent_dim=256, ff_size=1024, num_layers=8, num_heads=4, dropout=0.1,
-                 ablation=None, activation="gelu", legacy=False, data_rep='rot6d', dataset='aistpp', #clip_dim=512,
-                 arch='trans_enc', emb_trans_dec=False, clip_version=None, **kargs):
+                 ablation=None, activation="gelu", legacy=False, data_rep='rot6d', #clip_dim=512,
+                 **kargs):
         super().__init__()
 
         #self.legacy = legacy
@@ -24,7 +24,6 @@ class MDM(nn.Module):
         self.njoints = njoints
         self.nfeats = nfeats
         self.data_rep = data_rep
-        self.dataset = dataset
 
         self.pose_rep = pose_rep
         self.glob = glob
@@ -57,15 +56,12 @@ class MDM(nn.Module):
 
         self.cond_mode = kargs.get('cond_mode', 'no_cond')
         self.cond_mask_prob = self.cond_drop_prob
-        self.arch = arch
-        self.gru_emb_dim = self.latent_dim if self.arch == 'gru' else 0
         
         self.max_seq_att = kargs.get('max_seq_att', 1024)
         self.input_process = InputProcess(self.data_rep, self.input_feats+self.gru_emb_dim, self.latent_dim)
         self.process_cond_input = [nn.Linear(2*self.latent_dim, self.latent_dim) for _ in range(self.num_layers)]
         
         self.sequence_pos_encoder = PositionalEncoding(self.latent_dim, self.dropout)
-        self.emb_trans_dec = emb_trans_dec
 
         self.motion_mask = kargs['motion_mask']
         self.inpainting_frames = kargs['inpainting_frames']
@@ -75,28 +71,14 @@ class MDM(nn.Module):
             self.seperation_token = nn.Parameter(torch.randn(latent_dim))
             self.skel_embedding = nn.Linear(self.njoints, self.latent_dim)
         
-        if self.arch == 'inpainting':
-            # print("TRANS_ENC init")
-            seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
-                                                            nhead=self.num_heads,
-                                                            dim_feedforward=self.ff_size,
-                                                            dropout=self.dropout,
-                                                            activation=self.activation)
+        seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
+                                                        nhead=self.num_heads,
+                                                        dim_feedforward=self.ff_size,
+                                                        dropout=self.dropout,
+                                                        activation=self.activation)
 
-            self.seqTransEncoder = nn.TransformerEncoder(seqTransEncoderLayer,
-                                                        num_layers=self.num_layers)
-        elif self.arch == 'trans_dec':
-            print("TRANS_DEC init")
-            seqTransDecoderLayer = nn.TransformerDecoderLayer(d_model=self.latent_dim,
-                                                            nhead=self.num_heads,
-                                                            dim_feedforward=self.ff_size,
-                                                            dropout=self.dropout,
-                                                            activation=activation)
-            self.seqTransDecoder = nn.TransformerDecoder(seqTransDecoderLayer,
-                                                        num_layers=self.num_layers)
-        
-        else:
-            raise ValueError('Please choose correct architecture [trans_enc, trans_dec, gru]')
+        self.seqTransEncoder = nn.TransformerEncoder(seqTransEncoderLayer,
+                                                    num_layers=self.num_layers)
 
         self.embed_timestep = TimestepEmbedder(self.latent_dim, self.sequence_pos_encoder)
 
@@ -157,30 +139,29 @@ class MDM(nn.Module):
 
         x = self.input_process(x)
         
-        if self.arch == 'inpainting':
-            mask = lengths_to_mask(y['lengths'], x.device)
-            if y.get('hframes', None) == None:
-                token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
-                aug_mask = torch.cat((token_mask, mask), 1)
-                xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
-                xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-                if self.motion_mask:
-                    output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
-                else:
-                    output = self.seqTransEncoder(xseq)[1:]
+        mask = lengths_to_mask(y['lengths'], x.device)
+        if y.get('hframes', None) == None:
+            token_mask = torch.ones((bs, 1), dtype=bool, device=x.device)
+            aug_mask = torch.cat((token_mask, mask), 1)
+            xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
+            xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+            if self.motion_mask:
+                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
             else:
-                token_mask = torch.ones((bs, 2 + 2*self.inpainting_frames), dtype=bool, device=x.device)
-                aug_mask = torch.cat((token_mask, mask), 1)
-                sep_token = torch.tile(self.seperation_token, (bs,)).reshape(bs, -1).unsqueeze(0)
-                hframes = y['hframes'].squeeze(2).permute(2, 0, 1) #TODO find out the diff 
-                hframes_emb = self.skel_embedding(hframes)
-                fut_frames = y['fut_frames'].squeeze(2).permute(2, 0, 1)
-                fut_frames_emb = self.skel_embedding(fut_frames)
-                # hframes_emb = hframes_emb.permute(1, 0, 2) # [5 b dim]
-                xseq = torch.cat((emb, hframes_emb, fut_frames_emb, sep_token, x), axis=0)
-                # TODO add attention mask
-                xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-                output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + 2*self.inpainting_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+                output = self.seqTransEncoder(xseq)[1:]
+        else:
+            token_mask = torch.ones((bs, 2 + 2*self.inpainting_frames), dtype=bool, device=x.device)
+            aug_mask = torch.cat((token_mask, mask), 1)
+            sep_token = torch.tile(self.seperation_token, (bs,)).reshape(bs, -1).unsqueeze(0)
+            hframes = y['hframes'].squeeze(2).permute(2, 0, 1) #TODO find out the diff 
+            hframes_emb = self.skel_embedding(hframes)
+            fut_frames = y['fut_frames'].squeeze(2).permute(2, 0, 1)
+            fut_frames_emb = self.skel_embedding(fut_frames)
+            # hframes_emb = hframes_emb.permute(1, 0, 2) # [5 b dim]
+            xseq = torch.cat((emb, hframes_emb, fut_frames_emb, sep_token, x), axis=0)
+            # TODO add attention mask
+            xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+            output = self.seqTransEncoder(xseq, src_key_padding_mask=~aug_mask)[2 + 2*self.inpainting_frames:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         

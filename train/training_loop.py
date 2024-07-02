@@ -27,7 +27,6 @@ INITIAL_LOG_LOSS_SCALE = 20.0
 class TrainLoop:
     def __init__(self, args, model, diffusion, data):
         self.args = args
-        self.dataset = args.dataset
         self.model = model
         self.diffusion = diffusion
         self.cond_mode = model.cond_mode
@@ -217,7 +216,6 @@ class TrainLoop:
                 micro_0,  # [bs, ch, image_size, image_size]
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_0,
-                dataset=self.data.dataset,
             )
             if last_batch or not self.use_ddp:
                 loss_0, hist = compute_losses_0() 
@@ -241,7 +239,6 @@ class TrainLoop:
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_1,
                 noise=None,
-                dataset=self.data.dataset
             )
             if last_batch or not self.use_ddp:
                 loss_1, future = compute_losses_1() 
@@ -278,7 +275,6 @@ class TrainLoop:
                 t,  # [bs](int) sampled timesteps
                 model_kwargs=micro_cond_2,
                 noise=None,
-                dataset=self.data.dataset
             )
             if last_batch or not self.use_ddp:
                 loss_cycle, _ = compute_losses_cycle() 

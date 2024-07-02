@@ -12,7 +12,7 @@ score_labels = {
 }
 
 # Colors for the ratings
-colors = ['#d73027', '#fc8d59', '#fee08b', '#d9ef8b', '#1a9850']
+colors = ['#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3']
 
 # Define metrics and methods
 metrics = ['Smoothness', 'Diversity', 'Beat Accuracy', 'Overall']

@@ -42,10 +42,9 @@ class CompCCDGeneratedDataset(Dataset):
 
         model.eval()
         
-        if args.dataset == "aistpp":
-            nfeats = 151
-            njoints = 24
-            self.smpl = SMPLSkeleton(device=device)
+        nfeats = 151
+        njoints = 24
+        self.smpl = SMPLSkeleton(device=device)
         
         # print(len(dataloader))
 

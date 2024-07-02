@@ -11,45 +11,36 @@ from slice import *
 
 def create_dataset(opt):
     path_folder = ''
-    if opt.dataset_name == "aistpp":
-        path_folder = os.path.join(opt.datapath, 'aistpp_dataset/')
+    path_folder = os.path.join(opt.datapath, 'aistpp_dataset/')
     # split the data according to the splits files
     print("Creating train / test split")
-    split_data(path_folder, opt.dataset_name)
+    split_data(path_folder)
     
     inpainting_frame = opt.inpainting_frame
     motion_len = opt.motion_len
     slice_len = motion_len*2
     
     # process dataset to extract audio features
-    if opt.dataset_name == "aistpp":
-        if opt.extract_baseline:
-            extract_feature = 'baseline'
-            print("Extracting baseline features")
-            baseline_extract(f"{path_folder}/train/wavs", f"{path_folder}/train/music_npy")
-            baseline_extract(f"{path_folder}/test/wavs", f"{path_folder}/test/music_npy")
-        if opt.extract_jukebox:
-            extract_feature = 'jukebox'
-            print("Extracting jukebox features")
-            jukebox_extract(f"{path_folder}/train/wavs_sliced", f"{path_folder}/train/jukebox_feats")
-            jukebox_extract(f"{path_folder}/test/wavs_sliced", f"{path_folder}/test/jukebox_feats")
-            
-        # slice motions/music into sliding windows to create training dataset
-        print("Slicing train data")
+    if opt.extract_baseline:
+        extract_feature = 'baseline'
+        print("Extracting baseline features")
+        baseline_extract(f"{path_folder}/train/wavs", f"{path_folder}/train/music_npy")
+        baseline_extract(f"{path_folder}/test/wavs", f"{path_folder}/test/music_npy")
+    if opt.extract_jukebox:
+        extract_feature = 'jukebox'
+        print("Extracting jukebox features")
+        jukebox_extract(f"{path_folder}/train/wavs_sliced", f"{path_folder}/train/jukebox_feats")
+        jukebox_extract(f"{path_folder}/test/wavs_sliced", f"{path_folder}/test/jukebox_feats")
         
-        slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", f"{path_folder}/train/wavs", 0.5, slice_len, inpainting_frame, motion_len)
-        print("Slicing test data")
-        slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", f"{path_folder}/test/wavs", 0.5, slice_len, inpainting_frame, motion_len)
+    # slice motions/music into sliding windows to create training dataset
+    print("Slicing train data")
+    
+    slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", f"{path_folder}/train/wavs", 0.5, slice_len, inpainting_frame, motion_len)
+    print("Slicing test data")
+    slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", f"{path_folder}/test/wavs", 0.5, slice_len, inpainting_frame, motion_len)
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--dataset_name",
-        type=str,
-        default="aistpp",
-        choices=['aistpp'],
-        help="name of dataset",
-    )
     parser.add_argument(
         "--datapath",
         type=str,

@@ -153,7 +153,6 @@ class GaussianDiffusion():
         lambda_root_vel=0.,
         lambda_vel_rcxyz=0.,
         lambda_fc=0.,
-        dataset_name='aistpp',
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -233,10 +232,7 @@ class GaussianDiffusion():
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
         
-        if dataset_name == "aistpp":
-            self.smpl = SMPLSkeleton(device=self.device)
-        elif dataset_name == "finedance":
-            self.smpl = SMPLX_Skeleton(device=self.device, Jpath="data_loaders/d2m/body_models/smpl/smplx_neu_J_1.npy")
+        self.smpl = SMPLSkeleton(device=self.device)
         
     def masked_l2(self, a, b, mask):
         # print("GOTO: masked l2")
@@ -1284,7 +1280,7 @@ class GaussianDiffusion():
         output = th.where((t == 0), decoder_nll, kl)
         return {"output": output, "pred_xstart": out["pred_xstart"]}
     
-    def training_losses(self, model, x_start, t, model_kwargs=None, noise=None, dataset=None):
+    def training_losses(self, model, x_start, t, model_kwargs=None, noise=None):
         """
         Compute training losses for a single timestep.
 

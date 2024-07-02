@@ -3,12 +3,9 @@ from data_loaders.tensors import collate_pairs_and_text
 
 import multiprocessing
 
-def get_dataset_class(name):
-    if name == "aistpp":
-        from data_loaders.d2m.dance_dataset import AISTPPDataset
-        return AISTPPDataset
-    else:
-        raise ValueError(f'Unsupported dataset name [{name}]')
+def get_dataset_class():
+    from data_loaders.d2m.dance_dataset import AISTPPDataset
+    return AISTPPDataset
 
 def get_collate_fn():
     collate = collate_pairs_and_text
@@ -28,8 +25,8 @@ def parse_resume_step_from_filename(filename):
     except ValueError:
         return 0
 
-def get_dataset(args, name, split=True):
-    DATA = get_dataset_class(name)
+def get_dataset(args, split=True):
+    DATA = get_dataset_class()
     
     if split is False:
         
@@ -44,8 +41,8 @@ def get_dataset(args, name, split=True):
         )
     return dataset
 
-def get_dataset_loader(args, name, batch_size, split=True):
-    dataset = get_dataset(args, name, split)
+def get_dataset_loader(args, batch_size, split=True):
+    dataset = get_dataset(args, split)
     num_cpus = multiprocessing.cpu_count()
     
     collate = get_collate_fn()

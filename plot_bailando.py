@@ -77,7 +77,7 @@ def plot_frames(output_image_path):
             x_offset = 0
             y_offset += frame_height
     
-    
+    images = find_images(image_folder='./frames\inpainting 40', initial_frame=165, last_frame=169, jump_length=1)
     
     result_image.save(output_image_path)
     print(f"Output image saved as '{output_image_path}'")
