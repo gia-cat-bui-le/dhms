@@ -10,7 +10,7 @@ from slice import *
 
 
 def create_dataset(opt):
-    path_folder = ''
+    path_folder = opt.datapath
     # split the data according to the splits files
     print("Creating train / test split")
     split_data(path_folder)

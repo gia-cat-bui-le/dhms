@@ -1,23 +1,16 @@
 from utils.parser_util import evaluation_parser, generate_args
 from utils.fixseed import fixseed
+from utils import dist_util
 from utils.model_util import create_model_and_diffusion, load_model_wo_clip
 
 from diffusion import logger
-from utils import dist_util
 from model.cfg_sampler import ClassifierFreeSampleModel
 
 from vis import SMPLSkeleton
 from data_loaders.d2m.quaternion import ax_from_6v
 
-from scipy.ndimage import gaussian_filter as G
-from scipy.signal import argrelextrema
-from scipy import linalg
-
 import pickle
 from pathlib import Path
-
-from evaluation.features.kinetic import extract_kinetic_features
-from evaluation.features.manual_new import extract_manual_features
 
 from data_loaders.d2m.audio_extraction.jukebox_features import (
     extract_folder as jukebox_extract,
@@ -31,14 +24,9 @@ from scipy.io import wavfile
 
 import glob
 import multiprocessing
-import blobfile as bf
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-from typing import Any
+from torch.utils.data import Dataset, DataLoader
 
 from teach.data.tools import lengths_to_mask
-import random
-from pytorch3d.transforms import axis_angle_to_quaternion, quaternion_to_axis_angle
 from data_loaders.d2m.quaternion import ax_from_6v, quat_slerp, ax_to_6v
 
 import torch
@@ -52,11 +40,9 @@ from pytorch3d.transforms import (
     quaternion_multiply,
     quaternion_to_axis_angle,
 )
-from diffusion.gaussian_diffusion import GaussianDiffusion
-from copy import deepcopy
-from utils.model_util import create_gaussian_diffusion
 from data_loaders.d2m.preprocess import vectorize_many
 from typing import List, Dict
+from data_loaders.d2m.normalizer import unnomarlize
 
 def collate_tensors(batch):
     dims = batch[0].dim()
@@ -327,12 +313,6 @@ if __name__ == "__main__":
     ########################################################################
 
     num_samples_limit = None  # None means no limit (eval over all dataset)
-    run_mm = False
-    mm_num_samples = 0
-    mm_num_repeats = 0
-    mm_num_times = 0
-    diversity_times = 300
-    replication_times = 1  # about 3 Hrs
 
     dist_util.setup_dist(args.device)
     logger.configure()
@@ -341,10 +321,10 @@ if __name__ == "__main__":
 
     # extract feature from each music file
     #! code for jukebox
-    if args.baseline == "baseline":
-        baseline_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
-    else:
-        jukebox_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
+    # if args.baseline == "baseline":
+    #     baseline_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
+    # else:
+    #     jukebox_extract(args.music_dir, dest=os.path.join(args.music_dir, "feature"))
 
     logger.log("creating data loader...")
     
@@ -412,9 +392,6 @@ if __name__ == "__main__":
                     if scale != 1.:
                         model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
                                                                 device=dist_util.dev()) * scale
-                        
-                    mm_num_now = len(mm_generated_motions) // dataloader.batch_size
-                    is_mm = False
                     
                     sample = diffusion.p_sample_loop (
                         model,
@@ -445,7 +422,6 @@ if __name__ == "__main__":
                         motion = torch.cat(( sample_0[:, :, :, -45 :], sample_1[:, :, :, : 45]), -1)
                         assert motion.shape == (1, nfeats, 1, 90)
                         input_motions = motion
-                        
                         
                         max_frames = input_motions.shape[-1]
                         assert max_frames == input_motions.shape[-1]
@@ -589,7 +565,7 @@ if __name__ == "__main__":
                             assert full_pose.shape[1] == 55
                         
                         filename = batch_filename
-                        outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        outname = f'{args.output_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join("./", outname)
                         # Create the directory if it doesn't exist
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -616,7 +592,7 @@ if __name__ == "__main__":
                         assert full_pose.shape[1] == njoints
                         
                         filename = batch_filename
-                        outname = f'{args.inference_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
+                        outname = f'{args.output_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                         out_path = os.path.join("./", outname)
                         print("Save at: ", out_path)
                         # Create the directory if it doesn't exist
@@ -632,49 +608,52 @@ if __name__ == "__main__":
                                 },
                                 file_pickle,
                             )
-    # origin_dataset = OriginDataset(
-    #     data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
-    # )
-    # origin_loader = DataLoader(
-    #     origin_dataset,
-    #     batch_size=1,
-    #     shuffle=False,
-    #     num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
-    #     pin_memory=True,
-    #     drop_last=True,
-    #     collate_fn=collate_pairs_and_text
-    # )
+    origin_dataset = OriginDataset(
+        data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
+    )
+    origin_loader = DataLoader(
+        origin_dataset,
+        batch_size=1,
+        shuffle=False,
+        num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
+        pin_memory=True,
+        drop_last=True,
+        collate_fn=collate_pairs_and_text
+    )
     
-    # for batch in origin_loader:
-    #     njoints = 24
-    #     smpl = SMPLSkeleton(device=device)
+    for batch in origin_loader:
+        njoints = 24
+        smpl = SMPLSkeleton(device=device)
         
-    #     motion, filenames = batch["motion_feats"][0], batch["filename"][0]
-    #     motion = torch.Tensor(motion).to(device)
+        motion, filenames = batch["motion_feats"][0], batch["filename"][0]
+        motion = torch.Tensor(motion).to(device)
         
-    #     b, s, c = motion.shape
+        b, s, c = motion.shape
         
-    #     sample_contact, motion = torch.split(
-    #     motion, (4, motion.shape[2] - 4), dim=2)
-    #     pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-    #     q = motion[:, :, 3:].reshape(b, s, njoints, 6)
-    #     # go 6d to ax
-    #     q = ax_from_6v(q).to(motion.device)
+        sample_contact, motion = torch.split(
+        motion, (4, motion.shape[2] - 4), dim=2)
+        pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+        q = motion[:, :, 3:].reshape(b, s, njoints, 6)
+        # go 6d to ax
+        q = ax_from_6v(q).to(motion.device)
         
-    #     for q_, pos_ in zip(q, pos):
+        for q_, pos_ in zip(q, pos):
             
-    #         # if out_dir is not None:
-    #         full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
-    #         outname = f'{args.inference_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
-    #         out_path = os.path.join(outname)
-    #         # Create the directory if it doesn't exist
-    #         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    #         with open(out_path, "wb") as file_pickle:
-    #             pickle.dump(
-    #                 {
-    #                     "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-    #                     "smpl_trans": pos_.squeeze(0).cpu().numpy(),
-    #                     "full_pose": full_pose,
-    #                 },
-    #                 file_pickle,
-    #             )
+            # if out_dir is not None:
+            full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
+            outname = f'{args.output_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
+            out_path = os.path.join(outname)
+            # Create the directory if it doesn't exist
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            with open(out_path, "wb") as file_pickle:
+                pickle.dump(
+                    {
+                        "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                        "smpl_trans": pos_.squeeze(0).cpu().numpy(),
+                        "full_pose": full_pose,
+                    },
+                    file_pickle,
+                )
+    
+    unnomarlize(f'{args.output_dir}/gt')
+    unnomarlize(f'{args.output_dir}/inference')

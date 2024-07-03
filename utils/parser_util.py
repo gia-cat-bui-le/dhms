@@ -142,38 +142,13 @@ def add_sampling_options(parser):
     group.add_argument("--output_dir", default='', type=str,
                        help="Path to results dir (auto created by the script). "
                             "If empty, will create dir in parallel to checkpoint.")
-    group.add_argument("--num_samples", default=0, type=int,
-                       help="Maximal number of prompts to sample, "
-                            "if loading dataset from file, this field will be ignored.")
-    group.add_argument("--num_repetitions", default=0, type=int,
-                       help="Number of repetitions, per sample (text prompt/action)")
     group.add_argument("--guidance_param", default=1.0, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
-
-#TODO: fix motion length
-def add_generate_options(parser):
-    group = parser.add_argument_group('generate')
-    group.add_argument("--motion_length", default=5.0, type=float,
-                       help="The length of the sampled motion [in seconds]. ")
-    group.add_argument("--use_cached_features", action="store_true",
-        help="Use precomputed features instead of music folder",
-    )
-    group.add_argument(
-        "--feature_cache_dir",
-        type=str,
-        default="cached_features/",
-        help="Where to save/load the features",
-    )
     group.add_argument(
         "--music_dir",
         type=str,
         default="./custom_input",
         help="folder containing input music",
-    )
-    group.add_argument(
-        "--cache_features",
-        action="store_true",
-        help="Save the jukebox features for later reuse",
     )
 
 def add_evaluation_options(parser):
@@ -218,7 +193,6 @@ def generate_args():
     # args specified by the user: (all other will be loaded from the model)
     add_base_options(parser)
     add_sampling_options(parser)
-    add_generate_options(parser)
     return parse_and_load_from_model(parser)
 
 def evaluation_parser():

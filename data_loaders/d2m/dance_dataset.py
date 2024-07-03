@@ -29,7 +29,6 @@ class AISTPPDataset(Dataset):
         feature_type: str = "baseline",
         data_len: int = -1,
     ):
-        self.dataname = "aistpp"
         self.data_path = data_path
         self.raw_fps = 60
         self.data_fps = 30

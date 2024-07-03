@@ -1,30 +1,45 @@
 from evaluation.metrics_new import *
 from evaluation.beat_align import *
 from evaluation.metrics_new import quantized_metrics, calc_and_save_feats
-import torch 
-from scipy.spatial.transform import Rotation as R
-from evaluation.features.kinetic import extract_kinetic_features
-from evaluation.features.manual_new import extract_manual_features
-from vis import SMPLSkeleton
+import argparse
 
-log_file = "evaluate_result\dhms-guidance\\val\ckpt16-guidance-2.5\\result.log"
+def parse_opt():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--log",
+        type=str,
+        default="output\\result.log",
+        help="path to result log file",
+    )
+    parser.add_argument(
+        "--gt_dir",
+        type=str,
+        default="output\\gt",
+        help="path to ground truth dir",
+    )
+    parser.add_argument(
+        "--pred_dir",
+        type=str,
+        default="output\\inference",
+        help="path to prediction dir",
+    )
+    opt = parser.parse_args()
+    return opt
         
 if __name__ == '__main__':
-
-    #TODO: fix the path
-    gt_root = 'evaluate_result\dhms-guidance\\val\ckpt16-guidance-2.5\gt_normed'
     
-    calc_and_save_feats(gt_root)
+    opt = parse_opt()
+    log_file = opt.log
 
-    pred_roots = [
-        'evaluate_result\dhms-guidance\\val\ckpt16-guidance-2.5\inference_normed'
-    ]
+    gt_root = opt.gt_dir
+    calc_and_save_feats(gt_root)
+    
+    pred_root = opt.pred_dir
     
     with open(log_file, 'a') as f:
-        for pred_root in pred_roots:
-            print(pred_root, file=f, flush=True)
-            calc_and_save_feats(pred_root)
-            print("FID Metrics", file=f, flush=True)
-            print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
-            print("Beat Accuracy", file=f, flush=True)
-            print(calc_ba_score(pred_root), file=f, flush=True)
+        print(pred_root, file=f, flush=True)
+        calc_and_save_feats(pred_root)
+        print("FID Metrics", file=f, flush=True)
+        print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
+        print("Beat Accuracy", file=f, flush=True)
+        print(calc_ba_score(pred_root), file=f, flush=True)

@@ -125,16 +125,14 @@ def create_noramlizer():
     print(data_newunnormed[0,:20])
     print(data_li_ori[0,:20])
     
-def unnomarlize():
-    generate_dir = "evaluate_result\dhms-guidance\\val\ckpt16-guidance-2.5\inference"
-    out_dir = "evaluate_result\dhms-guidance\\val\ckpt16-guidance-2.5\inference_normed"
-    
+def unnomarlize(pred_dir):
+    out_dir = os.path(pred_dir+"_normed")
     reNorm = torch.load('data_loaders/d2m/aistpp_dataset/AIST_Normalizer.pth')
     
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     smpl = SMPLSkeleton(device=device)
     
-    motions = sorted(glob.glob(os.path.join(generate_dir, "*.pkl")))
+    motions = sorted(glob.glob(os.path.join(pred_dir, "*.pkl")))
     for motion in motions:
         with open(motion, 'rb') as f:
             data = pickle.load(f)
@@ -181,4 +179,8 @@ def unnomarlize():
             )
         
 if __name__ == '__main__':
-    unnomarlize()
+    
+    pred_dir = "evaluate_result\dhms-guidance\\val\ckpt16-guidance-2.5\inference"
+    out_dir = "evaluate_result\dhms-guidance\\val\ckpt16-guidance-2.5\inference_normed"
+    
+    unnomarlize(pred_dir)
