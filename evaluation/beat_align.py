@@ -11,7 +11,7 @@ from scipy.signal import argrelextrema
 import librosa
 import matplotlib.pyplot as plt 
 
-music_root = 'custom_input_val'
+music_root = 'custom_input'
 
 
 def get_mb(key, length=None):
@@ -75,10 +75,11 @@ def BA(music_beats, motion_beats):
         ba +=  np.exp(-np.min((motion_beats[0] - bb)**2) / 2 / 9)
     return (ba / len(music_beats))
 
-def calc_ba_score(root):
+def calc_ba_score(root, music_dir):
 
     # gt_list = []
     ba_scores = []
+    music_root = music_dir
 
     for pkl in os.listdir(root):
         # print(pkl)
@@ -88,7 +89,7 @@ def calc_ba_score(root):
         joint3d = joint3d.reshape(joint3d.shape[0], 24*3)
 
         dance_beats, length = calc_db(joint3d, pkl)        
-        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0][:-7] + '.wav'), joint3d.shape[0])
+        music_beats = get_music_beat_fromwav(os.path.join(music_root, pkl.split('.')[0] + '.wav'), joint3d.shape[0])
 
         ba_scores.append(BA(music_beats, dance_beats))
         

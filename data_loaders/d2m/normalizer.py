@@ -126,7 +126,7 @@ def create_noramlizer():
     print(data_li_ori[0,:20])
     
 def unnomarlize(pred_dir):
-    out_dir = os.path(pred_dir+"_normed")
+    out_dir = os.path.join(pred_dir)
     reNorm = torch.load('data_loaders/d2m/aistpp_dataset/AIST_Normalizer.pth')
     
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -162,7 +162,7 @@ def unnomarlize(pred_dir):
             smpl.forward(q, pos).squeeze(0).detach().cpu().numpy()
         )  # b, s, 24, 3
         
-        outname = f'{out_dir}/{"".join(os.path.splitext(os.path.basename(motion))[0])}_normed.pkl'
+        outname = f'{out_dir}/{"".join(os.path.splitext(os.path.basename(motion))[0])}.pkl'
         
         out_path = os.path.join(outname)
         # Create the directory if it doesn't exist

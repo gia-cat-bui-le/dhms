@@ -23,6 +23,12 @@ def parse_opt():
         default="output\\inference",
         help="path to prediction dir",
     )
+    parser.add_argument(
+        "--music_dir",
+        type=str,
+        default="custom_input",
+        help="path to music dir",
+    )
     opt = parser.parse_args()
     return opt
         
@@ -35,6 +41,7 @@ if __name__ == '__main__':
     calc_and_save_feats(gt_root)
     
     pred_root = opt.pred_dir
+    music_dir = opt.music_dir
     
     with open(log_file, 'a') as f:
         print(pred_root, file=f, flush=True)
@@ -42,4 +49,4 @@ if __name__ == '__main__':
         print("FID Metrics", file=f, flush=True)
         print(quantized_metrics(pred_root, gt_root), file=f, flush=True)
         print("Beat Accuracy", file=f, flush=True)
-        print(calc_ba_score(pred_root), file=f, flush=True)
+        print(calc_ba_score(pred_root, music_dir), file=f, flush=True)
