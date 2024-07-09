@@ -3,10 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import clip
-from model.rotation2xyz import Rotation2xyz
 from teach.data.tools import lengths_to_mask
-from vis import SMPLSkeleton
-from einops import rearrange, reduce, repeat
 
 def featurewise_affine(x, scale_shift):
     scale, shift = scale_shift

@@ -608,52 +608,52 @@ if __name__ == "__main__":
                                 },
                                 file_pickle,
                             )
-    origin_dataset = OriginDataset(
-        data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
-    )
-    origin_loader = DataLoader(
-        origin_dataset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
-        pin_memory=True,
-        drop_last=True,
-        collate_fn=collate_pairs_and_text
-    )
+    # origin_dataset = OriginDataset(
+    #     data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
+    # )
+    # origin_loader = DataLoader(
+    #     origin_dataset,
+    #     batch_size=1,
+    #     shuffle=False,
+    #     num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
+    #     pin_memory=True,
+    #     drop_last=True,
+    #     collate_fn=collate_pairs_and_text
+    # )
     
-    for batch in origin_loader:
-        njoints = 24
-        smpl = SMPLSkeleton(device=device)
+    # for batch in origin_loader:
+    #     njoints = 24
+    #     smpl = SMPLSkeleton(device=device)
         
-        motion, filenames = batch["motion_feats"][0], batch["filename"][0]
-        motion = torch.Tensor(motion).to(device)
+    #     motion, filenames = batch["motion_feats"][0], batch["filename"][0]
+    #     motion = torch.Tensor(motion).to(device)
         
-        b, s, c = motion.shape
+    #     b, s, c = motion.shape
         
-        sample_contact, motion = torch.split(
-        motion, (4, motion.shape[2] - 4), dim=2)
-        pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-        q = motion[:, :, 3:].reshape(b, s, njoints, 6)
-        # go 6d to ax
-        q = ax_from_6v(q).to(motion.device)
+    #     sample_contact, motion = torch.split(
+    #     motion, (4, motion.shape[2] - 4), dim=2)
+    #     pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+    #     q = motion[:, :, 3:].reshape(b, s, njoints, 6)
+    #     # go 6d to ax
+    #     q = ax_from_6v(q).to(motion.device)
         
-        for q_, pos_ in zip(q, pos):
+    #     for q_, pos_ in zip(q, pos):
             
-            # if out_dir is not None:
-            full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
-            outname = f'{args.output_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
-            out_path = os.path.join(outname)
-            # Create the directory if it doesn't exist
-            os.makedirs(os.path.dirname(out_path), exist_ok=True)
-            with open(out_path, "wb") as file_pickle:
-                pickle.dump(
-                    {
-                        "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-                        "smpl_trans": pos_.squeeze(0).cpu().numpy(),
-                        "full_pose": full_pose,
-                    },
-                    file_pickle,
-                )
+    #         # if out_dir is not None:
+    #         full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
+    #         outname = f'{args.output_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
+    #         out_path = os.path.join(outname)
+    #         # Create the directory if it doesn't exist
+    #         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    #         with open(out_path, "wb") as file_pickle:
+    #             pickle.dump(
+    #                 {
+    #                     "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+    #                     "smpl_trans": pos_.squeeze(0).cpu().numpy(),
+    #                     "full_pose": full_pose,
+    #                 },
+    #                 file_pickle,
+    #             )
     
-    unnomarlize(f'{args.output_dir}/gt')
-    unnomarlize(f'{args.output_dir}/inference')
+    # unnomarlize(f'{args.output_dir}/gt')
+    # unnomarlize(f'{args.output_dir}/inference')
