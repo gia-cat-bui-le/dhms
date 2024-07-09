@@ -656,4 +656,4 @@ if __name__ == "__main__":
     #             )
     
     # unnomarlize(f'{args.output_dir}/gt')
-    # unnomarlize(f'{args.output_dir}/inference')
+    unnomarlize(f'{args.output_dir}/inference')
