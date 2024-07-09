@@ -34,6 +34,6 @@ def concatenate_slices(input_folder, output_folder):
         print(f"Saved concatenated file for {song_dir} to {output_file}")
 
 if __name__ == "__main__":
-    input_folder = "custom_input\\feature_sliced"
-    output_folder = "custom_input\\feature"
+    input_folder = "custom_input/feature_sliced"
+    output_folder = "custom_input/feature"
     concatenate_slices(input_folder, output_folder)
