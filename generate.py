@@ -350,6 +350,8 @@ if __name__ == "__main__":
         logger.log(f"Loading checkpoints from [{args.model_path}]...")
         state_dict = torch.load(args.model_path, map_location="cpu")
         load_model_wo_clip(model, state_dict)
+        
+        model_transition = model
 
         if args.guidance_param != 1:
             model = ClassifierFreeSampleModel(
@@ -467,7 +469,7 @@ if __name__ == "__main__":
                                 model_kwargs_2['y']['inpainting_mask'][i, :, :, end_idx+f] = f/mask_slope
                         
                         sample_2 = diffusion.p_sample_loop (
-                            model,
+                            model_transition,
                             (1, nfeats, 1, model_kwargs_2['y']['mask'].shape[-1]),
                             noise=None,
                             clip_denoised=clip_denoised,
