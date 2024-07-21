@@ -192,7 +192,7 @@ def skeleton_render_3D(
         Path(out).mkdir(parents=True, exist_ok=True)
         num_steps = poses.shape[0]
         
-        fig = plt.figure(figsize=(20, 16))
+        fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(projection="3d")
         
         point = np.array([0, 1, 0])  # Changed z to y
@@ -275,7 +275,7 @@ def skeleton_render_3D(
             path = os.path.normpath(name)
             pathparts = path.split(os.sep)
             gifname = os.path.join(out, f"{pathparts[-1][:-4]}.gif")
-            anim.save(gifname, writer='imagemagick', savefig_kwargs={"transparent": True, "facecolor": "none"},)
+            anim.save(gifname, writer='pillow', savefig_kwargs={"transparent": True, "facecolor": "none"})
     plt.close()
 
 def skeleton_render(
@@ -417,7 +417,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    folder_path = "evaluate_result\dhms-test-custom\\2.0/inference_normed"  # Change this to the path of your folder
+    folder_path = "visualize_result\mix\inference"  # Change this to the path of your folder
     file_pattern = "*.pkl"
     file_list = glob.glob(folder_path + "/" + file_pattern)
 
@@ -432,7 +432,7 @@ if __name__ == '__main__':
         poses = data['full_pose'].reshape(-1, 24, 3)
         # poses = data
         
-        render_out = "evaluate_result\dhms-test-custom\\2.0/\\renders"
+        render_out = "visualize_result\mix\\renders"
         epoch = 0
         name = file_name
         sound = False
