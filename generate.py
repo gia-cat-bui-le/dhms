@@ -394,86 +394,15 @@ if __name__ == "__main__":
                     if scale != 1.:
                         model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
                                                                 device=dist_util.dev()) * scale
+                    repeat_times = 3
+                    for repeat_time in range(repeat_times):
                     
-                    sample = diffusion.p_sample_loop (
-                        model,
-                        (bs, nfeats, 1, model_kwargs['y']['mask'].shape[-1]),
-                        noise=None,
-                        clip_denoised=clip_denoised,
-                        model_kwargs=model_kwargs,
-                        skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
-                        init_image=None,
-                        progress=False,
-                        dump_steps=None,
-                        const_noise=False,
-                        guidance_weight=args.guidance_param
-                        # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
-                    )
-                    
-                    motion_final = []
-                    motion_final.append(sample[0].squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, :45, :])
-                    
-                    for idx in range(bs - 1):
-                        sample_0 = sample[idx].unsqueeze(0)
-                        sample_1 = sample[idx + 1].unsqueeze(0)
-                        
-                        music_0 = model_kwargs['y']['music'][idx, -45 * 4800:].unsqueeze(0)
-                        music_1 = model_kwargs['y']['music'][idx + 1, :45 * 4800].unsqueeze(0)
-                    
-                        num_rows = 1
-                        motion = torch.cat(( sample_0[:, :, :, -45 :], sample_1[:, :, :, : 45]), -1)
-                        assert motion.shape == (1, nfeats, 1, 90)
-                        input_motions = motion
-                        
-                        max_frames = input_motions.shape[-1]
-                        assert max_frames == input_motions.shape[-1]
-                        gt_frames_per_sample = {}
-                        
-                        model_kwargs_2 = {}
-                        model_kwargs_2['y'] = {}
-                        model_kwargs_2['y']['inpainted_motion'] = input_motions
-
-                        model_kwargs_2['y']['lengths'] = [90 for len in range(1)]
-                        model_kwargs_2['y']['music'] = torch.cat((music_0, music_1), dim=1).to(dist_util.dev())
-                        model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_2['y']['lengths'], 
-                                            dist_util.dev()).unsqueeze(1).unsqueeze(2)
-                        # add CFG scale to batch
-                        if scale != 1.:
-                            model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
-                                                                    device=dist_util.dev()) * scale
-                        
-                        total_hist_frame = 45
-                        condition_frame = 45 - args.inpainting_frames
-                        hist_lst = [feats[:,:,-90:] for feats in sample_0]
-                        hframes = torch.stack([x[:,:,-total_hist_frame : -condition_frame] for x in hist_lst])
-                        
-                        fut_lst = [feats[:,:,:90] for feats in sample_1]
-                        fut_frames = torch.stack([x[:,:,condition_frame:total_hist_frame] for x in fut_lst])
-
-                        model_kwargs_2['y']['hframes'] = hframes
-                        model_kwargs_2['y']['fut_frames'] = fut_frames
-                            
-                        model_kwargs_2['y']['inpainting_mask'] = torch.ones_like(input_motions, dtype=torch.float,
-                                                                    device=input_motions.device)  # True means use gt motion
-                        for i, length in enumerate(model_kwargs_2['y']['lengths']):
-                            start_idx, end_idx = 15, 90 - 15
-                            gt_frames_per_sample[i] = list(range(0, start_idx)) + list(range(end_idx, max_frames))
-                            model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx: end_idx] = False  # do inpainting in those frames
-                            mask_slope = 15
-                            for f in range(mask_slope):
-                                if start_idx-f < 0:
-                                    continue
-                                model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx-f] = f/mask_slope
-                                if end_idx+f >= length:
-                                    continue
-                                model_kwargs_2['y']['inpainting_mask'][i, :, :, end_idx+f] = f/mask_slope
-                        
-                        sample_2 = diffusion.p_sample_loop (
-                            model_transition,
-                            (1, nfeats, 1, model_kwargs_2['y']['mask'].shape[-1]),
+                        sample = diffusion.p_sample_loop (
+                            model,
+                            (bs, nfeats, 1, model_kwargs['y']['mask'].shape[-1]),
                             noise=None,
                             clip_denoised=clip_denoised,
-                            model_kwargs=model_kwargs_2,
+                            model_kwargs=model_kwargs,
                             skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
                             init_image=None,
                             progress=False,
@@ -483,133 +412,206 @@ if __name__ == "__main__":
                             # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
                         )
                         
-                        assert sample_0.shape == sample_1.shape == sample_2.shape == (1, nfeats, 1, 90)
+                        motion_final = []
+                        motion_final.append(sample[0].squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, :45, :])
                         
-                        motion_final.append(sample_2.squeeze().unsqueeze(dim=0).permute(0, 2, 1))
-                        # motion_final.append(sample_1.squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, -45:, :])
-                    motion_final.append(sample[-1].squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, -45:, :])
-                    motion_result = torch.cat(motion_final, dim=1)
-                    if motion_result.shape[2] == nfeats:
-                        sample_contact, motion_result = torch.split(
-                            motion_result, (4, motion_result.shape[2] - 4), dim=2
-                        )
-                    else:
-                        sample_contact = None
-                        # do the FK all at once
-                    
-                    b, s, c_ = motion_result.shape
-                    pos = motion_result[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
-                    q = motion_result[:, :, 3:].reshape(b, s, njoints, 6)
-                    # go 6d to ax
-                    q = ax_from_6v(q).to(device)
-
-                    b, s, c1, c2 = q.shape
-                    if b > 1:
-                        assert s % 2 == 0
-                        half = s // 2
-                        assert half == 45
-                        # if long mode, stitch position using linear interp
-
-                        fade_out = torch.ones((1, s, 1)).to(pos.device)
-                        fade_in = torch.ones((1, s, 1)).to(pos.device)
-                        fade_out[:, half:, :] = torch.linspace(1, 0, half)[None, :, None].to(
-                            pos.device
-                        )
-                        fade_in[:, :half, :] = torch.linspace(0, 1, half)[None, :, None].to(
-                            pos.device
-                        )
-
-                        pos[:-1] *= fade_out
-                        pos[1:] *= fade_in
-
-                        full_pos = torch.zeros((s + half * (b - 1), 3)).to(pos.device)
-                        id_ = 0
-                        for pos_slice in pos:
-                            full_pos[id_ : id_ + s] += pos_slice
-                            id_ += half
-
-                        # stitch joint angles with slerp
-                        slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(pos.device)
-
-                        left, right = q[:-1, half:], q[1:, :half]
-                        # convert to quat
-                        left, right = (
-                            axis_angle_to_quaternion(left),
-                            axis_angle_to_quaternion(right),
-                        )
-                        merged = quat_slerp(left, right, slerp_weight)  # (b-1) x half x ...
-                        # convert back
-                        merged = quaternion_to_axis_angle(merged)
-
-                        full_q = torch.zeros((s + half * (b - 1), c1, c2)).to(pos.device)
-                        full_q[:half] += q[0, :half]
-                        id_ = half
-                        for q_slice in merged:
-                            full_q[id_ : id_ + half] += q_slice
-                            id_ += half
-                        full_q[id_ : id_ + half] += q[-1, half:]
+                        for idx in range(bs - 1):
+                            sample_0 = sample[idx].unsqueeze(0)
+                            sample_1 = sample[idx + 1].unsqueeze(0)
+                            
+                            music_0 = model_kwargs['y']['music'][idx, -45 * 4800:].unsqueeze(0)
+                            music_1 = model_kwargs['y']['music'][idx + 1, :45 * 4800].unsqueeze(0)
                         
-                        full_pos = full_pos.unsqueeze(0)
-                        full_q = full_q.unsqueeze(0)
-                        
-                        # assert full_pos.shape == (1, 180, 3)
-                        # assert full_q.shape == (1, 180, njoints, 3)
-                        
-                        full_pose = (
-                            smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
-                        )  # b, s, 24, 3
-                        
-                        if njoints == 24:
-                            # assert full_pose.shape == (180, njoints, 3)
-                            assert full_pose.shape[1] == njoints
+                            num_rows = 1
+                            motion = torch.cat(( sample_0[:, :, :, -45 :], sample_1[:, :, :, : 45]), -1)
+                            assert motion.shape == (1, nfeats, 1, 90)
+                            input_motions = motion
+                            
+                            max_frames = input_motions.shape[-1]
+                            assert max_frames == input_motions.shape[-1]
+                            gt_frames_per_sample = {}
+                            
+                            model_kwargs_2 = {}
+                            model_kwargs_2['y'] = {}
+                            model_kwargs_2['y']['inpainted_motion'] = input_motions
+
+                            model_kwargs_2['y']['lengths'] = [90 for len in range(1)]
+                            model_kwargs_2['y']['music'] = torch.cat((music_0, music_1), dim=1).to(dist_util.dev())
+                            model_kwargs_2['y']['mask'] = lengths_to_mask(model_kwargs_2['y']['lengths'], 
+                                                dist_util.dev()).unsqueeze(1).unsqueeze(2)
+                            # add CFG scale to batch
+                            if scale != 1.:
+                                model_kwargs_2['y']['scale'] = torch.ones(len(model_kwargs_2['y']['lengths']),
+                                                                        device=dist_util.dev()) * scale
+                            
+                            total_hist_frame = 45
+                            condition_frame = 45 - args.inpainting_frames
+                            hist_lst = [feats[:,:,-90:] for feats in sample_0]
+                            hframes = torch.stack([x[:,:,-total_hist_frame : -condition_frame] for x in hist_lst])
+                            
+                            fut_lst = [feats[:,:,:90] for feats in sample_1]
+                            fut_frames = torch.stack([x[:,:,condition_frame:total_hist_frame] for x in fut_lst])
+
+                            model_kwargs_2['y']['hframes'] = hframes
+                            model_kwargs_2['y']['fut_frames'] = fut_frames
+                                
+                            model_kwargs_2['y']['inpainting_mask'] = torch.ones_like(input_motions, dtype=torch.float,
+                                                                        device=input_motions.device)  # True means use gt motion
+                            for i, length in enumerate(model_kwargs_2['y']['lengths']):
+                                start_idx, end_idx = 15, 90 - 15
+                                gt_frames_per_sample[i] = list(range(0, start_idx)) + list(range(end_idx, max_frames))
+                                model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx: end_idx] = False  # do inpainting in those frames
+                                mask_slope = 15
+                                for f in range(mask_slope):
+                                    if start_idx-f < 0:
+                                        continue
+                                    model_kwargs_2['y']['inpainting_mask'][i, :, :, start_idx-f] = f/mask_slope
+                                    if end_idx+f >= length:
+                                        continue
+                                    model_kwargs_2['y']['inpainting_mask'][i, :, :, end_idx+f] = f/mask_slope
+                            
+                            sample_2 = diffusion.p_sample_loop (
+                                model_transition,
+                                (1, nfeats, 1, model_kwargs_2['y']['mask'].shape[-1]),
+                                noise=None,
+                                clip_denoised=clip_denoised,
+                                model_kwargs=model_kwargs_2,
+                                skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
+                                init_image=None,
+                                progress=False,
+                                dump_steps=None,
+                                const_noise=False,
+                                guidance_weight=args.guidance_param
+                                # when experimenting guidance_scale we want to nutrileze the effect of noise on generation
+                            )
+                            
+                            assert sample_0.shape == sample_1.shape == sample_2.shape == (1, nfeats, 1, 90)
+                            
+                            motion_final.append(sample_2.squeeze().unsqueeze(dim=0).permute(0, 2, 1))
+                            # motion_final.append(sample_1.squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, -45:, :])
+                        motion_final.append(sample[-1].squeeze().unsqueeze(dim=0).permute(0, 2, 1)[:, -45:, :])
+                        motion_result = torch.cat(motion_final, dim=1)
+                        if motion_result.shape[2] == nfeats:
+                            sample_contact, motion_result = torch.split(
+                                motion_result, (4, motion_result.shape[2] - 4), dim=2
+                            )
                         else:
-                            # assert full_pose.shape == (180, 55, 3)
-                            assert full_pose.shape[1] == 55
+                            sample_contact = None
+                            # do the FK all at once
                         
-                        filename = batch_filename
-                        outname = f'{args.output_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
-                        out_path = os.path.join("./", outname)
-                        # Create the directory if it doesn't exist
-                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        generate_len.append(full_pose.squeeze().shape[0])
-                        
-                        with open(out_path, "wb") as file_pickle:
-                            pickle.dump(
-                                {
-                                    "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-                                    "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
-                                    "full_pose": full_pose.squeeze(),
-                                },
-                                file_pickle,
+                        b, s, c_ = motion_result.shape
+                        pos = motion_result[:, :, :3].to(device)  # np.zeros((sample.shape[0], 3))
+                        q = motion_result[:, :, 3:].reshape(b, s, njoints, 6)
+                        # go 6d to ax
+                        q = ax_from_6v(q).to(device)
+
+                        b, s, c1, c2 = q.shape
+                        if b > 1:
+                            assert s % 2 == 0
+                            half = s // 2
+                            assert half == 45
+                            # if long mode, stitch position using linear interp
+
+                            fade_out = torch.ones((1, s, 1)).to(pos.device)
+                            fade_in = torch.ones((1, s, 1)).to(pos.device)
+                            fade_out[:, half:, :] = torch.linspace(1, 0, half)[None, :, None].to(
+                                pos.device
                             )
-                    
-                    else:
-                        full_pos = pos.squeeze().unsqueeze(0)
-                        full_q = q.squeeze().unsqueeze(0)
-                        
-                        full_pose = (
-                            smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
-                        )  # b, s, 24, 3
-                        
-                        assert full_pose.shape[1] == njoints
-                        
-                        filename = batch_filename
-                        outname = f'{args.output_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
-                        out_path = os.path.join("./", outname)
-                        print("Save at: ", out_path)
-                        # Create the directory if it doesn't exist
-                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        generate_len.append(full_pose.squeeze().shape[0])
-                        
-                        with open(out_path, "wb") as file_pickle:
-                            pickle.dump(
-                                {
-                                    "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-                                    "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
-                                    "full_pose": full_pose.squeeze(),
-                                },
-                                file_pickle,
+                            fade_in[:, :half, :] = torch.linspace(0, 1, half)[None, :, None].to(
+                                pos.device
                             )
+
+                            pos[:-1] *= fade_out
+                            pos[1:] *= fade_in
+
+                            full_pos = torch.zeros((s + half * (b - 1), 3)).to(pos.device)
+                            id_ = 0
+                            for pos_slice in pos:
+                                full_pos[id_ : id_ + s] += pos_slice
+                                id_ += half
+
+                            # stitch joint angles with slerp
+                            slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(pos.device)
+
+                            left, right = q[:-1, half:], q[1:, :half]
+                            # convert to quat
+                            left, right = (
+                                axis_angle_to_quaternion(left),
+                                axis_angle_to_quaternion(right),
+                            )
+                            merged = quat_slerp(left, right, slerp_weight)  # (b-1) x half x ...
+                            # convert back
+                            merged = quaternion_to_axis_angle(merged)
+
+                            full_q = torch.zeros((s + half * (b - 1), c1, c2)).to(pos.device)
+                            full_q[:half] += q[0, :half]
+                            id_ = half
+                            for q_slice in merged:
+                                full_q[id_ : id_ + half] += q_slice
+                                id_ += half
+                            full_q[id_ : id_ + half] += q[-1, half:]
+                            
+                            full_pos = full_pos.unsqueeze(0)
+                            full_q = full_q.unsqueeze(0)
+                            
+                            # assert full_pos.shape == (1, 180, 3)
+                            # assert full_q.shape == (1, 180, njoints, 3)
+                            
+                            full_pose = (
+                                smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
+                            )  # b, s, 24, 3
+                            
+                            if njoints == 24:
+                                # assert full_pose.shape == (180, njoints, 3)
+                                assert full_pose.shape[1] == njoints
+                            else:
+                                # assert full_pose.shape == (180, 55, 3)
+                                assert full_pose.shape[1] == 55
+                            
+                            filename = batch_filename
+                            outname = f'{args.output_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}_{repeat_time}.pkl'
+                            out_path = os.path.join("./", outname)
+                            # Create the directory if it doesn't exist
+                            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                            generate_len.append(full_pose.squeeze().shape[0])
+                            
+                            with open(out_path, "wb") as file_pickle:
+                                pickle.dump(
+                                    {
+                                        "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                                        "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+                                        "full_pose": full_pose.squeeze(),
+                                    },
+                                    file_pickle,
+                                )
+                        
+                        else:
+                            full_pos = pos.squeeze().unsqueeze(0)
+                            full_q = q.squeeze().unsqueeze(0)
+                            
+                            full_pose = (
+                                smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
+                            )  # b, s, 24, 3
+                            
+                            assert full_pose.shape[1] == njoints
+                            
+                            filename = batch_filename
+                            outname = f'{args.output_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}_{repeat_time}.pkl'
+                            out_path = os.path.join("./", outname)
+                            print("Save at: ", out_path)
+                            # Create the directory if it doesn't exist
+                            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                            generate_len.append(full_pose.squeeze().shape[0])
+                            
+                            with open(out_path, "wb") as file_pickle:
+                                pickle.dump(
+                                    {
+                                        "smpl_poses": full_q.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+                                        "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+                                        "full_pose": full_pose.squeeze(),
+                                    },
+                                    file_pickle,
+                                )
     # origin_dataset = OriginDataset(
     #     data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
     # )
