@@ -559,7 +559,7 @@ if __name__ == "__main__":
                             full_poses = pos.squeeze().unsqueeze(0)
                             full_qs = q.squeeze().unsqueeze(0)
                             
-                            for index, (full_pose, full_q) in enumerate(zip(full_poses, full_qs)):
+                            for index, (full_pos, full_q) in enumerate(zip(full_poses, full_qs)):
                             
                             # assert full_pos.shape == (1, 180, 3)
                             # assert full_q.shape == (1, 180, njoints, 3)
