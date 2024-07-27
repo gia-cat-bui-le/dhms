@@ -555,25 +555,20 @@ if __name__ == "__main__":
                             #     full_q[id_ : id_ + half] += q_slice
                             #     id_ += half
                             # full_q[id_ : id_ + half] += q[-1, half:]
+
                             
-                            full_poses = pos.squeeze().unsqueeze(0)
-                            full_qs = q.squeeze().unsqueeze(0)
-                            
-                            for index, (full_pos, full_q) in enumerate(zip(full_poses, full_qs)):
+                            for index, (full_pos, full_q) in enumerate(zip(pos, q)):
                             
                             # assert full_pos.shape == (1, 180, 3)
                             # assert full_q.shape == (1, 180, njoints, 3)
+                                full_pos = full_pos.squeeze().unsqueeze(0)
+                                full_q = full_q.squeeze().unsqueeze(0)
                             
                                 full_pose = (
                                     smpl.forward(full_q, full_pos).squeeze(0).detach().cpu().numpy()
                                 )  # b, s, 24, 3
                                 
-                                if njoints == 24:
-                                    # assert full_pose.shape == (180, njoints, 3)
-                                    assert full_pose.shape[1] == njoints
-                                else:
-                                    # assert full_pose.shape == (180, 55, 3)
-                                    assert full_pose.shape[1] == 55
+                                assert full_pose.shape[1] == njoints
                                 
                                 filename = batch_filename
                                 outname = f'{args.output_dir}/inference_inpainting/{"".join(os.path.splitext(os.path.basename(filename))[0])}_{repeat_time}_{index}.pkl'
