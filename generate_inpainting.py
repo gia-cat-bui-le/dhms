@@ -338,7 +338,7 @@ if __name__ == "__main__":
     
     generate_len = []
     
-    for file_name in file_names[:2]:
+    for file_name in file_names[:5]:
         
         dataloader = get_dataset_loader(args, file_name, batch_size=1)
         
