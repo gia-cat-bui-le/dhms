@@ -394,7 +394,7 @@ if __name__ == "__main__":
                     if scale != 1.:
                         model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
                                                                 device=dist_util.dev()) * scale
-                    repeat_times = 3
+                    repeat_times = 15
                     for repeat_time in range(repeat_times):
                     
                         sample = diffusion.p_sample_loop (
