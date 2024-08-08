@@ -338,65 +338,68 @@ if __name__ == "__main__":
     
     generate_len = []
     
-    for file_name in file_names:
-        
-        dataloader = get_dataset_loader(args, file_name, batch_size=1)
-        
-        num_actions = 1
-
-        logger.log("Creating model and diffusion...")
-        model, diffusion = create_model_and_diffusion(args, dataloader)
-
-        logger.log(f"Loading checkpoints from [{args.model_path}]...")
-        state_dict = torch.load(args.model_path, map_location="cpu")
-        load_model_wo_clip(model, state_dict)
-        
-        model_transition = model
-
-        if args.guidance_param != 1:
-            model = ClassifierFreeSampleModel(
-                model
-            )  # wrapping model with the classifier-free sampler
+    repeat_times = 30
+    
+    for repeat_time in range(repeat_times):
+    
+        for file_name in file_names:
             
-        model.to(device)
-        model.eval()  # disable random masking
-
-        generated_motion = []
-        mm_generated_motions = []
-        clip_denoised = False  #! hardcoded (from repo)
+            dataloader = get_dataset_loader(args, file_name, batch_size=1)
             
-        use_ddim = False  # hardcode
+            num_actions = 1
 
-        sample_fn = diffusion.p_sample_loop
+            logger.log("Creating model and diffusion...")
+            model, diffusion = create_model_and_diffusion(args, dataloader)
 
-        with torch.no_grad():
-            for _, batch in tqdm(enumerate(dataloader)):
-                for i in range(len(batch["filename"])):
-                    batch_music = batch["music"][i]
-                    batch_filename = batch["filename"][i]
-                    batch_length = batch["length"][i]
-                    
-                    if (
-                        num_samples_limit is not None
-                        and len(generated_motion) >= num_samples_limit
-                    ):
-                        break
+            logger.log(f"Loading checkpoints from [{args.model_path}]...")
+            state_dict = torch.load(args.model_path, map_location="cpu")
+            load_model_wo_clip(model, state_dict)
+            
+            model_transition = model
+
+            if args.guidance_param != 1:
+                model = ClassifierFreeSampleModel(
+                    model
+                )  # wrapping model with the classifier-free sampler
+                
+            model.to(device)
+            model.eval()  # disable random masking
+
+            generated_motion = []
+            mm_generated_motions = []
+            clip_denoised = False  #! hardcoded (from repo)
+                
+            use_ddim = False  # hardcode
+
+            sample_fn = diffusion.p_sample_loop
+
+            with torch.no_grad():
+                for _, batch in tqdm(enumerate(dataloader)):
+                    for i in range(len(batch["filename"])):
+                        batch_music = batch["music"][i]
+                        batch_filename = batch["filename"][i]
+                        batch_length = batch["length"][i]
                         
-                    bs, music_dim = batch_music.shape
-                    
-                    model_kwargs = {}
-                    model_kwargs['y'] = {}
-                    model_kwargs['y']['lengths'] = [90 for len in range(bs)]
-                    model_kwargs['y']['music'] = batch_music.to(dist_util.dev())
-                    model_kwargs['y']['mask'] = lengths_to_mask(model_kwargs['y']['lengths'], 
-                                        dist_util.dev()).unsqueeze(1).unsqueeze(2)
-                    
-                    if scale != 1.:
-                        model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
-                                                                device=dist_util.dev()) * scale
-                    repeat_times = 30
-                    for repeat_time in range(repeat_times):
-                    
+                        if (
+                            num_samples_limit is not None
+                            and len(generated_motion) >= num_samples_limit
+                        ):
+                            break
+                            
+                        bs, music_dim = batch_music.shape
+                        
+                        model_kwargs = {}
+                        model_kwargs['y'] = {}
+                        model_kwargs['y']['lengths'] = [90 for len in range(bs)]
+                        model_kwargs['y']['music'] = batch_music.to(dist_util.dev())
+                        model_kwargs['y']['mask'] = lengths_to_mask(model_kwargs['y']['lengths'], 
+                                            dist_util.dev()).unsqueeze(1).unsqueeze(2)
+                        
+                        if scale != 1.:
+                            model_kwargs['y']['scale'] = torch.ones(len(model_kwargs['y']['lengths']),
+                                                                    device=dist_util.dev()) * scale
+                        
+                        
                         sample = diffusion.p_sample_loop (
                             model,
                             (bs, nfeats, 1, model_kwargs['y']['mask'].shape[-1]),
@@ -596,7 +599,7 @@ if __name__ == "__main__":
                             assert full_pose.shape[1] == njoints
                             
                             filename = batch_filename
-                            outname = f'{args.output_dir}/inference/{"".join(os.path.splitext(os.path.basename(filename))[0])}_{repeat_time}.pkl'
+                            outname = f'{args.output_dir}/inference_{repeat_time}/{"".join(os.path.splitext(os.path.basename(filename))[0])}.pkl'
                             out_path = os.path.join("./", outname)
                             print("Save at: ", out_path)
                             # Create the directory if it doesn't exist
@@ -612,52 +615,52 @@ if __name__ == "__main__":
                                     },
                                     file_pickle,
                                 )
-    # origin_dataset = OriginDataset(
-    #     data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
-    # )
-    # origin_loader = DataLoader(
-    #     origin_dataset,
-    #     batch_size=1,
-    #     shuffle=False,
-    #     num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
-    #     pin_memory=True,
-    #     drop_last=True,
-    #     collate_fn=collate_pairs_and_text
-    # )
-    
-    # for batch in origin_loader:
-    #     njoints = 24
-    #     smpl = SMPLSkeleton(device=device)
+        # origin_dataset = OriginDataset(
+        #     data_path=os.path.join(args.music_dir, "motions"), num_feats=generate_len
+        # )
+        # origin_loader = DataLoader(
+        #     origin_dataset,
+        #     batch_size=1,
+        #     shuffle=False,
+        #     num_workers=min(int(multiprocessing.cpu_count() * 0.75), 32),
+        #     pin_memory=True,
+        #     drop_last=True,
+        #     collate_fn=collate_pairs_and_text
+        # )
         
-    #     motion, filenames = batch["motion_feats"][0], batch["filename"][0]
-    #     motion = torch.Tensor(motion).to(device)
-        
-    #     b, s, c = motion.shape
-        
-    #     sample_contact, motion = torch.split(
-    #     motion, (4, motion.shape[2] - 4), dim=2)
-    #     pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
-    #     q = motion[:, :, 3:].reshape(b, s, njoints, 6)
-    #     # go 6d to ax
-    #     q = ax_from_6v(q).to(motion.device)
-        
-    #     for q_, pos_ in zip(q, pos):
+        # for batch in origin_loader:
+        #     njoints = 24
+        #     smpl = SMPLSkeleton(device=device)
             
-    #         # if out_dir is not None:
-    #         full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
-    #         outname = f'{args.output_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
-    #         out_path = os.path.join(outname)
-    #         # Create the directory if it doesn't exist
-    #         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    #         with open(out_path, "wb") as file_pickle:
-    #             pickle.dump(
-    #                 {
-    #                     "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
-    #                     "smpl_trans": pos_.squeeze(0).cpu().numpy(),
-    #                     "full_pose": full_pose,
-    #                 },
-    #                 file_pickle,
-    #             )
-    
-    # unnomarlize(f'{args.output_dir}/gt')
-    unnomarlize(f'{args.output_dir}/inference')
+        #     motion, filenames = batch["motion_feats"][0], batch["filename"][0]
+        #     motion = torch.Tensor(motion).to(device)
+            
+        #     b, s, c = motion.shape
+            
+        #     sample_contact, motion = torch.split(
+        #     motion, (4, motion.shape[2] - 4), dim=2)
+        #     pos = motion[:, :, :3].to(motion.device)  # np.zeros((sample.shape[0], 3))
+        #     q = motion[:, :, 3:].reshape(b, s, njoints, 6)
+        #     # go 6d to ax
+        #     q = ax_from_6v(q).to(motion.device)
+            
+        #     for q_, pos_ in zip(q, pos):
+                
+        #         # if out_dir is not None:
+        #         full_pose = (smpl.forward(q_.unsqueeze(0), pos_.unsqueeze(0)).squeeze(0).detach().cpu().numpy())
+        #         outname = f'{args.output_dir}/gt/{"".join(os.path.splitext(os.path.basename(filenames)))}.pkl'
+        #         out_path = os.path.join(outname)
+        #         # Create the directory if it doesn't exist
+        #         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        #         with open(out_path, "wb") as file_pickle:
+        #             pickle.dump(
+        #                 {
+        #                     "smpl_poses": q_.squeeze(0).reshape((-1, njoints * 3)).cpu().numpy(),
+        #                     "smpl_trans": pos_.squeeze(0).cpu().numpy(),
+        #                     "full_pose": full_pose,
+        #                 },
+        #                 file_pickle,
+        #             )
+        
+        # unnomarlize(f'{args.output_dir}/gt')
+        unnomarlize(f'{args.output_dir}/inference_{repeat_time}')
