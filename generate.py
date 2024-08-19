@@ -338,7 +338,7 @@ if __name__ == "__main__":
     
     generate_len = []
     
-    repeat_times = 1
+    repeat_times = 10
     
     for repeat_time in range(repeat_times):
     
