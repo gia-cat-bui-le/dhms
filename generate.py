@@ -338,7 +338,7 @@ if __name__ == "__main__":
     
     generate_len = []
     
-    repeat_times = 30
+    repeat_times = 1
     
     for repeat_time in range(repeat_times):
     
