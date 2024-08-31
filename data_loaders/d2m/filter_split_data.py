@@ -75,14 +75,14 @@ def split_data_finedance(dataset_path):
         Path(f"{dataset_path}/{split_name}/motions").mkdir(parents=True, exist_ok=True)
         Path(f"{dataset_path}/{split_name}/wavs").mkdir(parents=True, exist_ok=True)
         for sequence in split_list:
-            motion = f"{dataset_path}/motion_fea319/{sequence}.pkl"
-            wav = f"{dataset_path}/music_npy/{sequence}.wav"
+            motion = f"{dataset_path}/motion_fea319/{sequence}.npy"
+            wav = f"{dataset_path}/music_npy/{sequence}.npy"
             assert os.path.isfile(motion)
             assert os.path.isfile(wav)
-            motion_data = pickle.load(open(motion, "rb"))
+            motion_data = np.load(motion, allow_pickle=True)
             trans = motion_data["smpl_trans"]
             pose = motion_data["smpl_poses"]
             scale = motion_data["smpl_scaling"]
             out_data = {"pos": trans, "q": pose, "scale": scale}
-            pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.pkl", "wb"))
-            shutil.copyfile(wav, f"{dataset_path}/{split_name}/wavs/{sequence}.wav")
+            pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.npy", "wb"))
+            shutil.copyfile(wav, f"{dataset_path}/{split_name}/wavs/{sequence}.npy")
