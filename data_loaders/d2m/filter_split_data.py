@@ -80,9 +80,8 @@ def split_data_finedance(dataset_path):
             assert os.path.isfile(motion)
             assert os.path.isfile(wav)
             motion_data = np.load(motion, allow_pickle=True)
-            trans = motion_data["smpl_trans"]
-            pose = motion_data["smpl_poses"]
-            scale = motion_data["smpl_scaling"]
-            out_data = {"pos": trans, "q": pose, "scale": scale}
+            trans = motion_data[:, :3]
+            pose = motion_data[:, 3:]
+            out_data = {"pos": trans, "q": pose}
             pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.npy", "wb"))
             shutil.copyfile(wav, f"{dataset_path}/{split_name}/wavs/{sequence}.npy")
