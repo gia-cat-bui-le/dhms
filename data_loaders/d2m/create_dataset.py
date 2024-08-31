@@ -28,9 +28,9 @@ def create_dataset(opt):
         
     # slice motions/music into sliding windows to create training dataset
     print("Slicing train data")
-    slice_aistpp(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", f"{path_folder}/train/wavs", 0.5, motion_len)
+    slice_finedance(f"{path_folder}/train/motions", f"{path_folder}/train/music_npy", f"{path_folder}/train/wavs", 0.5, motion_len)
     print("Slicing test data")
-    slice_aistpp(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", f"{path_folder}/test/wavs", 0.5, motion_len)
+    slice_finedance(f"{path_folder}/test/motions", f"{path_folder}/test/music_npy", f"{path_folder}/test/wavs", 0.5, motion_len)
 
 def parse_opt():
     parser = argparse.ArgumentParser()
