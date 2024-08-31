@@ -67,7 +67,7 @@ def slice_motion(motion_file, stride, length, out_dir, num_slices, segment_len):
 def slice_motion_finedance(motion_file, stride, length, out_dir, num_slices, segment_len):
     motion = pickle.load(open(motion_file, "rb"))
     pos, q = motion["pos"], motion["q"]
-    scale = motion["scale"][0]
+    scale = 1.0
 
     file_name = os.path.splitext(os.path.basename(motion_file))[0]
     # normalize root position
