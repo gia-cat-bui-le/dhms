@@ -82,5 +82,5 @@ def split_data_finedance(dataset_path):
             trans = motion_data[:, :3]
             pose = motion_data[:, 3:]
             out_data = {"pos": trans, "q": pose}
-            pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.npy", "wb"))
+            pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.pkl", "wb"))
             shutil.copyfile(wav, f"{dataset_path}/{split_name}/wavs/{sequence}.npy")
