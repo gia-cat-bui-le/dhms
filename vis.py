@@ -150,7 +150,7 @@ def plot_single_pose(num, poses, lines, ax, axrange, scat, contact):
 
     if num == 0:
         axrange = (axrange, axrange, axrange)
-        xcenter, ycenter, zcenter = 0, 0, 1.5
+        xcenter, ycenter, zcenter = 0, 0, 1.0
         stepx, stepy, stepz = axrange[0] / 3, axrange[1] / 3, axrange[2] / 3
 
         x_min, x_max = xcenter - stepx, xcenter + stepx
@@ -228,7 +228,7 @@ def skeleton_render_3D(
             plot_single_pose,
             num_steps,
             fargs=(poses, lines, ax, axrange, scat, contact),
-            interval=1000 // 30,
+            interval=1000 // 33.3,
         )
 
     if sound:
@@ -275,7 +275,7 @@ def skeleton_render_3D(
             path = os.path.normpath(name)
             pathparts = path.split(os.sep)
             gifname = os.path.join(out, f"{pathparts[-1][:-4]}.gif")
-            anim.save(gifname, writer='pillow', savefig_kwargs={"transparent": True, "facecolor": "none"})
+            anim.save(gifname, writer='pillow',  fps=30, savefig_kwargs={"transparent": True, "facecolor": "none"})
     plt.close()
 
 def skeleton_render(
@@ -331,14 +331,14 @@ def skeleton_render(
             plot_single_pose,
             num_steps,
             fargs=(poses, lines, ax, axrange, scat, contact),
-            interval=1000 // 30,
+            interval=1000 // 33.3,
         )
         
         # actually save the gif
         path = os.path.normpath(name)
         pathparts = path.split(os.sep)
         gifname = os.path.join(out, f"{pathparts[-1][:-4]}.gif")
-        anim.save(gifname, savefig_kwargs={"transparent": True, "facecolor": "none"})
+        anim.save(gifname,  fps=30, savefig_kwargs={"transparent": True, "facecolor": "none"})
         
         plt.close()
 
@@ -417,7 +417,7 @@ class SMPLSkeleton:
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
 
 if __name__ == '__main__':
-    folder_path = "visualize_result\mix\inference"  # Change this to the path of your folder
+    folder_path = "Demo\Motion"  # Change this to the path of your folder
     file_pattern = "*.pkl"
     file_list = glob.glob(folder_path + "/" + file_pattern)
 
@@ -432,7 +432,7 @@ if __name__ == '__main__':
         poses = data['full_pose'].reshape(-1, 24, 3)
         # poses = data
         
-        render_out = "visualize_result\mix\\renders"
+        render_out = "Demo\Vis"
         epoch = 0
         name = file_name
         sound = False
