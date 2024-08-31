@@ -75,7 +75,8 @@ def split_data_finedance(dataset_path):
             if sequence in filter_list:
                 continue
             motion = f"{dataset_path}/motion_fea319/{sequence}.npy"
-            wav = f"{dataset_path}/music_npy/{sequence}.npy"
+            wav = f"{dataset_path}/music_wav/{sequence}.wav"
+            music_npy = f"{dataset_path}/music_npy/{sequence}.npy"
             assert os.path.isfile(motion)
             assert os.path.isfile(wav)
             motion_data = np.load(motion, allow_pickle=True)
@@ -83,4 +84,5 @@ def split_data_finedance(dataset_path):
             pose = motion_data[:, 3:]
             out_data = {"pos": trans, "q": pose}
             pickle.dump(out_data, open(f"{dataset_path}/{split_name}/motions/{sequence}.pkl", "wb"))
-            shutil.copyfile(wav, f"{dataset_path}/{split_name}/wavs/{sequence}.npy")
+            shutil.copyfile(wav, f"{dataset_path}/{split_name}/wavs/{sequence}.wav")
+            shutil.copyfile(music_npy, f"{dataset_path}/{split_name}/music_npy/{sequence}.npy")
