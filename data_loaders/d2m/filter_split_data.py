@@ -71,6 +71,7 @@ def split_data_finedance(dataset_path):
     for split_list, split_name in zip([train_list, test_list], ["train", "test"]):
         Path(f"{dataset_path}/{split_name}/motions").mkdir(parents=True, exist_ok=True)
         Path(f"{dataset_path}/{split_name}/wavs").mkdir(parents=True, exist_ok=True)
+        Path(f"{dataset_path}/{split_name}/music_npy").mkdir(parents=True, exist_ok=True)
         for sequence in split_list:
             if sequence in filter_list:
                 continue
