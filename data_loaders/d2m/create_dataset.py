@@ -13,18 +13,18 @@ def create_dataset(opt):
     path_folder = opt.datapath
     # split the data according to the splits files
     print("Creating train / test split")
-    split_data(path_folder)
+    split_data_finedance(path_folder)
     motion_len = opt.motion_len
     
     # process dataset to extract audio features
-    if opt.extract_baseline:
-        print("Extracting baseline features")
-        baseline_extract(f"{path_folder}/train/wavs", f"{path_folder}/train/music_npy")
-        baseline_extract(f"{path_folder}/test/wavs", f"{path_folder}/test/music_npy")
-    if opt.extract_jukebox:
-        print("Extracting jukebox features")
-        jukebox_extract(f"{path_folder}/train/wavs_sliced", f"{path_folder}/train/jukebox_feats")
-        jukebox_extract(f"{path_folder}/test/wavs_sliced", f"{path_folder}/test/jukebox_feats")
+    # if opt.extract_baseline:
+    #     print("Extracting baseline features")
+    #     baseline_extract(f"{path_folder}/train/wavs", f"{path_folder}/train/music_npy")
+    #     baseline_extract(f"{path_folder}/test/wavs", f"{path_folder}/test/music_npy")
+    # if opt.extract_jukebox:
+    #     print("Extracting jukebox features")
+    #     jukebox_extract(f"{path_folder}/train/wavs_sliced", f"{path_folder}/train/jukebox_feats")
+    #     jukebox_extract(f"{path_folder}/test/wavs_sliced", f"{path_folder}/test/jukebox_feats")
         
     # slice motions/music into sliding windows to create training dataset
     print("Slicing train data")
@@ -37,7 +37,7 @@ def parse_opt():
     parser.add_argument(
         "--datapath",
         type=str,
-        default="./aistpp_dataset/",
+        default="./finedance/",
         help="path to folder containing motions and music",
     )
     parser.add_argument(

@@ -29,7 +29,7 @@ def get_model_args(args, data):
     njoints = 151
     nfeats = 1
     
-    feature_dim = 4800
+    feature_dim = 35
     cond_drop_prob = args.cond_drop_prob
     
     return {'modeltype': '', 'njoints': njoints, 'nfeats': nfeats,

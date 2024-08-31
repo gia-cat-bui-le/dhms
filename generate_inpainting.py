@@ -421,8 +421,8 @@ if __name__ == "__main__":
                             sample_0 = sample[idx].unsqueeze(0)
                             sample_1 = sample[idx + 1].unsqueeze(0)
                             
-                            music_0 = model_kwargs['y']['music'][idx, -45 * 4800:].unsqueeze(0)
-                            music_1 = model_kwargs['y']['music'][idx + 1, :45 * 4800].unsqueeze(0)
+                            music_0 = model_kwargs['y']['music'][idx, -45 * 35:].unsqueeze(0)
+                            music_1 = model_kwargs['y']['music'][idx + 1, :45 * 35].unsqueeze(0)
                         
                             num_rows = 1
                             motion = torch.cat(( sample_0[:, :, :, -45 :], sample_1[:, :, :, : 45]), -1)
